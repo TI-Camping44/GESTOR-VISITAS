@@ -16,12 +16,12 @@ insert into vis_vendedores (nombre, email, rol) values
   ('Supervisora', 'super@camping44.com.py', 'supervisor'),
   ('Antonio', 'antonio@camping44.com.py', 'vendedor'),
   ('Beto', 'beto@camping44.com.py', 'vendedor');
-insert into vis_zonas (nombre) values ('Zona Norte'), ('Zona Sur');
+insert into vis_zonas (nombre) values ('Zona Prueba A'), ('Zona Prueba B');
 insert into vis_clientes (odoo_partner_id, razon_social, telefono, ciudad, lat, lng, origen_ubicacion, zona_id, vendedor_id, ultima_factura_fecha, odoo_alta_fecha) values
   (1, 'Ferretería López S.A.', '0981 111-222', 'Concepción', -23.4064, -57.4344, 'odoo',
-     (select id from vis_zonas where nombre='Zona Norte'), (select id from vis_vendedores where nombre='Antonio'), vis_hoy() - 30, '2020-01-01'),
+     (select id from vis_zonas where nombre='Zona Prueba A'), (select id from vis_vendedores where nombre='Antonio'), vis_hoy() - 30, '2020-01-01'),
   (2, 'Agro Beto SRL', '0972 333 444', 'San Pedro', -24.0912, -57.0800, 'odoo',
-     (select id from vis_zonas where nombre='Zona Norte'), (select id from vis_vendedores where nombre='Beto'), vis_hoy() - 400, '2019-01-01'),
+     (select id from vis_zonas where nombre='Zona Prueba A'), (select id from vis_vendedores where nombre='Beto'), vis_hoy() - 400, '2019-01-01'),
   (3, 'Nuevo Odoo', null, 'Asunción', null, null, null, null, null, null, vis_hoy() - 20);
 
 create or replace function pg_temp.como(p_email text) returns void language plpgsql as $$
@@ -200,7 +200,7 @@ select pg_temp.como('super@camping44.com.py') \gset
 set role authenticated;
 insert into vis_rutas (nombre, vendedor_id, zona_id, semana_inicio, estado)
 select 'Ruta Norte – Sem test – Antonio', v.id, z.id, date_trunc('week', vis_hoy())::date, 'borrador'
-from vis_vendedores v, vis_zonas z where v.nombre = 'Antonio' and z.nombre = 'Zona Norte';
+from vis_vendedores v, vis_zonas z where v.nombre = 'Antonio' and z.nombre = 'Zona Prueba A';
 insert into vis_ruta_paradas (ruta_id, cliente_id, dia, orden)
 select r.id, c.id, vis_hoy(), row_number() over (order by c.razon_social)
 from vis_rutas r, vis_clientes c where c.odoo_partner_id in (1, 2);
@@ -234,7 +234,7 @@ do $$ begin
   assert exists (select 1 from vis_clientes where odoo_partner_id = 2), 'con la parada publicada ve a Agro Beto';
   assert (select realizadas from vis_tablero(date_trunc('week', vis_hoy())::date) where dia = vis_hoy()) = 1, 'tablero: 1 visita hoy';
   assert (select count(distinct vendedor_id) from vis_tablero(date_trunc('week', vis_hoy())::date)) = 1, 'el vendedor solo se ve a sí mismo en el tablero';
-  assert (select count(*) from vis_zona_historial((select id from vis_zonas where nombre = 'Zona Norte'))) = 1, 'historial de zona';
+  assert (select count(*) from vis_zona_historial((select id from vis_zonas where nombre = 'Zona Prueba A'))) = 1, 'historial de zona';
   assert (select count(*) from vis_clientes_cercanos(-23.4064, -57.4344, 2000)) >= 1, 'cerca mío';
 end $$;
 reset role;
@@ -265,6 +265,18 @@ insert into vis_jornadas (vendedor_id, inicio) select id, now() - interval '1 da
 do $$ begin
   assert vis_cerrar_jornadas_olvidadas() = 1, 'cierra la jornada de ayer';
   assert (select cierre_auto from vis_jornadas j join vis_vendedores v on v.id = j.vendedor_id where v.nombre = 'Beto'), 'cierre_auto = true';
+end $$;
+
+-- ── Zonas por ciudad (0007) ────────────────────────────────────────
+do $$ declare v uuid; begin
+  assert (select nombre from vis_zonas where id = vis_zona_por_ciudad('concepcion')) = 'Zona Norte 1', 'Concepción → Zona Norte 1';
+  assert (select nombre from vis_zonas where id = vis_zona_por_ciudad('CDE')) = 'Zona Este 2', 'CDE → Zona Este 2';
+  assert (select nombre from vis_zonas where id = vis_zona_por_ciudad('San Pedro del Paraná')) = 'Zona Sur Oeste', 'San Pedro del Paraná no se confunde con San Pedro';
+  assert vis_zona_por_ciudad('Asunción') is null, 'Asunción está en dos zonas: la asigna el supervisor';
+  insert into vis_clientes (razon_social, ciudad) values ('Cliente Encarnación', 'Encarnacion') returning id into v;
+  assert (select z.nombre from vis_clientes c join vis_zonas z on z.id = c.zona_id where c.id = v) = 'Zona Sur', 'el cliente nuevo toma la zona por la ciudad';
+  update vis_clientes set zona_id = null where id = v;
+  assert (select zona_id from vis_clientes where id = v) is null, 'quitar la zona a mano se respeta';
 end $$;
 
 select 'OK: todas las pruebas pasaron' as resultado;

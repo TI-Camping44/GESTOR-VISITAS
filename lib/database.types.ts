@@ -1,4 +1,4 @@
-// Generado desde Supabase (proyecto GESTOR-VISITAS) después de aplicar las migraciones 0001–0005.
+// Generado desde Supabase (proyecto GESTOR-VISITAS) después de aplicar las migraciones 0001–0007.
 // Regenerar cuando cambie el esquema.
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
@@ -110,8 +110,8 @@ export type Database = {
         Relationships: Rel[]
       }
       vis_zonas: {
-        Row: { activo: boolean; color: string; created_at: string; id: string; nombre: string; poligono: unknown }
-        Insert: { activo?: boolean; color?: string; created_at?: string; id?: string; nombre: string; poligono?: unknown }
+        Row: { activo: boolean; ciudades: string[]; color: string; created_at: string; frecuencia: string | null; id: string; nombre: string; poligono: unknown; responsable: string | null; semanas_mes: number[]; vendedor_id: string | null }
+        Insert: { activo?: boolean; ciudades?: string[]; color?: string; created_at?: string; frecuencia?: string | null; id?: string; nombre: string; poligono?: unknown; responsable?: string | null; semanas_mes?: number[]; vendedor_id?: string | null }
         Update: Partial<Database['public']['Tables']['vis_zonas']['Insert']>
         Relationships: []
       }
@@ -173,6 +173,8 @@ export type Database = {
         Returns: Database['public']['Tables']['vis_jornadas']['Row']
       }
       vis_vincular_usuario: { Args: never; Returns: Json }
+      vis_zona_por_ciudad: { Args: { p_ciudad: string }; Returns: string | null }
+      vis_asignar_zonas_por_ciudad: { Args: never; Returns: number }
       vis_zona_historial: {
         Args: { p_dias?: number; p_zona: string }
         Returns: HistorialZona[]

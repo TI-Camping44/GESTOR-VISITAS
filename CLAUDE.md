@@ -2,12 +2,21 @@
 
 El plan completo está en `BRIEF.md`. Trabajar por fases y **parar al final de cada una** hasta que Facundo confirme.
 
-## Estado
+## Estado (07/10/2026)
 
-- **Fase 0 (descubrimiento en Odoo): script listo, falta correrlo.** `scripts/odoo-discovery.ts` + `lib/odoo.ts` + tests. Próximo paso: correr `npm run odoo:discovery`, leer `.discovery/odoo-discovery-*.md` y con eso escribir `docs/odoo-campos.md` (mapeo de campos confirmado, valores de `x_name` y de Observaciones). Después **parar** y mostrárselo.
-- Supabase: proyecto **GESTOR-VISITAS** (`fhbnqvqxgmukukwlyune`, São Paulo), vacío. No aplicar migraciones hasta la Fase 1.
-- Vercel: equipo C44 (`c49`), proyecto `gestion-visitas`, plan **Hobby** → cron 1×/día (05:00 Asunción = `0 8 * * *` UTC) + botón manual. Funciones en región `gru1` (São Paulo).
-- Pendiente de Facundo para la Fase 1: OAuth de Google (Workspace), punto de salida del depósito, vendedor piloto.
+- **Fase 0 (Odoo): script listo, sin correr.** Facundo pidió dejar Odoo para el final. `scripts/odoo-discovery.ts` + `lib/odoo.ts`. Cuando haya acceso: correr `npm run odoo:discovery`, escribir `docs/odoo-campos.md`, y recién ahí el sync (`lib/sync/*`, `/api/cron/sync`, `vercel.json` crons).
+- **Fase 1 sin Odoo: hecha.** Migraciones 0001–0007 aplicadas en Supabase **GESTOR-VISITAS** (`fhbnqvqxgmukukwlyune`, São Paulo). Pantallas de vendedor y supervisor, PWA, cola offline, tracking y mapa en vivo.
+- Zonas reales cargadas (0007): ciudades, semana del mes y responsable. Asunción está en dos zonas (quincenas) → esos clientes se asignan a mano.
+- Accesos: solo Facundo (admin). Faltan los emails de Antonio Fernández, Dan Velastiqui y Humberto Benítez.
+- Vercel: equipo C44 (`c49`), proyecto `gestion-visitas`, plan **Hobby** (cron 1×/día), región `gru1`.
+- Pendiente de Facundo: URLs de redirección en Supabase Auth, OAuth de Google, vendedor piloto.
+
+## Cómo probar
+
+- `npm test` (lib/odoo, geo, fechas) · `npm run typecheck` · `npm run lint` · `npm run build`.
+- `npm run db:test`: migraciones + RLS en un Postgres 16 local con PostGIS que imita Supabase
+  (`PGHOST=/tmp PGPORT=54329 PGUSER=postgres`). Saltea `*_cron.sql` y `*_fotos.sql`.
+- Aplicar migraciones nuevas con el conector de Supabase (`apply_migration`), en orden, y regenerar `lib/database.types.ts`.
 
 ## Reglas que no se negocian
 

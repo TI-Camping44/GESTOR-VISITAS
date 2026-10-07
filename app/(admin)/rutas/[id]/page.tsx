@@ -9,7 +9,7 @@ import { ArrowDown, ArrowUp, Trash2, Wand2 } from 'lucide-react'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, Boton, Entrada, Insignia, PuntoEstado, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
-import { fmtDia, fmtFecha, hace, lunesDe, semanaIso, sumarDias } from '@/lib/fechas'
+import { fmtDia, fmtFecha, hace, hoyIso, lunesDe, semanaIso, sumarDias } from '@/lib/fechas'
 import { ordenarParadas } from '@/lib/geo'
 import { COLOR_ESTADO, VIS } from '@/lib/config'
 import { COLOR_ESTADO_RUTA, ETIQUETA_ESTADO_RUTA, renombrarSemana } from '@/lib/rutas'
@@ -51,6 +51,8 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
       if (error || !r) { setError(error ? mensajeError(error) : 'Ruta inexistente.'); return }
       setRuta(r)
       setDestinoDup(sumarDias(r.semana_inicio, 7))
+      const idxHoy = LETRA.findIndex((_, i) => sumarDias(r.semana_inicio, i) === hoyIso())
+      if (idxHoy >= 0) setDiaSel(idxHoy)
       const [v, z] = await Promise.all([
         sb.from('vis_vendedores').select('*').eq('id', r.vendedor_id).single(),
         r.zona_id ? sb.from('vis_zonas').select('*').eq('id', r.zona_id).single() : Promise.resolve({ data: null }),

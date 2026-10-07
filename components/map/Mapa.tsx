@@ -3,9 +3,11 @@
 // Puntos con color propio, agrupados (clustering) si se pide, etiqueta opcional
 // (número de parada o iniciales) y popup con link. Opcional: líneas y "mi posición".
 import { useEffect, useRef } from 'react'
-import { LngLatBounds, Map as MapaML, Marker, NavigationControl, Popup, type GeoJSONSource, type MapLayerMouseEvent } from 'maplibre-gl'
+import { LngLatBounds, Map as MapaML, Marker, NavigationControl, Popup, setWorkerUrl, type GeoJSONSource, type MapLayerMouseEvent } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { CENTRO_PY, MAPA_ESTILO } from '@/lib/config'
+
+setWorkerUrl('/maplibre/maplibre-gl-worker.mjs')
 
 export type PuntoMapa = {
   id: string

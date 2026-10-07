@@ -47,3 +47,11 @@ describe('leerCoordenadas', () => {
     assert.equal(leerCoordenadas('Concepción'), null)
   })
 })
+
+describe('semanaDelMes', () => {
+  it('numera las semanas del mes por el lunes', async () => {
+    const { semanaDelMes } = await import('../lib/fechas')
+    assert.deepEqual(['2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26'].map(semanaDelMes), [1, 2, 3, 4])
+    assert.equal(semanaDelMes('2026-11-30'), 5)
+  })
+})

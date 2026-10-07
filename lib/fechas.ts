@@ -67,4 +67,9 @@ export function hace(v: string | Date | null | undefined, ahora = Date.now()): s
   return `hace ${Math.round(h / 24)} días`
 }
 
+/** Semana del mes de un lunes: 1 a 5 (el lunes 12 cae en la 2da semana). Así se planifican las zonas. */
+export const semanaDelMes = (lunesIso: string) => Math.ceil(Number(lunesIso.slice(8, 10)) / 7)
+
+export const ORDINAL_SEMANA = ['', '1ra', '2da', '3ra', '4ta', '5ta'] as const
+
 export const DIAS_LABORALES = 6 // lunes a sábado

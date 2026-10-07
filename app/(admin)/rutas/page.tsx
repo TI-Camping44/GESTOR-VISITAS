@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { SelectorSemana } from '@/components/admin/SelectorSemana'
 import { Aviso, Boton, Entrada, Etiqueta, Insignia, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
-import { hoyIso, lunesDe, semanaIso } from '@/lib/fechas'
+import { hoyIso, lunesDe, ORDINAL_SEMANA, semanaDelMes, semanaIso } from '@/lib/fechas'
 import { mensajeError } from '@/lib/utils'
 import { COLOR_ESTADO_RUTA } from '@/lib/rutas'
 import type { EstadoRuta, Vendedor, Zona } from '@/lib/database.types'
@@ -35,6 +35,18 @@ export default function Rutas() {
       .eq('semana_inicio', semana).order('nombre')
       .then(({ data, error }) => { if (error) setError(mensajeError(error)); else setRutas((data ?? []) as unknown as FilaRuta[]) })
   }, [semana])
+
+  const semMes = semanaDelMes(semana)
+  const tocan = zonas.filter((z) => z.semanas_mes.includes(semMes))
+  const responsableDe = (z: Zona) => vendedores.find((v) => v.id === z.vendedor_id)?.nombre ?? z.responsable
+  const esDe = (z: Zona, v: Vendedor) => z.vendedor_id === v.id || (!z.vendedor_id && !!z.responsable &&
+    z.responsable.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(' ')[0] === v.nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(' ')[0])
+
+  function elegirVendedor(id: string) {
+    const v = vendedores.find((x) => x.id === id)
+    const sugerida = v ? tocan.find((z) => esDe(z, v)) : undefined
+    setNueva((n) => ({ ...n, vendedor_id: id, zona_id: n.zona_id || sugerida?.id || '' }))
+  }
 
   const nombreSugerido = () => {
     const v = vendedores.find((x) => x.id === nueva.vendedor_id)
@@ -70,11 +82,15 @@ export default function Rutas() {
       </div>
 
       <Tarjeta>
-        <h2 className="mb-3 font-semibold">Nueva ruta para esta semana</h2>
+        <h2 className="font-semibold">Nueva ruta para esta semana</h2>
+        <p className="mb-3 mt-1 text-sm text-tenue">
+          Es la {ORDINAL_SEMANA[semMes]} semana del mes.{' '}
+          {tocan.length ? <>Toca: {tocan.map((z) => `${z.nombre}${responsableDe(z) ? ` (${responsableDe(z)})` : ''}`).join(' · ')}.</> : 'Ninguna zona tiene visita programada esta semana.'}
+        </p>
         <form onSubmit={crear} className="grid gap-3 md:grid-cols-[1fr_1fr_1.5fr_auto] md:items-end">
           <div>
             <Etiqueta htmlFor="nv-vend">Vendedor</Etiqueta>
-            <Selector id="nv-vend" value={nueva.vendedor_id} onChange={(e) => setNueva({ ...nueva, vendedor_id: e.target.value })}>
+            <Selector id="nv-vend" value={nueva.vendedor_id} onChange={(e) => elegirVendedor(e.target.value)}>
               <option value="">Elegí…</option>
               {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nombre}</option>)}
             </Selector>
@@ -83,7 +99,7 @@ export default function Rutas() {
             <Etiqueta htmlFor="nv-zona">Zona</Etiqueta>
             <Selector id="nv-zona" value={nueva.zona_id} onChange={(e) => setNueva({ ...nueva, zona_id: e.target.value })}>
               <option value="">Sin zona</option>
-              {zonas.map((z) => <option key={z.id} value={z.id}>{z.nombre}</option>)}
+              {zonas.map((z) => <option key={z.id} value={z.id}>{z.nombre}{z.semanas_mes.includes(semMes) ? ' · le toca esta semana' : ''}</option>)}
             </Selector>
           </div>
           <div>

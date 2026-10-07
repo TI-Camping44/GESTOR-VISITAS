@@ -13,3 +13,6 @@ out/
 
 *.log
 .DS_Store
+
+# Copiado de node_modules en postinstall
+public/maplibre/
