@@ -10,4 +10,5 @@ for f in supabase/migrations/*.sql; do
   case "$f" in *_cron.sql|*_fotos.sql) echo "  (salteo $f: pg_cron y Storage solo existen en Supabase)"; continue;; esac
   "${P[@]}" -d vis_test -f "$f"
 done
-"${P[@]}" -d vis_test -f supabase/tests/01_rls_y_funciones.sql | grep -E 'OK:|ERROR' || { echo "Las pruebas fallaron"; exit 1; }
+salida=$("${P[@]}" -d vis_test -f supabase/tests/01_rls_y_funciones.sql 2>&1 || true)
+if grep -q 'OK: todas las pruebas pasaron' <<<"$salida"; then echo " OK: todas las pruebas pasaron"; else grep -E 'ERROR|CONTEXT' <<<"$salida"; echo "Las pruebas fallaron"; exit 1; fi

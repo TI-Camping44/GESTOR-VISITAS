@@ -157,10 +157,10 @@ function Recorrido({ vendedores }: { vendedores: Vendedor[] }) {
     Promise.all([
       sb.from('vis_posiciones').select('fecha_hora, lat, lng').eq('vendedor_id', vendedorId).gte('fecha_hora', desde).lt('fecha_hora', hasta).order('fecha_hora').limit(5000),
       sb.from('vis_visitas').select('id, fecha_hora, lat, lng, hizo_pedido, cliente:vis_clientes!vis_visitas_cliente_id_fkey(razon_social)').eq('vendedor_id', vendedorId).gte('fecha_hora', desde).lt('fecha_hora', hasta).order('fecha_hora'),
-      sb.from('vis_jornadas').select('inicio, fin, km_recorridos').eq('vendedor_id', vendedorId).gte('inicio', desde).lt('inicio', hasta).order('inicio'),
+      sb.from('vis_jornadas').select('inicio, fin, km_recorridos, km_actual:vis_km_actual').eq('vendedor_id', vendedorId).gte('inicio', desde).lt('inicio', hasta).order('inicio'),
     ]).then(([p, v, j]) => {
       const pos = p.data ?? []
-      const jornadas = j.data ?? []
+      const jornadas = (j.data ?? []) as unknown as { inicio: string; fin: string | null; km_actual: number | null }[]
       const visitas = ((v.data ?? []) as unknown as { id: string; fecha_hora: string; lat: number | null; lng: number | null; hizo_pedido: boolean; cliente: { razon_social: string } | null }[])
       setDatos({
         linea: pos.length > 1 ? { id: 'recorrido', color: '#2563eb', puntos: pos.map((x) => [x.lng, x.lat]) } : null,
@@ -170,7 +170,7 @@ function Recorrido({ vendedores }: { vendedores: Vendedor[] }) {
         })),
         inicio: jornadas[0]?.inicio ?? null,
         fin: jornadas.at(-1)?.fin ?? null,
-        km: jornadas.reduce((s, x) => s + Number(x.km_recorridos ?? 0), 0) || null,
+        km: jornadas.reduce((s, x) => s + Number(x.km_actual ?? 0), 0),
       })
     })
   }, [vendedorId, dia, sb])
@@ -195,7 +195,7 @@ function Recorrido({ vendedores }: { vendedores: Vendedor[] }) {
         <>
           <p className="text-sm text-tenue tabular">
             Inicio {datos.inicio ? fmtSoloHora(datos.inicio) : '—'} · fin {datos.fin ? fmtSoloHora(datos.fin) : datos.inicio ? 'en curso' : '—'} ·
-            {' '}{datos.km != null ? fmtDistancia(datos.km * 1000) : 'km al cerrar la jornada'} · {datos.visitas.length} visitas con GPS
+            {' '}{datos.inicio ? `${fmtDistancia((datos.km ?? 0) * 1000)} recorridos${datos.fin ? '' : ' hasta ahora'}` : 'sin jornada'} · {datos.visitas.length} visitas con GPS
           </p>
           <Mapa puntos={datos.visitas} lineas={datos.linea ? [datos.linea] : []} claveEncuadre={`${vendedorId}-${dia}-${datos.visitas.length}-${datos.linea?.puntos.length ?? 0}`} className="h-96 w-full overflow-hidden rounded-xl border border-borde" />
         </>

@@ -28,6 +28,7 @@ export default function Tablero() {
   const [semana, setSemana] = useState(lunesDe(hoyIso()))
   const [filas, setFilas] = useState<FilaTablero[] | null>(null)
   const [visitas, setVisitas] = useState<VisitaSemana[]>([])
+  const [kmHoras, setKmHoras] = useState<Map<string, { km: number; horas: number }>>(new Map())
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -39,10 +40,13 @@ export default function Tablero() {
       sb.from('vis_visitas')
         .select('id, vendedor_id, fecha_hora, lat, lng, hizo_pedido, ruta_parada_id, cliente:vis_clientes!vis_visitas_cliente_id_fkey(razon_social, ciudad), zona:vis_zonas!vis_visitas_zona_id_fkey(nombre)')
         .eq('origen', 'app').gte('fecha_hora', inicioDia(semana)).lt('fecha_hora', inicioDia(sumarDias(semana, 7))).limit(5000),
-    ]).then(([t, v]) => {
+      sb.rpc('vis_reporte_vendedores', { p_desde: semana, p_hasta: sumarDias(semana, 6) }),
+    ]).then(([t, v, r]) => {
       if (!vivo) return
       if (t.error || v.error) setError(mensajeError(t.error ?? v.error))
       else { setError(null); setFilas((t.data ?? []) as FilaTablero[]); setVisitas((v.data ?? []) as unknown as VisitaSemana[]) }
+      const filasR = (r.data ?? []) as unknown as { vendedor_id: string; km: number; horas_jornada: number }[]
+      setKmHoras(new Map(filasR.map((f) => [f.vendedor_id, { km: Number(f.km), horas: Number(f.horas_jornada) }])))
     })
     return () => { vivo = false }
   }, [semana])
@@ -95,11 +99,13 @@ export default function Tablero() {
               <th className="px-3 py-3 text-center font-medium">Semana</th>
               <th className="px-3 py-3 text-center font-medium">Con pedido</th>
               <th className="px-3 py-3 text-center font-medium">Fuera de ruta</th>
+              <th className="px-3 py-3 text-center font-medium">Km</th>
+              <th className="px-3 py-3 text-center font-medium">Horas</th>
             </tr>
           </thead>
           <tbody>
-            {filas === null && <tr><td colSpan={10} className="px-4 py-6 text-center text-tenue">Cargando…</td></tr>}
-            {filas && porVendedor.length === 0 && <tr><td colSpan={10} className="px-4 py-6 text-center text-tenue">No hay vendedores activos. Cargalos en Vendedores.</td></tr>}
+            {filas === null && <tr><td colSpan={12} className="px-4 py-6 text-center text-tenue">Cargando…</td></tr>}
+            {filas && porVendedor.length === 0 && <tr><td colSpan={12} className="px-4 py-6 text-center text-tenue">No hay vendedores activos. Cargalos en Vendedores.</td></tr>}
             {porVendedor.map(([id, v]) => {
               const lista = dias.map((d) => v.dias.get(d))
               const total = lista.reduce((s, f) => s + Number(f?.realizadas ?? 0), 0)
@@ -128,6 +134,8 @@ export default function Tablero() {
                   </td>
                   <td className="px-3 py-2 text-center">{pedidos}</td>
                   <td className="px-3 py-2 text-center">{fuera}</td>
+                  <td className="px-3 py-2 text-center">{kmHoras.get(id)?.km.toLocaleString('es-PY', { maximumFractionDigits: 1 }) ?? '—'}</td>
+                  <td className="px-3 py-2 text-center">{kmHoras.get(id)?.horas.toLocaleString('es-PY', { maximumFractionDigits: 1 }) ?? '—'}</td>
                 </tr>
               )
             })}

@@ -1,4 +1,4 @@
-// Generado desde Supabase (proyecto GESTOR-VISITAS) después de aplicar las migraciones 0001–0007.
+// Generado desde Supabase (proyecto GESTOR-VISITAS) después de aplicar las migraciones 0001–0008.
 // Regenerar cuando cambie el esquema.
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
@@ -174,6 +174,10 @@ export type Database = {
       }
       vis_vincular_usuario: { Args: never; Returns: Json }
       vis_zona_por_ciudad: { Args: { p_ciudad: string }; Returns: string | null }
+      vis_reporte_vendedores: { Args: { p_desde: string; p_hasta: string }; Returns: Record<string, unknown>[] }
+      vis_reporte_resultados: { Args: { p_desde: string; p_hasta: string; p_vendedor?: string }; Returns: Record<string, unknown>[] }
+      vis_reporte_zonas: { Args: { p_desde: string; p_hasta: string }; Returns: Record<string, unknown>[] }
+      vis_clientes_sin_visita: { Args: { p_dias?: number; p_zona?: string }; Returns: Record<string, unknown>[] }
       vis_asignar_zonas_por_ciudad: { Args: never; Returns: number }
       vis_zona_historial: {
         Args: { p_dias?: number; p_zona: string }

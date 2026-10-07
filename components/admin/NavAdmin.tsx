@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart3, Route, Radio, Users, MapPinned, UserCog, RefreshCw, Smartphone } from 'lucide-react'
+import { BarChart3, Route, Radio, Users, MapPinned, UserCog, RefreshCw, Smartphone, FileBarChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Rol } from '@/lib/database.types'
 
@@ -9,6 +9,7 @@ export function NavAdmin({ rol }: { rol: Rol }) {
   const ruta = usePathname()
   const items = [
     { href: '/tablero', texto: 'Tablero', Icono: BarChart3 },
+    { href: '/reportes', texto: 'Reportes', Icono: FileBarChart },
     { href: '/rutas', texto: 'Rutas', Icono: Route },
     { href: '/en-vivo', texto: 'En vivo', Icono: Radio },
     { href: '/clientes', texto: 'Clientes', Icono: Users },

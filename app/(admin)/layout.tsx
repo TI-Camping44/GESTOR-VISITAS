@@ -15,7 +15,8 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
   }
   return (
     <div className="min-h-full lg:grid lg:grid-cols-[220px_1fr]">
-      <aside className="border-b border-borde bg-superficie px-3 py-3 lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
+      <aside className="border-b border-borde bg-superficie px-3 py-3 lg:border-b-0 lg:border-r">
+        <div className="lg:sticky lg:top-3">
         <div className="mb-3 flex items-center justify-between gap-2 px-2 lg:block">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-marca">Camping 44</p>
@@ -25,6 +26,7 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
         </div>
         <NavAdmin rol={perfil.rol} />
         <BotonSalir className="mt-3 hidden w-full lg:flex" />
+        </div>
       </aside>
       <div className="min-w-0">
         {fallos > 0 && (

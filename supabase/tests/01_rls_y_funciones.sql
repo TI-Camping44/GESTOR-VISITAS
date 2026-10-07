@@ -267,6 +267,28 @@ do $$ begin
   assert (select cierre_auto from vis_jornadas j join vis_vendedores v on v.id = j.vendedor_id where v.nombre = 'Beto'), 'cierre_auto = true';
 end $$;
 
+-- ── Reportes (0008) ────────────────────────────────────────────────
+select pg_temp.como('super@camping44.com.py') \gset
+set role authenticated;
+do $$ declare r record; begin
+  select * into r from vis_reporte_vendedores(vis_hoy() - 7, vis_hoy()) where vendedor = 'Antonio';
+  assert r.visitas = 1 and r.con_pedido = 1, format('reporte: 1 visita con pedido, vino %s/%s', r.visitas, r.con_pedido);
+  assert r.km > 0, 'reporte: km de la jornada';
+  assert r.dias_con_jornada = 1 and r.horas_jornada >= 0, 'reporte: días y horas de jornada';
+  assert r.prospectos_nuevos = 2, format('reporte: 2 prospectos nuevos, vino %s', r.prospectos_nuevos);
+  assert (select visitas from vis_reporte_resultados(vis_hoy() - 7, vis_hoy()) where resultado = 'Hizo pedido') = 1, 'reporte de resultados';
+  assert (select visitados from vis_reporte_zonas(vis_hoy() - 7, vis_hoy()) where zona = 'Zona Prueba A') = 1, 'cobertura por zona';
+  assert exists (select 1 from vis_clientes_sin_visita(60) where razon_social = 'Agro Beto SRL'), 'Agro Beto figura sin visita';
+end $$;
+reset role;
+select pg_temp.como('beto@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert (select count(*) from vis_reporte_vendedores(vis_hoy() - 7, vis_hoy())) = 1, 'un vendedor solo se ve a sí mismo en el reporte';
+  assert (select vendedor from vis_reporte_vendedores(vis_hoy() - 7, vis_hoy())) = 'Beto', 'y es él';
+end $$;
+reset role;
+
 -- ── Zonas por ciudad (0007) ────────────────────────────────────────
 do $$ declare v uuid; begin
   assert (select nombre from vis_zonas where id = vis_zona_por_ciudad('concepcion')) = 'Zona Norte 1', 'Concepción → Zona Norte 1';
