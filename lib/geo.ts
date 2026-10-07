@@ -52,27 +52,33 @@ export function ordenarParadas<T extends Punto>(paradas: T[], origen: Punto | nu
 /**
  * Links de Google Maps para navegar la ruta, en tramos de hasta 9 paradas intermedias
  * (límite de waypoints de la URL). Cada tramo arranca donde terminó el anterior.
+ * Sin origen, el primer tramo sale de donde esté el celular (Google usa la ubicación actual).
  */
 export function linksGoogleMaps(origen: Punto | null, paradas: Punto[]): string[] {
   const p = (x: Punto) => `${x.lat.toFixed(6)},${x.lng.toFixed(6)}`
   const links: string[] = []
   let desde: Punto | null = origen
-  let i = 0
-  while (i < paradas.length) {
-    // Sin origen, el primer tramo arranca en la primera parada.
-    if (!desde) { desde = paradas[0]!; i = 1; if (i >= paradas.length) break }
+  for (let i = 0; i < paradas.length; ) {
     const tramo = paradas.slice(i, i + 10) // 9 intermedias + destino
     const destino = tramo[tramo.length - 1]!
-    const intermedias = tramo.slice(0, -1)
     const url = new URL('https://www.google.com/maps/dir/')
     url.searchParams.set('api', '1')
-    url.searchParams.set('origin', p(desde))
+    if (desde) url.searchParams.set('origin', p(desde))
     url.searchParams.set('destination', p(destino))
-    if (intermedias.length) url.searchParams.set('waypoints', intermedias.map(p).join('|'))
+    if (tramo.length > 1) url.searchParams.set('waypoints', tramo.slice(0, -1).map(p).join('|'))
     url.searchParams.set('travelmode', 'driving')
     links.push(url.toString())
     desde = destino
     i += tramo.length
   }
   return links
+}
+
+/** Lee coordenadas pegadas como "-25.28, -57.63" o un link de Google Maps (…@-25.28,-57.63,17z…). */
+export function leerCoordenadas(texto: string): Punto | null {
+  const m = texto.match(/(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/)
+  if (!m) return null
+  const lat = Number(m[1])
+  const lng = Number(m[2])
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null
 }

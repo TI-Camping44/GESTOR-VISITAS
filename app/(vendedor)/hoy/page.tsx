@@ -10,7 +10,7 @@ import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
 import { fmtFecha, hace, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
-import { COLOR_ESTADO, VIS } from '@/lib/config'
+import { COLOR_ESTADO } from '@/lib/config'
 import { linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
 import type { FilaTablero, ParadaDia } from '@/lib/database.types'
 
@@ -63,7 +63,7 @@ export default function Hoy() {
     })), [datos])
 
   const pendientesHoy = useMemo(() => (datos?.paradas ?? []).filter((p) => !p.visitada && p.lat != null && p.lng != null), [datos])
-  const links = useMemo(() => linksGoogleMaps(VIS.base, pendientesHoy.map((p) => ({ lat: p.lat!, lng: p.lng! }))), [pendientesHoy])
+  const links = useMemo(() => linksGoogleMaps(null, pendientesHoy.map((p) => ({ lat: p.lat!, lng: p.lng! }))), [pendientesHoy])
 
   const extra = pendientes.visitas
   return (
