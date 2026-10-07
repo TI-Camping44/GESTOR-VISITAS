@@ -1,0 +1,15 @@
+node_modules/
+.next/
+out/
+.vercel/
+
+# Credenciales: nunca al repo
+.env
+.env.*
+!.env.example
+
+# Reportes de descubrimiento con datos reales de Odoo
+.discovery/
+
+*.log
+.DS_Store
