@@ -2,7 +2,8 @@
 // Captura GPS al abrir la pantalla, con precisión visible y botón para reintentar.
 import { useCallback, useEffect, useState } from 'react'
 import { LocateFixed, RefreshCw } from 'lucide-react'
-import { leerGps, type Lectura } from '@/lib/gps'
+import type { Lectura } from '@/lib/gps'
+import { ubicacionRapida } from '@/lib/tracking/tracker'
 import { distanciaM, fmtDistancia, type Punto } from '@/lib/geo'
 import { VIS } from '@/lib/config'
 import { cn } from '@/lib/utils'
@@ -14,7 +15,7 @@ export function useGps(auto = true) {
   const leer = useCallback(async () => {
     setLeyendo(true)
     setError(null)
-    try { setLectura(await leerGps()) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setLeyendo(false) }
+    try { setLectura(await ubicacionRapida()) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setLeyendo(false) }
   }, [])
   useEffect(() => { if (auto) void leer() }, [auto, leer])
   return { lectura, error, leyendo, leer, precisionOk: lectura != null && lectura.precision <= VIS.gpsPrecisionMaxM }
