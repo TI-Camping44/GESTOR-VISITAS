@@ -42,6 +42,24 @@ body {
 }
 .tabular { font-variant-numeric: tabular-nums; }
 
-/* MapLibre: que los popups sigan el tema */
-.maplibregl-popup-content { background: var(--c-superficie); color: var(--c-tinta); border-radius: 10px; padding: 10px 12px; }
-.maplibregl-popup-tip { border-top-color: var(--c-superficie) !important; border-bottom-color: var(--c-superficie) !important; }
+/* MapLibre: que los popups sigan el tema. Selectores más específicos que los de
+   maplibre-gl.css, que se carga después y si no vuelve a poner el fondo blanco. */
+.maplibregl-map .maplibregl-popup-content {
+  background: var(--c-superficie);
+  color: var(--c-tinta);
+  border-radius: 10px;
+  padding: 10px 28px 10px 12px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.maplibregl-map .maplibregl-popup-content a { color: var(--c-marca); }
+.maplibregl-map .maplibregl-popup-close-button { color: var(--c-tenue); font-size: 18px; padding: 0 6px; }
+.maplibregl-map .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-top-right .maplibregl-popup-tip { border-bottom-color: var(--c-superficie); }
+.maplibregl-map .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip { border-top-color: var(--c-superficie); }
+.maplibregl-map .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--c-superficie); }
+.maplibregl-map .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--c-superficie); }

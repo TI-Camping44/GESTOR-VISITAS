@@ -121,7 +121,7 @@ export function Mapa({ puntos, agrupar = false, lineas = [], yo, claveEncuadre, 
         const p = f.properties as Record<string, string>
         alClic.current?.(p.id!)
         const html = `<strong>${esc(p.titulo ?? '')}</strong>${p.detalle ? `<div style="margin-top:2px;font-size:12px;opacity:.8">${esc(p.detalle)}</div>` : ''}${
-          p.href ? `<a href="${esc(p.href)}" style="display:inline-block;margin-top:6px;font-weight:600;color:#1f6f4a">${esc(p.textoLink ?? 'Abrir')} →</a>` : ''}`
+          p.href ? `<a href="${esc(p.href)}" style="display:inline-block;margin-top:6px;font-weight:600">${esc(p.textoLink ?? 'Abrir')} →</a>` : ''}`
         new Popup({ offset: 10, maxWidth: '260px' }).setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number]).setHTML(html).addTo(m)
       })
       for (const capa of ['punto', 'grupos']) {
