@@ -55,3 +55,22 @@ describe('semanaDelMes', () => {
     assert.equal(semanaDelMes('2026-11-30'), 5)
   })
 })
+
+describe('repartirEnDias', () => {
+  it('llena los días por ciudad, respeta la capacidad y prioriza el puntaje', async () => {
+    const { repartirEnDias } = await import('../lib/sugerencia')
+    const mk = (id: string, ciudad: string, lat: number, puntaje: number) => ({ cliente_id: id, ciudad, lat, lng: -57.5, puntaje })
+    const cands = [
+      mk('c1', 'Concepción', -23.40, 50), mk('c2', 'Concepción', -23.41, 40), mk('c3', 'Concepción', -23.42, 30),
+      mk('h1', 'Horqueta', -23.34, 90), mk('h2', 'Horqueta', -23.35, 80),
+      mk('x', 'Lejana', -20.0, 1), // puntaje más bajo: no entra
+    ]
+    const r = repartirEnDias(cands, [{ dia: 'lun', libres: 3 }, { dia: 'mar', libres: 2 }], { lat: -23.30, lng: -57.5 })
+    assert.equal(r.length, 5)
+    assert.ok(!r.some((a) => a.c.cliente_id === 'x'), 'el de menor puntaje queda afuera')
+    const lunes = r.filter((a) => a.dia === 'lun').map((a) => a.c.ciudad)
+    assert.deepEqual([...new Set(r.filter((a) => a.dia === 'mar').map((a) => a.c.ciudad))], ['Concepción'], 'martes en una sola ciudad')
+    assert.equal(lunes.filter((c) => c === 'Horqueta').length, 2, 'Horqueta (más cerca de la salida) va primero')
+    assert.deepEqual(r.filter((a) => a.dia === 'lun').map((a) => a.orden), [1, 2, 3])
+  })
+})

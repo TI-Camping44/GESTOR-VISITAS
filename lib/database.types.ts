@@ -1,4 +1,4 @@
-// Generado desde Supabase (proyecto GESTOR-VISITAS) después de aplicar las migraciones 0001–0008.
+// Generado desde Supabase (proyecto GESTOR-VISITAS) después de aplicar las migraciones 0001–0009.
 // Regenerar cuando cambie el esquema.
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
@@ -178,6 +178,8 @@ export type Database = {
       vis_reporte_resultados: { Args: { p_desde: string; p_hasta: string; p_vendedor?: string }; Returns: Record<string, unknown>[] }
       vis_reporte_zonas: { Args: { p_desde: string; p_hasta: string }; Returns: Record<string, unknown>[] }
       vis_clientes_sin_visita: { Args: { p_dias?: number; p_zona?: string }; Returns: Record<string, unknown>[] }
+      vis_proximas_visitas: { Args: { p_hasta?: string }; Returns: ProximaVisita[] }
+      vis_sugerir_paradas: { Args: { p_ruta: string }; Returns: Sugerida[] }
       vis_asignar_zonas_por_ciudad: { Args: never; Returns: number }
       vis_zona_historial: {
         Args: { p_dias?: number; p_zona: string }
@@ -233,4 +235,16 @@ export type HistorialZona = {
 export type Perfil = {
   id: string; nombre: string; email: string; rol: Rol; meta_diaria: number; meta_semanal: number
   tracking_aceptado_el: string | null
+}
+
+export type ProximaVisita = {
+  cliente_id: string; razon_social: string; ciudad: string | null; direccion: string | null; telefono: string | null
+  telefono_norm: string | null; lat: number | null; lng: number | null; estado: EstadoCliente; zona_id: string | null
+  vendedor_id: string | null; proxima_visita: string; ultima_visita: string; ultima_observacion: string | null; dias_vencida: number
+}
+
+export type Sugerida = {
+  cliente_id: string; razon_social: string; ciudad: string | null; lat: number | null; lng: number | null
+  estado: EstadoCliente; puntaje: number; motivos: string[]; proxima_visita: string | null; ultima_visita: string | null
+  ventas_6m_gs: number
 }

@@ -5,7 +5,7 @@
 import { use, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowDown, ArrowUp, Trash2, Wand2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Sparkles, Trash2, Wand2, X } from 'lucide-react'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, Boton, Entrada, Insignia, PuntoEstado, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
@@ -13,8 +13,9 @@ import { fmtDia, fmtFecha, hace, hoyIso, lunesDe, semanaIso, sumarDias } from '@
 import { ordenarParadas } from '@/lib/geo'
 import { COLOR_ESTADO, VIS } from '@/lib/config'
 import { COLOR_ESTADO_RUTA, ETIQUETA_ESTADO_RUTA, renombrarSemana } from '@/lib/rutas'
+import { repartirEnDias, type Asignacion } from '@/lib/sugerencia'
 import { cn, mensajeError } from '@/lib/utils'
-import type { EstadoCliente, EstadoRuta, HistorialZona, Parada, Ruta, Vendedor, Zona } from '@/lib/database.types'
+import type { EstadoCliente, EstadoRuta, HistorialZona, Parada, ProximaVisita, Ruta, Sugerida, Vendedor, Zona } from '@/lib/database.types'
 
 type Cand = { id: string; razon_social: string; ciudad: string | null; lat: number | null; lng: number | null; estado: EstadoCliente; ultima_visita: string | null; zona_id: string | null }
 const LETRA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -38,6 +39,9 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
   const [destinoDup, setDestinoDup] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState(false)
+  const [proximas, setProximas] = useState<Map<string, string>>(new Map())
+  const [sugerencia, setSugerencia] = useState<Asignacion<Sugerida>[] | null>(null)
+  const [conSabado, setConSabado] = useState(false)
 
   const cargarParadas = useCallback(async () => {
     const { data, error } = await sb.from('vis_ruta_paradas').select('*').eq('ruta_id', id).order('dia').order('orden')
@@ -66,6 +70,8 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
         setHistorial((data ?? []) as HistorialZona[])
       } else setHistorial([])
       await cargarParadas()
+      const { data: pv } = await sb.rpc('vis_proximas_visitas', { p_hasta: sumarDias(r.semana_inicio, 6) })
+      setProximas(new Map(((pv ?? []) as ProximaVisita[]).map((x) => [x.cliente_id, x.proxima_visita])))
     })()
   }, [id, sb, cargarParadas])
 
@@ -162,6 +168,32 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
     router.push(`/rutas/${nueva.data.id}`)
   }
 
+  async function sugerir() {
+    if (!ruta) return
+    setOcupado(true)
+    setError(null)
+    const { data, error } = await sb.rpc('vis_sugerir_paradas', { p_ruta: id })
+    setOcupado(false)
+    if (error) return setError(mensajeError(error))
+    const meta = vendedor?.meta_diaria ?? 10
+    // Solo días que todavía no pasaron.
+    const capacidad = dias.slice(0, conSabado ? 6 : 5).filter((d) => d >= hoyIso()).map((d) => ({ dia: d, libres: Math.max(0, meta - delDia(d).length) }))
+    const lista = ((data ?? []) as Sugerida[]).map((x) => ({ ...x, puntaje: Number(x.puntaje) }))
+    const r = repartirEnDias(lista, capacidad, origen)
+    if (!r.length) setError(!capacidad.length ? 'Los días de esta ruta ya pasaron.' : lista.length ? 'Los días que quedan ya están completos según la meta diaria del vendedor.' : 'No hay clientes para sugerir en esta zona (o ya se visitaron en las últimas 2 semanas).')
+    setSugerencia(r.length ? r : null)
+  }
+
+  async function aplicarSugerencia() {
+    if (!sugerencia?.length) return
+    await hacer(async () => {
+      const filas = sugerencia.map((a) => ({ ruta_id: id, cliente_id: a.c.cliente_id, dia: a.dia, orden: Math.max(0, ...delDia(a.dia).map((p) => p.orden)) + a.orden }))
+      const r = await sb.from('vis_ruta_paradas').insert(filas)
+      if (!r.error) setSugerencia(null)
+      return r
+    })
+  }
+
   const diaActivo = dias[diaSel] ?? ''
   const puntos = useMemo<PuntoMapa[]>(() => {
     const paradasDia = paradas.filter((p) => p.dia === diaActivo).sort((a, b) => a.orden - b.orden)
@@ -188,6 +220,8 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Insignia className={COLOR_ESTADO_RUTA[ruta.estado]}>{ETIQUETA_ESTADO_RUTA[ruta.estado]}</Insignia>
+          <label className="flex items-center gap-1.5 text-xs text-tenue"><input type="checkbox" checked={conSabado} onChange={(e) => setConSabado(e.target.checked)} /> con sábado</label>
+          <Boton variante="secundario" disabled={ocupado} onClick={() => void sugerir()}><Sparkles className="size-4" aria-hidden /> Sugerir paradas</Boton>
           {ruta.estado === 'borrador' && <Boton disabled={ocupado || !paradas.length} onClick={() => void cambiarEstado('publicada')}>Publicar</Boton>}
           {ruta.estado === 'publicada' && <>
             <Boton variante="secundario" disabled={ocupado} onClick={() => void cambiarEstado('borrador')}>Volver a borrador</Boton>
@@ -198,6 +232,46 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
       </div>
       {!origen && <Aviso tipo="alerta">Sin punto de salida: “Ordenar” arranca desde la primera parada. Cargá el del vendedor o el del depósito en Vendedores.</Aviso>}
       {error && <Aviso tipo="error">{error}</Aviso>}
+
+      {sugerencia && (
+        <Tarjeta className="flex flex-col gap-3 border-marca">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="font-semibold">Sugerencia: {sugerencia.length} clientes en {new Set(sugerencia.map((a) => a.dia)).size} días</h2>
+              <p className="text-sm text-tenue">
+                Prioriza próximas visitas, clientes sin movimiento, los que más compran y los que hace más tiempo no se visitan.
+                Agrupa por ciudad y ordena desde el punto de salida. Hasta {vendedor?.meta_diaria ?? 10} por día. Sacá los que no quieras.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Boton disabled={ocupado} onClick={() => void aplicarSugerencia()}>Agregar a la ruta</Boton>
+              <Boton variante="secundario" onClick={() => setSugerencia(null)}>Descartar</Boton>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {[...new Set(sugerencia.map((a) => a.dia))].map((d) => (
+              <div key={d} className="rounded-lg bg-fondo p-2">
+                <p className="mb-1 text-sm font-semibold">{fmtDia(d)} <span className="font-normal text-tenue">· {sugerencia.filter((a) => a.dia === d).length}</span></p>
+                <ol className="flex flex-col gap-1">
+                  {sugerencia.filter((a) => a.dia === d).map((a) => (
+                    <li key={a.c.cliente_id} className="flex items-start gap-2 rounded-md bg-superficie px-2 py-1.5">
+                      <span className="mt-0.5 text-xs font-semibold text-tenue tabular">{a.orden}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5"><PuntoEstado estado={a.c.estado} /><p className="truncate text-sm font-medium">{a.c.razon_social}</p></div>
+                        <p className="truncate text-xs text-tenue">{a.c.ciudad ?? 'Sin ciudad'}{a.c.motivos.length ? ` · ${a.c.motivos.join(' · ')}` : ''}</p>
+                      </div>
+                      <button type="button" aria-label={`Sacar ${a.c.razon_social}`} className="rounded p-0.5 text-tenue hover:text-red-600"
+                        onClick={() => setSugerencia((s) => { const n = (s ?? []).filter((x) => x.c.cliente_id !== a.c.cliente_id); return n.length ? n : null })}>
+                        <X className="size-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+        </Tarjeta>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(280px,360px)_1fr]">
         {/* Clientes candidatos */}
@@ -221,6 +295,7 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{c.razon_social}</p>
                       <div className="flex items-center gap-2"><PuntoEstado estado={c.estado} /><span className="truncate text-xs text-tenue">{c.ciudad ?? '—'} · {hace(c.ultima_visita)}</span></div>
+                      {proximas.has(c.id) && <p className="text-xs font-medium text-amber-700 dark:text-amber-300">Próxima visita: {fmtFecha(proximas.get(c.id)!)}</p>}
                     </div>
                   </div>
                   <div className="mt-1.5 flex gap-1" role="group" aria-label={`Días para ${c.razon_social}`}>
@@ -257,7 +332,7 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
                   <Wand2 className="size-4" aria-hidden /> Ordenar
                 </Boton>
               </div>
-              {delDia(diaActivo).length === 0 ? <Vacio titulo="Sin paradas este día">Sumá clientes desde la lista o tocándolos en el mapa.</Vacio> : (
+              {delDia(diaActivo).length === 0 ? <Vacio titulo="Sin paradas este día">Sumá clientes desde la lista, tocándolos en el mapa o con “Sugerir paradas”.</Vacio> : (
                 <ol className="flex flex-col gap-1">
                   {delDia(diaActivo).map((p, i, arr) => {
                     const c = porId.get(p.cliente_id)

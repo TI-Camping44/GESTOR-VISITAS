@@ -12,9 +12,9 @@ import { fmtFecha, hace, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
 import { COLOR_ESTADO } from '@/lib/config'
 import { linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
-import type { FilaTablero, ParadaDia } from '@/lib/database.types'
+import type { FilaTablero, ParadaDia, ProximaVisita } from '@/lib/database.types'
 
-type Datos = { paradas: ParadaDia[]; hoy: number; semana: number }
+type Datos = { paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[] }
 
 export default function Hoy() {
   const { perfil, pendientes } = useVendedor()
@@ -30,9 +30,10 @@ export default function Hoy() {
       const cache = await leerCache<Datos>(clave).catch(() => null)
       if (cache && vivo) { setDatos(cache.datos); setGuardadoEl(cache.guardado) }
       const sb = supabaseNavegador()
-      const [p, t] = await Promise.all([
+      const [p, t, pv] = await Promise.all([
         sb.rpc('vis_paradas_dia', { p_dia: hoy, p_vendedor: perfil.id }),
         sb.rpc('vis_tablero', { p_semana: lunesDe(hoy), p_vendedor: perfil.id }),
+        sb.rpc('vis_proximas_visitas', { p_hasta: hoy }),
       ])
       if (!vivo) return
       if (p.error || t.error) {
@@ -44,6 +45,8 @@ export default function Hoy() {
         paradas: (p.data ?? []) as ParadaDia[],
         hoy: filas.find((f) => f.dia === hoy)?.realizadas ?? 0,
         semana: filas.reduce((s, f) => s + Number(f.realizadas), 0),
+        // Los de otros vendedores no: solo los míos (o los que dejé yo en la última visita).
+        pendientes: ((pv.data ?? []) as ProximaVisita[]).filter((x) => x.vendedor_id === perfil.id || perfil.rol === 'vendedor'),
       }
       setDatos(nuevo)
       setGuardadoEl(null)
@@ -51,7 +54,7 @@ export default function Hoy() {
       await guardarCache(clave, nuevo).catch(() => {})
     })()
     return () => { vivo = false }
-  }, [clave, hoy, perfil.id])
+  }, [clave, hoy, perfil.id, perfil.rol])
 
   const puntos = useMemo<PuntoMapa[]>(() => (datos?.paradas ?? [])
     .filter((p) => p.lat != null && p.lng != null)
@@ -66,6 +69,8 @@ export default function Hoy() {
   const links = useMemo(() => linksGoogleMaps(null, pendientesHoy.map((p) => ({ lat: p.lat!, lng: p.lng! }))), [pendientesHoy])
 
   const extra = pendientes.visitas
+  const enRuta = new Set((datos?.paradas ?? []).map((p) => p.cliente_id))
+  const proximas = (datos?.pendientes ?? []).filter((x) => !enRuta.has(x.cliente_id))
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-baseline justify-between gap-2">
@@ -152,6 +157,43 @@ export default function Hoy() {
           )
         })}
       </ol>
+
+      {proximas.length > 0 && (
+        <section className="flex flex-col gap-3" aria-labelledby="pendientes-titulo">
+          <div>
+            <h2 id="pendientes-titulo" className="text-lg font-semibold">Visitas pendientes</h2>
+            <p className="text-sm text-tenue">Clientes a los que quedaste en volver y no están en la ruta de hoy.</p>
+          </div>
+          <ul className="flex flex-col gap-3">
+            {proximas.map((x) => {
+              const tel = linkTel(x.telefono)
+              const wa = linkWhatsApp(x.telefono_norm)
+              return (
+                <li key={x.cliente_id}>
+                  <Tarjeta className={x.dias_vencida > 0 ? 'border-amber-300 dark:border-amber-800' : undefined}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold leading-snug">{x.razon_social}</p>
+                        <p className="text-sm text-tenue">{[x.direccion, x.ciudad].filter(Boolean).join(' · ') || 'Sin dirección'}</p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${x.dias_vencida > 0 ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200' : 'bg-fondo text-tenue'}`}>
+                        {x.dias_vencida > 0 ? `vencida hace ${x.dias_vencida} día${x.dias_vencida > 1 ? 's' : ''}` : 'para hoy'}
+                      </span>
+                    </div>
+                    {x.ultima_observacion && <p className="mt-1 text-sm">{x.ultima_observacion}</p>}
+                    <p className="mt-1 text-xs text-tenue">Última visita {fmtFecha(x.ultima_visita)} · quedaste en volver el {fmtFecha(x.proxima_visita)}</p>
+                    <div className="mt-3 flex gap-2">
+                      <Link href={`/visita/${x.cliente_id}`} className="flex-1"><Boton variante="secundario" className="w-full">Registrar visita</Boton></Link>
+                      {tel && <a href={tel} aria-label={`Llamar a ${x.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" /></a>}
+                      {wa && <a href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp a ${x.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><MessageCircle className="size-4" /></a>}
+                    </div>
+                  </Tarjeta>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
     </div>
   )
 }

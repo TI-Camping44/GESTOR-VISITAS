@@ -289,6 +289,37 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── Próximas visitas y ruta sugerida (0009) ────────────────────────
+do $$ declare v_cli uuid; v_ruta uuid; begin
+  select id into v_cli from vis_clientes where odoo_partner_id = 1;
+  update vis_visitas set proxima_visita = vis_hoy() - 2 where cliente_id = v_cli;
+  select id into v_ruta from vis_rutas limit 1;
+  -- Agro Beto (rojo, sin visitar) para la sugerencia: se saca de la ruta
+  delete from vis_ruta_paradas where cliente_id = (select id from vis_clientes where odoo_partner_id = 2);
+end $$;
+select pg_temp.como('antonio@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert (select dias_vencida from vis_proximas_visitas() where razon_social = 'Ferretería López S.A.') = 2, 'próxima visita vencida hace 2 días';
+end $$;
+reset role;
+select pg_temp.como('beto@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert not exists (select 1 from vis_proximas_visitas() where razon_social = 'Ferretería López S.A.'), 'Beto no ve pendientes de clientes de Antonio';
+end $$;
+reset role;
+select pg_temp.como('super@camping44.com.py') \gset
+set role authenticated;
+do $$ declare s record; begin
+  select * into s from vis_sugerir_paradas((select id from vis_rutas limit 1)) where razon_social = 'Agro Beto SRL';
+  assert s.cliente_id is not null, 'Agro Beto aparece sugerido';
+  assert 'Sin movimiento: recuperar' = any(s.motivos) and 'Nunca visitado' = any(s.motivos), format('motivos: %s', s.motivos);
+  assert s.puntaje >= 105, format('puntaje %s', s.puntaje);
+  assert not exists (select 1 from vis_sugerir_paradas((select id from vis_rutas limit 1)) where razon_social = 'Ferretería López S.A.'), 'no sugiere lo que ya está en la ruta';
+end $$;
+reset role;
+
 -- ── Zonas por ciudad (0007) ────────────────────────────────────────
 do $$ declare v uuid; begin
   assert (select nombre from vis_zonas where id = vis_zona_por_ciudad('concepcion')) = 'Zona Norte 1', 'Concepción → Zona Norte 1';
