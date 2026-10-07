@@ -6,5 +6,7 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|icons/|maplibre/|sw.js|manifest.webmanifest|.*\\.(?:png|svg|jpg|jpeg|webp|ico)$).*)'],
+  // Node.js completo (no Edge): supabase-js usa APIs que el runtime Edge no tiene.
+  runtime: 'nodejs',
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|icons/|maplibre/|sw.js|manifest.webmanifest|.*\\.(?:png|svg|jpg|jpeg|webp|ico|mjs)$).*)'],
 }
