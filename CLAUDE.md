@@ -10,7 +10,8 @@ El plan completo está en `BRIEF.md`. Trabajar por fases y **parar al final de c
 - Extras pedidos por Facundo: Reportes con km y Excel (0008), próximas visitas pendientes y ruta sugerida (0009).
 - Accesos: solo Facundo (admin). Faltan los emails de Antonio Fernández, Dan Velastiqui y Humberto Benítez.
 - Vercel: equipo C44 (`c49`), proyecto `gestion-visitas`, plan **Hobby** (cron 1×/día), región `gru1`.
-- Pendiente de Facundo: URLs de redirección en Supabase Auth, OAuth de Google, vendedor piloto.
+- Producción: https://gestion-visitas-eight.vercel.app (rama `main`, PR #1 mergeado). URLs de Supabase Auth configuradas. Login por link de email; Google OAuth pendiente.
+- Piloto: **Antonio Fernández**, semana 12–16/10 = 2da del mes → Zona Norte 3. Falta su email y los clientes (Odoo o Excel exportado).
 
 ## Cómo probar
 
