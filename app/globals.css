@@ -1,0 +1,47 @@
+@import 'tailwindcss';
+
+/* Colores de la app. Verde campo de Camping 44 como marca; neutros con un leve tinte verde. */
+:root {
+  --c-marca: #1f6f4a;
+  --c-marca-oscuro: #17573a;
+  --c-fondo: #f3f5f2;
+  --c-superficie: #ffffff;
+  --c-tinta: #17201b;
+  --c-tenue: #5b6660;
+  --c-borde: #d9dfda;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-marca: #3fa874;
+    --c-marca-oscuro: #2f8a5c;
+    --c-fondo: #111612;
+    --c-superficie: #1a201c;
+    --c-tinta: #e7ece8;
+    --c-tenue: #9aa59e;
+    --c-borde: #2c352f;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-marca: var(--c-marca);
+  --color-marca-oscuro: var(--c-marca-oscuro);
+  --color-fondo: var(--c-fondo);
+  --color-superficie: var(--c-superficie);
+  --color-tinta: var(--c-tinta);
+  --color-tenue: var(--c-tenue);
+  --color-borde: var(--c-borde);
+  --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--c-fondo);
+  color: var(--c-tinta);
+  -webkit-tap-highlight-color: transparent;
+}
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* MapLibre: que los popups sigan el tema */
+.maplibregl-popup-content { background: var(--c-superficie); color: var(--c-tinta); border-radius: 10px; padding: 10px 12px; }
+.maplibregl-popup-tip { border-top-color: var(--c-superficie) !important; border-bottom-color: var(--c-superficie) !important; }
