@@ -6,7 +6,8 @@
   "scripts": {
     "odoo:discovery": "tsx scripts/odoo-discovery.ts",
     "test": "node --import tsx --test tests/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:test": "bash scripts/db-test.sh"
   },
   "engines": {
     "node": ">=22"
