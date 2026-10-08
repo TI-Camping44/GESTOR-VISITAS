@@ -2,15 +2,17 @@
 
 El plan completo está en `BRIEF.md`. Trabajar por fases y **parar al final de cada una** hasta que Facundo confirme.
 
-## Estado (07/10/2026)
+## Estado (08/10/2026)
 
 - **Fase 0 (Odoo): script listo, sin correr.** Facundo pidió dejar Odoo para el final. `scripts/odoo-discovery.ts` + `lib/odoo.ts`. Cuando haya acceso: correr `npm run odoo:discovery`, escribir `docs/odoo-campos.md`, y recién ahí el sync (`lib/sync/*`, `/api/cron/sync`, `vercel.json` crons).
-- **Fase 1 sin Odoo: hecha.** Migraciones 0001–0009 aplicadas en Supabase **GESTOR-VISITAS** (`fhbnqvqxgmukukwlyune`, São Paulo). Pantallas de vendedor y supervisor, PWA, cola offline, tracking y mapa en vivo.
+- **Fase 1 sin Odoo: hecha.** Migraciones 0001–0010 aplicadas en Supabase **GESTOR-VISITAS** (`fhbnqvqxgmukukwlyune`, São Paulo). Pantallas de vendedor y supervisor, PWA, cola offline, tracking y mapa en vivo.
 - Zonas reales cargadas (0007): ciudades, semana del mes y responsable. Asunción está en dos zonas (quincenas) → esos clientes se asignan a mano.
 - Extras pedidos por Facundo: Reportes con km y Excel (0008), próximas visitas pendientes y ruta sugerida (0009).
+- Ciudad del alta de cliente: se elige de una lista (ciudades de las zonas). Las abreviaturas van en `vis_zonas.ciudades_alias` (0010): reconocen la zona pero no salen en la lista.
 - Accesos: solo Facundo (admin). Faltan los emails de Antonio Fernández, Dan Velastiqui y Humberto Benítez.
 - Vercel: equipo C44 (`c49`), proyecto `gestion-visitas`, plan **Hobby** (cron 1×/día), región `gru1`.
-- Pendiente de Facundo: URLs de redirección en Supabase Auth, OAuth de Google, vendedor piloto.
+- Producción: https://gestion-visitas-eight.vercel.app (rama `main`, PR #1 mergeado). URLs de Supabase Auth configuradas. Login por link de email; Google OAuth pendiente.
+- Piloto: **Humberto Benítez** (cambió de Antonio), semana 12–16/10 = 2da del mes → zona **Asunción 2da y 4ta**. Sus ciudades están también en Asunción 1ra y 3ra, así que los clientes se reparten a mano entre las dos quincenas. Falta su email y los clientes (Odoo o Excel exportado).
 
 ## Cómo probar
 

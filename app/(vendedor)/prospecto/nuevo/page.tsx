@@ -3,19 +3,26 @@
 // no se guarda sin razón social y teléfono, con GPS peor que el umbral, ni si parece
 // repetido (mismo RUC, mismo teléfono o a menos de 30 m con nombre parecido) salvo que
 // el vendedor confirme que es otro.
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CapturaGps, useGps } from '@/components/vendedor/CapturaGps'
-import { AreaTexto, Aviso, Boton, Entrada, Etiqueta, Tarjeta } from '@/components/ui'
+import { AreaTexto, Aviso, Boton, Entrada, Etiqueta, Selector, Tarjeta } from '@/components/ui'
+import { useVendedor } from '@/components/vendedor/Proveedor'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { fmtDistancia } from '@/lib/geo'
 import { VIS } from '@/lib/config'
 import { mensajeError } from '@/lib/utils'
-import type { Duplicado } from '@/lib/database.types'
+import type { Duplicado, Zona } from '@/lib/database.types'
+
+const OTRA = '__otra'
+const orden = new Intl.Collator('es').compare
 
 export default function NuevoProspecto() {
   const router = useRouter()
   const gps = useGps()
+  const { perfil } = useVendedor()
+  const [zonas, setZonas] = useState<Pick<Zona, 'ciudades' | 'vendedor_id'>[]>([])
+  const [otraCiudad, setOtraCiudad] = useState(false)
   const [f, setF] = useState({ razon_social: '', telefono: '', ruc: '', direccion: '', ciudad: '', notas: '' })
   const [duplicados, setDuplicados] = useState<Duplicado[] | null>(null)
   const [enviando, setEnviando] = useState(false)
@@ -25,10 +32,30 @@ export default function NuevoProspecto() {
     setDuplicados(null)
   }
 
+  useEffect(() => {
+    supabaseNavegador().from('vis_zonas').select('ciudades, vendedor_id').eq('activo', true)
+      .then(({ data }) => setZonas(data ?? []))
+  }, [])
+
+  // Primero las ciudades de sus zonas; después el resto. Asunción está en dos zonas: va una sola vez.
+  const ciudades = useMemo(() => {
+    const unicas = (zs: typeof zonas) => [...new Set(zs.flatMap((z) => z.ciudades))].sort(orden)
+    const mias = unicas(zonas.filter((z) => z.vendedor_id === perfil.id))
+    return { mias, otras: unicas(zonas).filter((c) => !mias.includes(c)) }
+  }, [zonas, perfil.id])
+
+  function elegirCiudad(e: React.ChangeEvent<HTMLSelectElement>) {
+    const otra = e.target.value === OTRA
+    setOtraCiudad(otra)
+    setF((x) => ({ ...x, ciudad: otra ? '' : e.target.value }))
+    setDuplicados(null)
+  }
+
   async function guardar(forzar: boolean) {
     setError(null)
     if (!f.razon_social.trim()) return setError('Falta la razón social.')
     if (f.telefono.replace(/\D/g, '').length < 9) return setError('Falta el teléfono o está incompleto.')
+    if (!f.ciudad.trim()) return setError('Falta la ciudad.')
     const l = gps.lectura
     if (!l) return setError('Falta la ubicación GPS. Tocá "Reintentar".')
     if (l.precision > VIS.gpsPrecisionMaxM) return setError(`Precisión actual: ${l.precision} m. Se necesita ${VIS.gpsPrecisionMaxM} m o menos: reintentá al aire libre.`)
@@ -66,15 +93,25 @@ export default function NuevoProspecto() {
         <Etiqueta htmlFor="ruc">RUC</Etiqueta>
         <Entrada id="ruc" value={f.ruc} onChange={cambiar('ruc')} placeholder="80012345-6" />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Etiqueta htmlFor="dir">Dirección</Etiqueta>
-          <Entrada id="dir" value={f.direccion} onChange={cambiar('direccion')} />
-        </div>
-        <div>
-          <Etiqueta htmlFor="ciudad">Ciudad</Etiqueta>
-          <Entrada id="ciudad" value={f.ciudad} onChange={cambiar('ciudad')} />
-        </div>
+      <div>
+        <Etiqueta htmlFor="ciudad">Ciudad *</Etiqueta>
+        <Selector id="ciudad" required value={otraCiudad ? OTRA : f.ciudad} onChange={elegirCiudad}>
+          <option value="" disabled>Elegí la ciudad…</option>
+          {ciudades.mias.length > 0 && (
+            <optgroup label="Tus zonas">{ciudades.mias.map((c) => <option key={c} value={c}>{c}</option>)}</optgroup>
+          )}
+          {ciudades.otras.length > 0 && (
+            <optgroup label={ciudades.mias.length > 0 ? 'Otras zonas' : 'Ciudades'}>{ciudades.otras.map((c) => <option key={c} value={c}>{c}</option>)}</optgroup>
+          )}
+          <option value={OTRA}>Otra ciudad (escribir)</option>
+        </Selector>
+        {otraCiudad && (
+          <Entrada id="ciudad-otra" aria-label="Nombre de la ciudad" className="mt-2" autoFocus placeholder="Nombre de la ciudad" value={f.ciudad} onChange={cambiar('ciudad')} />
+        )}
+      </div>
+      <div>
+        <Etiqueta htmlFor="dir">Dirección</Etiqueta>
+        <Entrada id="dir" value={f.direccion} onChange={cambiar('direccion')} />
       </div>
       <div>
         <Etiqueta htmlFor="notas">Notas</Etiqueta>

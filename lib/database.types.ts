@@ -110,8 +110,8 @@ export type Database = {
         Relationships: Rel[]
       }
       vis_zonas: {
-        Row: { activo: boolean; ciudades: string[]; color: string; created_at: string; frecuencia: string | null; id: string; nombre: string; poligono: unknown; responsable: string | null; semanas_mes: number[]; vendedor_id: string | null }
-        Insert: { activo?: boolean; ciudades?: string[]; color?: string; created_at?: string; frecuencia?: string | null; id?: string; nombre: string; poligono?: unknown; responsable?: string | null; semanas_mes?: number[]; vendedor_id?: string | null }
+        Row: { activo: boolean; ciudades: string[]; ciudades_alias: string[]; color: string; created_at: string; frecuencia: string | null; id: string; nombre: string; poligono: unknown; responsable: string | null; semanas_mes: number[]; vendedor_id: string | null }
+        Insert: { activo?: boolean; ciudades?: string[]; ciudades_alias?: string[]; color?: string; created_at?: string; frecuencia?: string | null; id?: string; nombre: string; poligono?: unknown; responsable?: string | null; semanas_mes?: number[]; vendedor_id?: string | null }
         Update: Partial<Database['public']['Tables']['vis_zonas']['Insert']>
         Relationships: []
       }

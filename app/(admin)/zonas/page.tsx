@@ -9,6 +9,7 @@ import { cn, mensajeError } from '@/lib/utils'
 import type { Vendedor, Zona } from '@/lib/database.types'
 
 type ZonaConConteo = Zona & { clientes: { count: number }[] }
+const lista = (texto: string) => [...new Set(texto.split(/[,\n]/).map((c) => c.trim()).filter(Boolean))]
 const COLORES = ['#16a34a', '#2563eb', '#d97706', '#dc2626', '#0891b2', '#9333ea', '#be185d', '#4d7c0f']
 
 export default function Zonas() {
@@ -82,7 +83,7 @@ function FilaZona({ zona: z, vendedores, alGuardar, alFallar }: { zona: ZonaConC
   const sb = supabaseNavegador()
   const [f, setF] = useState({
     nombre: z.nombre, color: z.color, frecuencia: z.frecuencia ?? '', semanas: new Set(z.semanas_mes), vendedor_id: z.vendedor_id ?? '',
-    ciudades: z.ciudades.join(', '), activo: z.activo,
+    ciudades: z.ciudades.join(', '), alias: z.ciudades_alias.join(', '), activo: z.activo,
   })
   const [abierta, setAbierta] = useState(false)
   const responsable = vendedores.find((v) => v.id === z.vendedor_id)?.nombre ?? z.responsable
@@ -91,7 +92,7 @@ function FilaZona({ zona: z, vendedores, alGuardar, alFallar }: { zona: ZonaConC
     const { error } = await sb.from('vis_zonas').update({
       nombre: f.nombre.trim(), color: f.color, frecuencia: f.frecuencia.trim() || null, semanas_mes: [...f.semanas].sort(),
       vendedor_id: f.vendedor_id || null, activo: f.activo,
-      ciudades: [...new Set(f.ciudades.split(/[,\n]/).map((c) => c.trim()).filter(Boolean))],
+      ciudades: lista(f.ciudades), ciudades_alias: lista(f.alias),
     }).eq('id', z.id)
     if (error) alFallar(error.code === '23505' ? 'Ya existe una zona con ese nombre.' : mensajeError(error))
     else { setAbierta(false); alGuardar(`${f.nombre} guardada.`) }
@@ -133,8 +134,12 @@ function FilaZona({ zona: z, vendedores, alGuardar, alFallar }: { zona: ZonaConC
               </Selector>
             </div>
             <div className="md:col-span-2">
-              <Etiqueta htmlFor={`ci-${z.id}`}>Ciudades (separadas por coma; se pueden poner variantes como “CDE”)</Etiqueta>
+              <Etiqueta htmlFor={`ci-${z.id}`}>Ciudades (separadas por coma; son las que el vendedor elige al dar de alta un cliente)</Etiqueta>
               <AreaTexto id={`ci-${z.id}`} value={f.ciudades} onChange={(e) => setF({ ...f, ciudades: e.target.value })} />
+            </div>
+            <div className="md:col-span-2">
+              <Etiqueta htmlFor={`al-${z.id}`}>Otras formas de escribirlas (“CDE”, “Fdo de la Mora”): reconocen la zona pero no salen en la lista</Etiqueta>
+              <Entrada id={`al-${z.id}`} value={f.alias} onChange={(e) => setF({ ...f, alias: e.target.value })} />
             </div>
             <div className="flex gap-2 md:col-span-2">
               <Boton onClick={() => void guardar()}>Guardar</Boton>

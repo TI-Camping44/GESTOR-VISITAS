@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, Boton, PuntoEstado, Tarjeta } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
-import { leerGps } from '@/lib/gps'
+import { ubicacionRapida } from '@/lib/tracking/tracker'
 import { fmtDistancia } from '@/lib/geo'
 import { hace } from '@/lib/fechas'
 import { COLOR_ESTADO, ETIQUETA_ESTADO } from '@/lib/config'
@@ -35,7 +35,7 @@ export default function MapaVendedor() {
     setBuscando(true)
     setError(null)
     try {
-      const yo = await leerGps()
+      const yo = await ubicacionRapida()
       const { data, error } = await supabaseNavegador().rpc('vis_clientes_cercanos', { p_lat: yo.lat, p_lng: yo.lng, p_radio_m: radioKm * 1000 })
       if (error) throw error
       setCerca({ radio: radioKm, lista: (data ?? []) as C[], yo: { lat: yo.lat, lng: yo.lng } })

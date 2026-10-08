@@ -5,7 +5,7 @@
 // Límite real: con la pantalla apagada Android pausa el JavaScript y quedan huecos.
 import { VIS } from '@/lib/config'
 import { distanciaM } from '@/lib/geo'
-import { aLectura, nivelBateria, type Lectura } from '@/lib/gps'
+import { aLectura, leerGps, nivelBateria, type Lectura } from '@/lib/gps'
 import { encolarPosiciones, subirPendientes } from '@/lib/offline/subir'
 
 type WakeLock = { release: () => Promise<void> }
@@ -96,3 +96,24 @@ class Tracker {
 }
 
 export const tracker = new Tracker()
+
+/**
+ * Ubicación para una pantalla (visita, alta, cerca mío). Con la jornada iniciada el tracking ya
+ * tiene una lectura reciente y se usa al instante; si no, se pide al GPS. Si el GPS no responde,
+ * sirve una lectura del tracking de hasta 1 minuto.
+ */
+export async function ubicacionRapida(): Promise<Lectura> {
+  const reciente = (maxMs: number) => {
+    const l = tracker.ultimaLectura
+    return l && Date.now() - l.fecha.getTime() < maxMs ? l : null
+  }
+  const ya = reciente(15_000)
+  if (ya) return ya
+  try {
+    return await leerGps()
+  } catch (e) {
+    const respaldo = reciente(60_000)
+    if (respaldo) return respaldo
+    throw e
+  }
+}
