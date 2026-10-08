@@ -326,6 +326,10 @@ do $$ declare v uuid; begin
   assert (select nombre from vis_zonas where id = vis_zona_por_ciudad('CDE')) = 'Zona Este 2', 'CDE → Zona Este 2';
   assert (select nombre from vis_zonas where id = vis_zona_por_ciudad('San Pedro del Paraná')) = 'Zona Sur Oeste', 'San Pedro del Paraná no se confunde con San Pedro';
   assert vis_zona_por_ciudad('Asunción') is null, 'Asunción está en dos zonas: la asigna el supervisor';
+  -- 0010: las abreviaturas reconocen la zona pero no salen en la lista de ciudades.
+  assert (select 'CDE' = any(ciudades_alias) and not 'CDE' = any(ciudades) and 'Ciudad del Este' = any(ciudades) from vis_zonas where nombre = 'Zona Este 2'), 'CDE pasa a variantes';
+  assert (select nombre from vis_zonas where id = vis_zona_por_ciudad('Fdo de la Mora')) is null, 'Fdo de la Mora sigue siendo de las dos zonas de Asunción';
+  assert (select nombre from vis_zonas where id = vis_zona_por_ciudad('Mcal Estigarribia')) = 'Zona Chaco', 'variante → Zona Chaco';
   insert into vis_clientes (razon_social, ciudad) values ('Cliente Encarnación', 'Encarnacion') returning id into v;
   assert (select z.nombre from vis_clientes c join vis_zonas z on z.id = c.zona_id where c.id = v) = 'Zona Sur', 'el cliente nuevo toma la zona por la ciudad';
   update vis_clientes set zona_id = null where id = v;
