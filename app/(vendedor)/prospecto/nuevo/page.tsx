@@ -67,8 +67,9 @@ export default function NuevoProspecto() {
     })
     setEnviando(false)
     if (error) return setError(mensajeError(error))
-    const r = data as { ok: boolean; id?: string; duplicados?: Duplicado[] }
-    if (r.ok && r.id) router.push(`/visita/${r.id}`)
+    const r = data as { ok: boolean; id?: string; visita_id?: string; duplicados?: Duplicado[] }
+    // El alta ya cuenta como visita; el formulario que sigue la completa.
+    if (r.ok && r.id) router.push(`/visita/${r.id}${r.visita_id ? `?alta=${r.visita_id}` : ''}`)
     else setDuplicados(r.duplicados ?? [])
   }
 

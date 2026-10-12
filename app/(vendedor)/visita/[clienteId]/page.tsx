@@ -32,7 +32,9 @@ async function comprimir(archivo: File, max = 1280): Promise<Blob> {
 
 export default function RegistrarVisita({ params }: { params: Promise<{ clienteId: string }> }) {
   const { clienteId } = use(params)
-  const paradaId = useSearchParams().get('parada')
+  const busqueda = useSearchParams()
+  const paradaId = busqueda.get('parada')
+  const altaId = busqueda.get('alta') // visita creada con el alta del cliente: se completa, no se duplica
   const router = useRouter()
   const { perfil, refrescarPendientes } = useVendedor()
   const gps = useGps()
@@ -88,7 +90,7 @@ export default function RegistrarVisita({ params }: { params: Promise<{ clienteI
     const client_uuid = crypto.randomUUID()
     const l = gps.lectura
     const payload: Record<string, unknown> = {
-      client_uuid, cliente_id: cliente.id, ruta_parada_id: paradaId, fecha_hora: new Date().toISOString(),
+      client_uuid, cliente_id: cliente.id, ruta_parada_id: paradaId, visita_id: altaId, fecha_hora: new Date().toISOString(),
       lat: l?.lat ?? null, lng: l?.lng ?? null, precision_m: l?.precision ?? null,
       resultado_id: Number(resultadoId), hizo_pedido: hizoPedido || !!resultadoElegido?.es_venta,
       hizo_cobranza: cobranza, monto_cobrado_gs: cobranza ? Math.round(Number(monto)) : null,
@@ -181,6 +183,7 @@ export default function RegistrarVisita({ params }: { params: Promise<{ clienteI
         </div>
       </div>
 
+      {altaId && <Aviso tipo="ok">El cliente quedó cargado y la visita ya cuenta. Elegí el resultado y tocá <b>Guardar visita</b> para completarla.</Aviso>}
       <CapturaGps gps={gps} destino={destino} />
       {lejos && <Aviso tipo="alerta">Estás lejos de donde figura el cliente. Si está acá, al guardar te preguntamos si corregimos la ubicación.</Aviso>}
 

@@ -5,9 +5,10 @@ El plan completo está en `BRIEF.md`. Trabajar por fases y **parar al final de c
 ## Estado (12/10/2026)
 
 - **Fase 0 (Odoo): script listo, sin correr.** Facundo pidió dejar Odoo para el final. `scripts/odoo-discovery.ts` + `lib/odoo.ts`. Cuando haya acceso: correr `npm run odoo:discovery`, escribir `docs/odoo-campos.md`, y recién ahí el sync (`lib/sync/*`, `/api/cron/sync`, `vercel.json` crons).
-- **Fase 1 sin Odoo: hecha.** Migraciones 0001–0010 aplicadas en Supabase **GESTOR-VISITAS** (`fhbnqvqxgmukukwlyune`, São Paulo). Pantallas de vendedor y supervisor, PWA, cola offline, tracking y mapa en vivo.
+- **Fase 1 sin Odoo: hecha.** Migraciones 0001–0011 aplicadas en Supabase **GESTOR-VISITAS** (`fhbnqvqxgmukukwlyune`, São Paulo). Pantallas de vendedor y supervisor, PWA, cola offline, tracking y mapa en vivo.
 - Zonas reales cargadas (0007): ciudades, semana del mes y responsable. Asunción está en dos zonas (quincenas) → esos clientes se asignan a mano.
 - Extras pedidos por Facundo: Reportes con km y Excel (0008), próximas visitas pendientes y ruta sugerida (0009).
+- El alta de un cliente cuenta como visita (resultado "Cliente nuevo", 0011); el formulario que sigue completa esa misma visita (`visita_id`), no crea otra.
 - Ciudad del alta de cliente: se elige de una lista (ciudades de las zonas). Las abreviaturas van en `vis_zonas.ciudades_alias` (0010): reconocen la zona pero no salen en la lista.
 - Accesos: Facundo (admin), Jorge Lezcano (supervisor), Humberto Benítez, Dan Velastiqui y Antonio Fernández (vendedores). Login con **Google** (cliente OAuth interno del proyecto Google Cloud `visitas-c44`, solo cuentas @camping44.com.py). El link por email usa el SMTP por defecto de Supabase (≈2 mails/hora): no depender de él.
 - Clientes: 365 cargados el 09/10 desde un export de Contactos de Odoo (no versionado): 108 de la cartera con vendedor en Odoo + 257 empresas con compras. Vendedor asignado por cartera o por el responsable de la zona; 88 sin vendedor (vendedores de Odoo que no están en la app, o sin ciudad). Sin facturación todavía → todos figuran "sin movimiento" hasta cargar facturas o el sync.

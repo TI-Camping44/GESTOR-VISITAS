@@ -132,6 +132,14 @@ do $$ declare r jsonb; begin
 
   r := vis_crear_prospecto('{"razon_social":"Despensa Mari","telefono":"0985 555 666","lat":-23.41,"lng":-57.44,"precision_m":10}');
   assert (r ->> 'ok')::boolean, 'alta válida';
+  -- 0011: el alta cuenta como visita, y el formulario la completa sin duplicarla.
+  assert (select r2.nombre from vis_visitas v join vis_resultados r2 on r2.id = v.resultado_id
+          where v.id = (r ->> 'visita_id')::uuid and v.cliente_id = (r ->> 'id')::uuid) = 'Cliente nuevo', 'el alta deja una visita';
+  perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', r ->> 'id',
+    'visita_id', r ->> 'visita_id', 'resultado_id', (select id from vis_resultados where nombre = 'Tiene stock'),
+    'observaciones', 'Vuelvo en noviembre'));
+  assert (select count(*) from vis_visitas where cliente_id = (r ->> 'id')::uuid) = 1, 'completar el formulario no duplica la visita';
+  assert (select observaciones from vis_visitas where id = (r ->> 'visita_id')::uuid) = 'Vuelvo en noviembre', 'el formulario completa la visita del alta';
 
   -- mismo teléfono que un cliente de otro vendedor → muestra el posible duplicado
   r := vis_crear_prospecto('{"razon_social":"Otro nombre","telefono":"+595 972 333444","lat":-25.3,"lng":-57.6,"precision_m":10}');
@@ -232,7 +240,7 @@ do $$ begin
   assert (select count(*) from vis_paradas_dia()) = 2, format('2 paradas hoy, hay %s', (select count(*) from vis_paradas_dia()));
   assert (select count(*) from vis_paradas_dia() where visitada) = 1, 'Ferretería López figura visitada hoy';
   assert exists (select 1 from vis_clientes where odoo_partner_id = 2), 'con la parada publicada ve a Agro Beto';
-  assert (select realizadas from vis_tablero(date_trunc('week', vis_hoy())::date) where dia = vis_hoy()) = 1, 'tablero: 1 visita hoy';
+  assert (select realizadas from vis_tablero(date_trunc('week', vis_hoy())::date) where dia = vis_hoy()) = 3, 'tablero: 3 visitas hoy (Ferretería López + las 2 altas, que cuentan como visita)';
   assert (select count(distinct vendedor_id) from vis_tablero(date_trunc('week', vis_hoy())::date)) = 1, 'el vendedor solo se ve a sí mismo en el tablero';
   assert (select count(*) from vis_zona_historial((select id from vis_zonas where nombre = 'Zona Prueba A'))) = 1, 'historial de zona';
   assert (select count(*) from vis_clientes_cercanos(-23.4064, -57.4344, 2000)) >= 1, 'cerca mío';
@@ -272,7 +280,7 @@ select pg_temp.como('super@camping44.com.py') \gset
 set role authenticated;
 do $$ declare r record; begin
   select * into r from vis_reporte_vendedores(vis_hoy() - 7, vis_hoy()) where vendedor = 'Antonio';
-  assert r.visitas = 1 and r.con_pedido = 1, format('reporte: 1 visita con pedido, vino %s/%s', r.visitas, r.con_pedido);
+  assert r.visitas = 3 and r.con_pedido = 1, format('reporte: 3 visitas (2 son altas), 1 con pedido, vino %s/%s', r.visitas, r.con_pedido);
   assert r.km > 0, 'reporte: km de la jornada';
   assert r.dias_con_jornada = 1 and r.horas_jornada >= 0, 'reporte: días y horas de jornada';
   assert r.prospectos_nuevos = 2, format('reporte: 2 prospectos nuevos, vino %s', r.prospectos_nuevos);
