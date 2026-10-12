@@ -2,17 +2,18 @@
 
 El plan completo está en `BRIEF.md`. Trabajar por fases y **parar al final de cada una** hasta que Facundo confirme.
 
-## Estado (08/10/2026)
+## Estado (12/10/2026)
 
 - **Fase 0 (Odoo): script listo, sin correr.** Facundo pidió dejar Odoo para el final. `scripts/odoo-discovery.ts` + `lib/odoo.ts`. Cuando haya acceso: correr `npm run odoo:discovery`, escribir `docs/odoo-campos.md`, y recién ahí el sync (`lib/sync/*`, `/api/cron/sync`, `vercel.json` crons).
 - **Fase 1 sin Odoo: hecha.** Migraciones 0001–0010 aplicadas en Supabase **GESTOR-VISITAS** (`fhbnqvqxgmukukwlyune`, São Paulo). Pantallas de vendedor y supervisor, PWA, cola offline, tracking y mapa en vivo.
 - Zonas reales cargadas (0007): ciudades, semana del mes y responsable. Asunción está en dos zonas (quincenas) → esos clientes se asignan a mano.
 - Extras pedidos por Facundo: Reportes con km y Excel (0008), próximas visitas pendientes y ruta sugerida (0009).
 - Ciudad del alta de cliente: se elige de una lista (ciudades de las zonas). Las abreviaturas van en `vis_zonas.ciudades_alias` (0010): reconocen la zona pero no salen en la lista.
-- Accesos: solo Facundo (admin). Faltan los emails de Antonio Fernández, Dan Velastiqui y Humberto Benítez.
+- Accesos: Facundo (admin), Jorge Lezcano (supervisor), Humberto Benítez, Dan Velastiqui y Antonio Fernández (vendedores). Login con **Google** (cliente OAuth interno del proyecto Google Cloud `visitas-c44`, solo cuentas @camping44.com.py). El link por email usa el SMTP por defecto de Supabase (≈2 mails/hora): no depender de él.
+- Clientes: 365 cargados el 09/10 desde un export de Contactos de Odoo (no versionado): 108 de la cartera con vendedor en Odoo + 257 empresas con compras. Vendedor asignado por cartera o por el responsable de la zona; 88 sin vendedor (vendedores de Odoo que no están en la app, o sin ciudad). Sin facturación todavía → todos figuran "sin movimiento" hasta cargar facturas o el sync.
 - Vercel: equipo C44 (`c49`), proyecto `gestion-visitas`, plan **Hobby** (cron 1×/día), región `gru1`.
-- Producción: https://gestion-visitas-eight.vercel.app (rama `main`, PR #1 mergeado). URLs de Supabase Auth configuradas. Login por link de email; Google OAuth pendiente.
-- Piloto: **Humberto Benítez** (cambió de Antonio), semana 12–16/10 = 2da del mes → zona **Asunción 2da y 4ta**. Sus ciudades están también en Asunción 1ra y 3ra, así que los clientes se reparten a mano entre las dos quincenas. Falta su email y los clientes (Odoo o Excel exportado).
+- Producción: https://gestion-visitas-eight.vercel.app (rama `main`, PRs #1 y #2 mergeados). URLs de Supabase Auth configuradas. Login con Google (y link por email como respaldo).
+- Piloto: **Humberto Benítez** (cambió de Antonio), semana 12–16/10 = 2da del mes → zona **Asunción 2da y 4ta**. Sus ciudades están también en Asunción 1ra y 3ra, así que los clientes se reparten a mano entre las dos quincenas. Pendiente: decidir cómo se reparten los clientes de Asunción/Central entre las dos quincenas (hoy sin zona, todos de Humberto).
 
 ## Cómo probar
 
