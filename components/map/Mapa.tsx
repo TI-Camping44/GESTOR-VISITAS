@@ -3,7 +3,7 @@
 // Puntos con color propio, agrupados (clustering) si se pide, etiqueta opcional
 // (número de parada o iniciales) y popup con link. Opcional: líneas y "mi posición".
 import { useEffect, useRef } from 'react'
-import { LngLatBounds, Map as MapaML, Marker, NavigationControl, Popup, setWorkerUrl, type GeoJSONSource, type MapLayerMouseEvent } from 'maplibre-gl'
+import { FullscreenControl, LngLatBounds, Map as MapaML, Marker, NavigationControl, Popup, setWorkerUrl, type GeoJSONSource, type IControl, type MapLayerMouseEvent } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { CENTRO_PY, MAPA_ESTILO } from '@/lib/config'
 
@@ -58,6 +58,34 @@ function aLineas(lineas: LineaMapa[]): GeoJSON.FeatureCollection<GeoJSON.LineStr
   }
 }
 
+// Botón "Ver todo": vuelve a encuadrar todos los puntos después de hacer zoom.
+class ControlVerTodo implements IControl {
+  private caja?: HTMLDivElement
+  constructor(private readonly encuadrar: () => void) {}
+  onAdd() {
+    const caja = document.createElement('div')
+    caja.className = 'maplibregl-ctrl maplibregl-ctrl-group'
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.title = 'Ver todo'
+    b.setAttribute('aria-label', 'Ver todo')
+    b.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" style="margin:auto;display:block" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><circle cx="12" cy="12" r="2.5"/></svg>'
+    b.addEventListener('click', this.encuadrar)
+    caja.appendChild(b)
+    this.caja = caja
+    return caja
+  }
+  onRemove() { this.caja?.remove() }
+}
+
+function encuadre(m: MapaML, coords: [number, number][], animar: boolean) {
+  if (coords.length === 1) m.jumpTo({ center: coords[0]!, zoom: 14 })
+  else if (coords.length > 1) {
+    const b = coords.reduce((acc, c) => acc.extend(c), new LngLatBounds(coords[0]!, coords[0]!))
+    m.fitBounds(b, { padding: 48, maxZoom: 15, duration: animar ? 600 : 0 })
+  }
+}
+
 export function Mapa({ puntos, agrupar = false, lineas = [], yo, claveEncuadre, className, alClicPunto }: Props) {
   const div = useRef<HTMLDivElement>(null)
   const mapa = useRef<MapaML | null>(null)
@@ -67,6 +95,7 @@ export function Mapa({ puntos, agrupar = false, lineas = [], yo, claveEncuadre, 
   alClic.current = alClicPunto
   const ultimoEncuadre = useRef<string | undefined>(undefined)
   const pendiente = useRef<(() => void) | null>(null)
+  const coordsActuales = useRef<[number, number][]>([])
 
   // Crear el mapa una sola vez.
   useEffect(() => {
@@ -77,8 +106,14 @@ export function Mapa({ puntos, agrupar = false, lineas = [], yo, claveEncuadre, 
       center: [CENTRO_PY.lng, CENTRO_PY.lat],
       zoom: CENTRO_PY.zoom,
       attributionControl: { compact: true },
+      locale: {
+        'NavigationControl.ZoomIn': 'Acercar', 'NavigationControl.ZoomOut': 'Alejar',
+        'FullscreenControl.Enter': 'Pantalla completa', 'FullscreenControl.Exit': 'Salir de pantalla completa',
+      },
     })
+    m.addControl(new FullscreenControl(), 'top-right')
     m.addControl(new NavigationControl({ showCompass: false }), 'top-right')
+    m.addControl(new ControlVerTodo(() => encuadre(m, coordsActuales.current, true)), 'top-right')
     m.on('load', () => {
       m.addSource('lineas', { type: 'geojson', data: aLineas([]) })
       m.addLayer({ id: 'lineas', type: 'line', source: 'lineas', paint: { 'line-color': ['get', 'color'], 'line-width': 4, 'line-opacity': 0.8 } })
@@ -145,16 +180,13 @@ export function Mapa({ puntos, agrupar = false, lineas = [], yo, claveEncuadre, 
     const aplicar = () => {
       ;(m.getSource('puntos') as GeoJSONSource | undefined)?.setData(aGeoJson(puntos))
       ;(m.getSource('lineas') as GeoJSONSource | undefined)?.setData(aLineas(lineas))
+      const coords: [number, number][] = [...puntos.map((p) => [p.lng, p.lat] as [number, number]), ...lineas.flatMap((l) => l.puntos)]
+      if (yo) coords.push([yo.lng, yo.lat])
+      coordsActuales.current = coords
       const clave = claveEncuadre ?? 'inicial'
-      if (ultimoEncuadre.current !== clave) {
-        const coords: [number, number][] = [...puntos.map((p) => [p.lng, p.lat] as [number, number]), ...lineas.flatMap((l) => l.puntos)]
-        if (yo && !coords.length) coords.push([yo.lng, yo.lat])
-        if (coords.length === 1) m.jumpTo({ center: coords[0]!, zoom: 14 })
-        else if (coords.length > 1) {
-          const b = coords.reduce((acc, c) => acc.extend(c), new LngLatBounds(coords[0]!, coords[0]!))
-          m.fitBounds(b, { padding: 48, maxZoom: 15, duration: 0 })
-        }
-        if (coords.length) ultimoEncuadre.current = clave
+      if (ultimoEncuadre.current !== clave && coords.length) {
+        encuadre(m, coords, false)
+        ultimoEncuadre.current = clave
       }
     }
     if (listo.current) aplicar()
