@@ -103,7 +103,7 @@ export default function EnVivo() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <Mapa puntos={puntos} claveEncuadre={`vivo-${enJornada.length}`} className="h-[60vh] w-full overflow-hidden rounded-xl border border-borde" />
+        <Mapa puntos={puntos} claveEncuadre="vivo" className="h-[60vh] w-full overflow-hidden rounded-xl border border-borde" />
         <Tarjeta className="flex flex-col gap-3 p-3">
           <h2 className="font-semibold">En jornada ({enJornada.length})</h2>
           {enJornada.length === 0 && <p className="text-sm text-tenue">Nadie inició jornada todavía.</p>}
