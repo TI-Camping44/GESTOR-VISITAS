@@ -3,6 +3,8 @@ import { requerirSupervisor } from '@/lib/sesion'
 import { supabaseServidor } from '@/lib/supabase/server'
 import { NavAdmin } from '@/components/admin/NavAdmin'
 import { BotonSalir } from '@/components/BotonSalir'
+import { SelectorEmpresa } from '@/components/admin/SelectorEmpresa'
+import { temaEmpresa } from '@/lib/utils'
 
 export default async function LayoutAdmin({ children }: { children: React.ReactNode }) {
   const perfil = await requerirSupervisor()
@@ -14,15 +16,16 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
     fallos = count ?? 0
   }
   return (
-    <div className="min-h-full lg:grid lg:grid-cols-[220px_1fr]">
-      <aside className="border-b border-borde bg-superficie px-3 py-3 lg:border-b-0 lg:border-r">
+    <div data-empresa={temaEmpresa(perfil.empresa)} className="min-h-full bg-fondo text-tinta lg:grid lg:grid-cols-[220px_1fr]">
+      <aside className="border-b border-borde bg-barra px-3 py-3 text-barra-tinta lg:border-b-0 lg:border-r">
         <div className="lg:sticky lg:top-3">
         <div className="mb-3 flex items-center justify-between gap-2 px-2 lg:block">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-marca">Camping 44</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-barra-acento">{perfil.empresa ?? 'Camping 44'}</p>
             <p className="font-semibold">Visitas y rutas</p>
           </div>
-          <p className="truncate text-xs text-tenue lg:mt-1">{perfil.nombre}</p>
+          <p className="truncate text-xs text-barra-tenue lg:mt-1">{perfil.nombre}</p>
+          {perfil.multi_empresa && <SelectorEmpresa actual={perfil.empresa_id} />}
         </div>
         <NavAdmin rol={perfil.rol} />
         <BotonSalir className="mt-3 hidden w-full lg:flex" />

@@ -16,3 +16,9 @@ export function mensajeError(e: unknown): string {
 
 export const linkWhatsApp = (telNorm: string | null | undefined) => (telNorm ? `https://wa.me/${telNorm}` : null)
 export const linkTel = (tel: string | null | undefined) => (tel ? `tel:${tel.replace(/[^\d+]/g, '')}` : null)
+
+/** Tema de colores según la empresa ("Camping 44" → "camping44"); ver globals.css. */
+export function temaEmpresa(nombre: string | null | undefined): string | undefined {
+  const t = (nombre ?? '').normalize('NFD').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+  return t || undefined
+}

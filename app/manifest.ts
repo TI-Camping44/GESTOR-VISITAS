@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Visitas C44 — Camping 44',
+    name: 'Visitas y Rutas — Camping 44 · Vitalica',
     short_name: 'Visitas C44',
     description: 'Rutas y visitas de los vendedores',
     start_url: '/',

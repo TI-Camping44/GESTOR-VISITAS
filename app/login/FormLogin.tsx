@@ -14,7 +14,7 @@ export function FormLogin({ error }: { error?: string }) {
     setFallo(null)
     const { error } = await supabaseNavegador().auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: volver(), queryParams: { hd: 'camping44.com.py', prompt: 'select_account' } },
+      options: { redirectTo: volver(), queryParams: { prompt: 'select_account' } },
     })
     if (error) setFallo(mensajeError(error))
   }
@@ -43,7 +43,7 @@ export function FormLogin({ error }: { error?: string }) {
       ) : (
         <form onSubmit={conEmail} className="flex flex-col gap-2">
           <Etiqueta htmlFor="email">Email</Etiqueta>
-          <Entrada id="email" type="email" required autoComplete="email" inputMode="email" placeholder="nombre@camping44.com.py"
+          <Entrada id="email" type="email" required autoComplete="email" inputMode="email" placeholder="nombre@empresa.com.py"
             value={email} onChange={(e) => setEmail(e.target.value)} />
           <Boton type="submit" variante="secundario" disabled={estado === 'enviando'}>
             {estado === 'enviando' ? 'Enviando…' : 'Mandarme el link'}

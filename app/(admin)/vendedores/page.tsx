@@ -33,7 +33,7 @@ export default function Vendedores() {
     sb.from('vis_config').select('base_lat, base_lng').maybeSingle().then(({ data }) => setDeposito(coordTexto(data?.base_lat ?? null, data?.base_lng ?? null)))
   }, [sb, cargar])
 
-  async function actualizar(id: string, cambios: Partial<Vendedor>) {
+  async function actualizar(id: string, cambios: Partial<Pick<Vendedor, 'nombre' | 'telefono' | 'rol' | 'meta_diaria' | 'meta_semanal' | 'base_lat' | 'base_lng' | 'activo'>>) {
     setError(null)
     const { error } = await sb.from('vis_vendedores').update(cambios).eq('id', id)
     if (error) setError(mensajeError(error))
