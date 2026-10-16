@@ -436,4 +436,48 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── Usuarios y empresas (0014) ─────────────────────────────────────
+-- (El admin de prueba ya es multi empresa.) Diego: gerente, supervisor de las dos.
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000f3', 'diego@camping44.com.py');
+insert into vis_vendedores (nombre, email, rol, multi_empresa) values ('Diego', 'diego@camping44.com.py', 'supervisor', true);
+
+select pg_temp.como('sergio@camping44.com.py') \gset
+set role authenticated;
+do $$ declare n int; begin
+  assert exists (select 1 from vis_vendedores where nombre = 'Diego'), 'quien tiene ambas aparece también en Vitalica';
+  assert not exists (select 1 from vis_vendedores where nombre = 'Antonio'), 'pero no la gente solo de Camping 44';
+  update vis_vendedores set meta_diaria = 99 where nombre = 'Diego';
+  get diagnostics n = row_count; assert n = 0, 'el admin de Vitalica no edita a quien es de Camping 44';
+  begin perform vis_asignar_empresa((select id from vis_vendedores where nombre = 'Hugo'), (select id from vis_empresas where nombre = 'Camping 44'), false);
+    assert false, 'el admin de una empresa no cambia empresas';
+  exception when raise_exception then null; end;
+end $$;
+reset role;
+
+select pg_temp.como('diego@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert vis_vincular_usuario() ->> 'multi_empresa' = 'true', 'Diego entra con las dos empresas';
+  begin perform vis_asignar_empresa((select id from vis_vendedores where nombre = 'Hugo'), (select id from vis_empresas where nombre = 'Camping 44'), false);
+    assert false, 'un supervisor con ambas no cambia empresas';
+  exception when raise_exception then null; end;
+end $$;
+reset role;
+
+select pg_temp.como('admin@camping44.com.py') \gset
+set role authenticated;
+do $$ declare n int; begin
+  perform vis_cambiar_empresa((select id from vis_empresas where nombre = 'Vitalica'));
+  perform vis_asignar_empresa((select id from vis_vendedores where nombre = 'Hugo'), (select id from vis_empresas where nombre = 'Camping 44'), true);
+  assert (select multi_empresa from vis_vendedores where nombre = 'Hugo'), 'TI le da ambas a Hugo';
+  perform vis_asignar_empresa((select id from vis_vendedores where nombre = 'Hugo'), (select id from vis_empresas where nombre = 'Vitalica'), false);
+  assert (select not multi_empresa and empresa_activa is null from vis_vendedores where nombre = 'Hugo'), 'y lo vuelve a dejar solo en Vitalica';
+  update vis_vendedores set meta_diaria = 12 where nombre = 'Hugo';
+  get diagnostics n = row_count; assert n = 1, 'TI edita gente de cualquier empresa';
+  begin perform vis_asignar_empresa(vis_mi_id(), (select id from vis_empresas where nombre = 'Camping 44'), false);
+    assert false, 'no se saca a sí mismo el acceso a todas';
+  exception when raise_exception then null; end;
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;

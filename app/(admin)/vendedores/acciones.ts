@@ -1,5 +1,5 @@
 'use server'
-// Invitación por correo: la manda un admin, solo a gente de su empresa (lo filtra el RLS).
+// Invitación por correo: la manda un admin, solo a gente que gestiona (su empresa; TI, a todos).
 import { headers } from 'next/headers'
 import { supabaseServidor } from '@/lib/supabase/server'
 import { enviarCorreo } from '@/lib/correo'
@@ -15,20 +15,24 @@ export async function enviarInvitacion(vendedorId: string): Promise<{ ok: true }
     const { data: esAdmin } = await sb.rpc('vis_es_admin')
     if (!esAdmin) return { error: 'Solo un admin puede mandar invitaciones.' }
 
-    const { data: v } = await sb.from('vis_vendedores').select('nombre, email, rol, telefono, activo, empresa_id').eq('id', vendedorId).maybeSingle()
+    const { data: v } = await sb.from('vis_vendedores').select('nombre, email, rol, telefono, activo, empresa_id, multi_empresa').eq('id', vendedorId).maybeSingle()
     if (!v) return { error: 'No se encontró a esa persona.' }
     if (!v.activo) return { error: `${v.nombre} está inactivo: activalo antes de invitarlo.` }
+    const [{ data: miEmpresa }, { data: soyTI }] = await Promise.all([sb.rpc('vis_mi_empresa'), sb.rpc('vis_soy_admin_multi')])
+    if (!soyTI && v.empresa_id !== miEmpresa) return { error: `${v.nombre} es de otra empresa: lo invita su admin.` }
 
     const { data: miId } = await sb.rpc('vis_mi_id')
-    const [{ data: empresa }, { data: yo }] = await Promise.all([
-      sb.from('vis_empresas').select('nombre').eq('id', v.empresa_id).maybeSingle(),
+    const [{ data: empresas }, { data: yo }] = await Promise.all([
+      sb.from('vis_empresas').select('id, nombre').order('created_at'),
       sb.from('vis_vendedores').select('nombre, email').eq('id', miId ?? '').maybeSingle(),
     ])
 
     const h = await headers()
     const origen = `${h.get('x-forwarded-proto') ?? 'https'}://${h.get('x-forwarded-host') ?? h.get('host')}`
-    const nombreEmpresa = empresa?.nombre ?? null
-    const color = COLOR[temaEmpresa(nombreEmpresa) ?? ''] ?? '#262626'
+    // Quien tiene acceso a todas: "Camping 44 y Vitalica"; si no, su empresa.
+    const nombreEmpresa = (v.multi_empresa ? (empresas ?? []).map((e) => e.nombre).join(' y ') : empresas?.find((e) => e.id === v.empresa_id)?.nombre) || null
+    const origenEmpresa = empresas?.find((e) => e.id === v.empresa_id)?.nombre ?? null
+    const color = COLOR[temaEmpresa(origenEmpresa) ?? ''] ?? '#262626'
     const pasos = pasosInvitacion(v, origen)
 
     const html = `<!doctype html><html lang="es"><body style="margin:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#141414">
