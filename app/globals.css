@@ -1,25 +1,85 @@
 @import 'tailwindcss';
 
-/* Colores de la app. Verde campo de Camping 44 como marca; neutros con un leve tinte verde. */
+/* Colores de la app. Cada empresa tiene su tema (data-empresa en el layout):
+   Camping 44 negro y rojo, Vitalica naranja y gris, tomados de sus logos.
+   Sin empresa (login, sin acceso): neutro. */
 :root {
-  --c-marca: #1f6f4a;
-  --c-marca-oscuro: #17573a;
-  --c-fondo: #f3f5f2;
+  --c-marca: #262626;
+  --c-marca-oscuro: #111111;
+  --c-fondo: #f4f4f4;
   --c-superficie: #ffffff;
-  --c-tinta: #17201b;
-  --c-tenue: #5b6660;
-  --c-borde: #d9dfda;
+  --c-tinta: #161616;
+  --c-tenue: #5e5e5e;
+  --c-borde: #dcdcdc;
+  --c-barra: var(--c-superficie);
+  --c-barra-tinta: var(--c-tinta);
+  --c-barra-tenue: var(--c-tenue);
+  --c-barra-hover: var(--c-fondo);
+  --c-barra-acento: var(--c-marca);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --c-marca: #3fa874;
-    --c-marca-oscuro: #2f8a5c;
-    --c-fondo: #111612;
-    --c-superficie: #1a201c;
-    --c-tinta: #e7ece8;
-    --c-tenue: #9aa59e;
-    --c-borde: #2c352f;
+    --c-marca: #e5e5e5;
+    --c-marca-oscuro: #ffffff;
+    --c-fondo: #101010;
+    --c-superficie: #1a1a1a;
+    --c-tinta: #ececec;
+    --c-tenue: #a3a3a3;
+    --c-borde: #2e2e2e;
     color-scheme: dark;
+  }
+}
+
+[data-empresa='camping44'] {
+  --c-marca: #d90000;
+  --c-marca-oscuro: #a80000;
+  --c-fondo: #f4f4f4;
+  --c-superficie: #ffffff;
+  --c-tinta: #141414;
+  --c-tenue: #5e5e5e;
+  --c-borde: #dcdcdc;
+  --c-barra: #141414;
+  --c-barra-tinta: #f5f5f5;
+  --c-barra-tenue: #b3b3b3;
+  --c-barra-hover: #2b2b2b;
+  --c-barra-acento: #ff4040;
+}
+[data-empresa='vitalica'] {
+  --c-marca: #d9640a;
+  --c-marca-oscuro: #b4520a;
+  --c-fondo: #f6f5f3;
+  --c-superficie: #ffffff;
+  --c-tinta: #2b2b2b;
+  --c-tenue: #5f5f5f;
+  --c-borde: #e2dfdb;
+  --c-barra: #525252;
+  --c-barra-tinta: #ffffff;
+  --c-barra-tenue: #dedede;
+  --c-barra-hover: #626262;
+  --c-barra-acento: #ffb37a;
+}
+@media (prefers-color-scheme: dark) {
+  [data-empresa='camping44'] {
+    --c-marca: #ff4040;
+    --c-marca-oscuro: #ff6b6b;
+    --c-fondo: #0e0e0e;
+    --c-superficie: #1a1a1a;
+    --c-tinta: #ececec;
+    --c-tenue: #a3a3a3;
+    --c-borde: #2e2e2e;
+    --c-barra: #000000;
+    --c-barra-hover: #1f1f1f;
+  }
+  [data-empresa='vitalica'] {
+    --c-marca: #fd8a35;
+    --c-marca-oscuro: #ffa25e;
+    --c-fondo: #121110;
+    --c-superficie: #1d1c1a;
+    --c-tinta: #ededed;
+    --c-tenue: #a8a8a8;
+    --c-borde: #34312e;
+    --c-barra: #2e2e2e;
+    --c-barra-hover: #3d3d3d;
   }
 }
 
@@ -31,6 +91,11 @@
   --color-tinta: var(--c-tinta);
   --color-tenue: var(--c-tenue);
   --color-borde: var(--c-borde);
+  --color-barra: var(--c-barra);
+  --color-barra-tinta: var(--c-barra-tinta);
+  --color-barra-tenue: var(--c-barra-tenue);
+  --color-barra-hover: var(--c-barra-hover);
+  --color-barra-acento: var(--c-barra-acento);
   --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
 }
 

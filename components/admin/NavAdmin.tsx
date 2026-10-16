@@ -24,7 +24,7 @@ export function NavAdmin({ rol }: { rol: Rol }) {
         const activo = ruta === href || ruta.startsWith(`${href}/`)
         return (
           <Link key={href} href={href} aria-current={activo ? 'page' : undefined}
-            className={cn('flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium', activo ? 'bg-marca text-white' : 'text-tinta hover:bg-fondo')}>
+            className={cn('flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium', activo ? 'bg-marca text-white' : 'text-barra-tinta hover:bg-barra-hover')}>
             <Icono className="size-4" aria-hidden />{texto}
           </Link>
         )

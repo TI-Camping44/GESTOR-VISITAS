@@ -7,7 +7,7 @@ const plex = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600'], 
 
 export const metadata: Metadata = {
   title: { default: 'Visitas C44', template: '%s · Visitas C44' },
-  description: 'Rutas y visitas de los vendedores de Camping 44',
+  description: 'Rutas y visitas de los vendedores de Camping 44 y Vitalica',
   applicationName: 'Visitas C44',
   appleWebApp: { capable: true, title: 'Visitas C44', statusBarStyle: 'default' },
   icons: { icon: '/icons/icon-192.png', apple: '/icons/icon-192.png' },

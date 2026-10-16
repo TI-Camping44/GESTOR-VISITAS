@@ -344,4 +344,96 @@ do $$ declare v uuid; begin
   assert (select zona_id from vis_clientes where id = v) is null, 'quitar la zona a mano se respeta';
 end $$;
 
+-- ── Multi empresa (0012) ───────────────────────────────────────────
+-- Vitalica: su admin y su vendedor. Los clientes se comparten; la gente y su trabajo, no.
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000000f1', 'sergio@camping44.com.py'),
+  ('00000000-0000-0000-0000-0000000000f2', 'hugo@vitalica.com.py');
+insert into vis_vendedores (nombre, email, rol, empresa_id, tracking_aceptado_el) values
+  ('Sergio', 'sergio@camping44.com.py', 'admin', (select id from vis_empresas where nombre = 'Vitalica'), null),
+  ('Hugo', 'hugo@vitalica.com.py', 'vendedor', (select id from vis_empresas where nombre = 'Vitalica'), now());
+insert into vis_clientes (razon_social, ciudad, vendedor_id) values
+  ('Cliente de Hugo', 'Asunción', (select id from vis_vendedores where nombre = 'Hugo')),
+  ('Cliente libre', 'Asunción', null);
+insert into vis_jornadas (vendedor_id, inicio) values ((select id from vis_vendedores where nombre = 'Hugo'), now() - interval '1 hour');
+insert into vis_posiciones (jornada_id, vendedor_id, fecha_hora, lat, lng)
+  select id, vendedor_id, now() - interval '10 minutes', -25.3, -57.6 from vis_jornadas where vendedor_id = (select id from vis_vendedores where nombre = 'Hugo');
+insert into vis_rutas (nombre, vendedor_id, semana_inicio, estado)
+  values ('Ruta Hugo', (select id from vis_vendedores where nombre = 'Hugo'), date_trunc('week', vis_hoy())::date, 'publicada');
+
+select pg_temp.como('hugo@vitalica.com.py') \gset
+set role authenticated;
+do $$ declare r jsonb; begin
+  r := vis_vincular_usuario();
+  assert r ->> 'empresa' = 'Vitalica' and not (r ->> 'multi_empresa')::boolean, format('perfil de Hugo: %s', r);
+  r := vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id',
+    (select id from vis_clientes where razon_social = 'Cliente de Hugo'), 'resultado_id', (select id from vis_resultados where activo order by orden limit 1)));
+  assert r ->> 'id' is not null, 'Hugo registra su visita';
+  assert (select array_agg(nombre order by nombre) from vis_vendedores) = array['Hugo', 'Sergio'], 'un vendedor de Vitalica ve solo a la gente de Vitalica';
+end $$;
+reset role;
+
+select id as antonio_id from vis_vendedores where email = 'antonio@camping44.com.py' \gset
+select set_config('test.antonio', :'antonio_id', false) \gset
+select pg_temp.como('sergio@camping44.com.py') \gset
+set role authenticated;
+do $$ declare n int; begin
+  assert vis_vincular_usuario() ->> 'empresa' = 'Vitalica', 'Sergio es de Vitalica';
+  assert (select array_agg(nombre order by nombre) from vis_vendedores) = array['Hugo', 'Sergio'], 'Sergio ve solo a la gente de Vitalica';
+  assert (select count(*) from vis_zonas) = 0, 'las zonas de Camping 44 no se ven en Vitalica';
+  assert (select count(*) from vis_clientes where razon_social = 'Ferretería López S.A.') = 1, 'los clientes se comparten';
+  assert (select array_agg(nombre) from vis_rutas) = array['Ruta Hugo'], 'solo las rutas de Vitalica';
+  assert not exists (select 1 from vis_visitas v join vis_vendedores x on x.id = v.vendedor_id where x.nombre <> 'Hugo')
+     and exists (select 1 from vis_visitas), 'solo las visitas de Vitalica';
+  assert (select count(*) from vis_jornadas) = 1 and (select count(*) from vis_posiciones) = 1
+     and (select count(*) from vis_posicion_actual) = 1, 'en vivo y recorridos: solo Hugo';
+  assert (select array_agg(nombre) from vis_empresas) = array['Vitalica'], 've solo su empresa';
+  -- Clientes compartidos: asigna los libres a su gente, no toca los de Camping 44.
+  update vis_clientes set vendedor_id = (select id from vis_vendedores where nombre = 'Hugo') where razon_social = 'Cliente libre';
+  get diagnostics n = row_count; assert n = 1, 'asigna un cliente libre a Hugo';
+  update vis_clientes set notas = 'x' where razon_social = 'Ferretería López S.A.';
+  get diagnostics n = row_count; assert n = 0, 'no edita un cliente de un vendedor de Camping 44';
+  begin
+    update vis_clientes set vendedor_id = current_setting('test.antonio')::uuid where razon_social = 'Cliente libre';
+    assert false, 'no puede asignar a un vendedor de otra empresa';
+  exception when insufficient_privilege then null; end;
+  -- El alta de gente queda en su empresa y no puede darse acceso a otras.
+  insert into vis_vendedores (nombre, email, rol) values ('Nuevo Vitalica', 'nuevo@vitalica.com.py', 'vendedor');
+  assert (select e.nombre from vis_vendedores v join vis_empresas e on e.id = v.empresa_id where v.email = 'nuevo@vitalica.com.py') = 'Vitalica', 'el alta queda en Vitalica';
+  begin update vis_vendedores set multi_empresa = true where nombre = 'Sergio'; assert false, 'un admin no se da multi empresa';
+  exception when insufficient_privilege then null; end;
+  begin update vis_vendedores set empresa_id = (select id from vis_empresas limit 1) where nombre = 'Hugo'; assert false, 'un admin no mueve gente de empresa';
+  exception when insufficient_privilege then null; end;
+  begin perform vis_cambiar_empresa((select id from vis_empresas limit 1)); assert false, 'sin multi empresa no cambia de empresa';
+  exception when raise_exception then null; end;
+end $$;
+reset role;
+
+select pg_temp.como('super@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert not exists (select 1 from vis_vendedores where nombre in ('Hugo', 'Sergio', 'Nuevo Vitalica')), 'Camping 44 no ve la gente de Vitalica';
+  assert not exists (select 1 from vis_rutas where nombre = 'Ruta Hugo'), 'ni sus rutas';
+  assert not exists (select 1 from vis_visitas v join vis_clientes c on c.id = v.cliente_id where c.razon_social = 'Cliente de Hugo'), 'ni sus visitas';
+  assert not exists (select 1 from vis_jornadas j where j.vendedor_id not in (select id from vis_vendedores)), 'ni sus jornadas';
+  assert not exists (select 1 from vis_posicion_actual p where p.vendedor_id not in (select id from vis_vendedores)), 'ni su posición en vivo';
+  assert (select count(*) from vis_zonas) > 0, 'sus zonas siguen ahí';
+end $$;
+reset role;
+
+-- TI con multi empresa: elige con cuál trabaja.
+update vis_vendedores set multi_empresa = true where email = 'admin@camping44.com.py';
+select pg_temp.como('admin@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert vis_vincular_usuario() ->> 'empresa' = 'Camping 44', 'arranca en su empresa';
+  assert (select count(*) from vis_empresas) = 2, 've las dos empresas';
+  perform vis_cambiar_empresa((select id from vis_empresas where nombre = 'Vitalica'));
+  assert vis_vincular_usuario() ->> 'empresa' = 'Vitalica', 'pasó a Vitalica';
+  assert exists (select 1 from vis_vendedores where nombre = 'Hugo') and not exists (select 1 from vis_vendedores where nombre = 'Antonio'), 've la gente de Vitalica';
+  perform vis_cambiar_empresa((select id from vis_empresas where nombre = 'Camping 44'));
+  assert exists (select 1 from vis_vendedores where nombre = 'Antonio'), 'vuelve a Camping 44';
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;
