@@ -137,6 +137,8 @@ export type Database = {
     Functions: {
       vis_cambiar_empresa: { Args: { p_empresa: string }; Returns: undefined }
       vis_mi_empresa: { Args: never; Returns: string }
+      vis_soy_admin_multi: { Args: never; Returns: boolean }
+      vis_asignar_empresa: { Args: { p_vendedor: string; p_empresa: string; p_ambas: boolean }; Returns: undefined }
       vis_aceptar_tracking: { Args: never; Returns: string }
       vis_actualizar_ubicacion: {
         Args: { p_cliente: string; p_lat: number; p_lng: number; p_motivo: string; p_origen: Database['public']['Enums']['vis_origen_ubic']; p_precision: number }

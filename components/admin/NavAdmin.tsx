@@ -14,7 +14,7 @@ export function NavAdmin({ rol }: { rol: Rol }) {
     { href: '/en-vivo', texto: 'En vivo', Icono: Radio },
     { href: '/clientes', texto: 'Clientes', Icono: Users },
     { href: '/zonas', texto: 'Zonas', Icono: MapPinned },
-    { href: '/vendedores', texto: 'Vendedores', Icono: UserCog },
+    { href: '/vendedores', texto: 'Usuarios', Icono: UserCog },
     ...(rol === 'admin' ? [{ href: '/sync', texto: 'Sync Odoo', Icono: RefreshCw }] : []),
     { href: '/hoy', texto: 'App del vendedor', Icono: Smartphone },
   ]
