@@ -480,4 +480,23 @@ do $$ declare n int; begin
 end $$;
 reset role;
 
+-- ── Mis visitas (0015) ─────────────────────────────────────────────
+select pg_temp.como('antonio@camping44.com.py') \gset
+set role authenticated;
+do $$ declare n int; begin
+  select count(*) into n from vis_mis_visitas(vis_hoy() - 30, vis_hoy());
+  assert n > 0, 'Antonio ve sus visitas';
+  assert n = (select count(*) from vis_visitas where vendedor_id = vis_mi_id() and fecha_hora >= (vis_hoy() - 30)::timestamp at time zone 'America/Asuncion'),
+    'son exactamente las suyas del período';
+  assert not exists (select 1 from vis_mis_visitas(vis_hoy() - 30, vis_hoy()) m join vis_visitas v on v.id = m.id where v.vendedor_id <> vis_mi_id()), 'ninguna de otro';
+  assert (select count(*) from vis_mis_visitas(vis_hoy() - 30, vis_hoy()) where razon_social is null) = 0, 'siempre con el nombre del cliente';
+end $$;
+reset role;
+set role anon;
+do $$ begin
+  begin perform vis_mis_visitas(current_date - 1, current_date); assert false, 'anon no llama a vis_mis_visitas';
+  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;

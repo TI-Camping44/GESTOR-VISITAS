@@ -5,9 +5,10 @@ El plan completo está en `BRIEF.md`. Trabajar por fases y **parar al final de c
 ## Estado (12/10/2026)
 
 - **Fase 0 (Odoo): script listo, sin correr.** Facundo pidió dejar Odoo para el final. `scripts/odoo-discovery.ts` + `lib/odoo.ts`. Cuando haya acceso: correr `npm run odoo:discovery`, escribir `docs/odoo-campos.md`, y recién ahí el sync (`lib/sync/*`, `/api/cron/sync`, `vercel.json` crons).
-- **Fase 1 sin Odoo: hecha.** Migraciones 0001–0014 aplicadas en Supabase **GESTOR-VISITAS** (`fhbnqvqxgmukukwlyune`, São Paulo). Pantallas de vendedor y supervisor, PWA, cola offline, tracking y mapa en vivo.
+- **Fase 1 sin Odoo: hecha.** Migraciones 0001–0015 aplicadas en Supabase **GESTOR-VISITAS** (`fhbnqvqxgmukukwlyune`, São Paulo). Pantallas de vendedor y supervisor, PWA, cola offline, tracking y mapa en vivo.
 - Zonas reales cargadas (0007): ciudades, semana del mes y responsable. Asunción está en dos zonas (quincenas) → esos clientes se asignan a mano.
 - Extras pedidos por Facundo: Reportes con km y Excel (0008), próximas visitas pendientes y ruta sugerida (0009).
+- **Mis visitas** en la app del vendedor (`/visitas`, 0015 `vis_mis_visitas`): sus visitas por día y por cliente (7/30/90 días o un día), con las que quedaron sin enviar. Solo las propias.
 - El alta de un cliente cuenta como visita (resultado "Cliente nuevo", 0011); el formulario que sigue completa esa misma visita (`visita_id`), no crea otra.
 - Ciudad del alta de cliente: se elige de una lista (ciudades de las zonas). Las abreviaturas van en `vis_zonas.ciudades_alias` (0010): reconocen la zona pero no salen en la lista.
 - **Multi empresa (0012, 16/10):** Camping 44 y Vitalica en la misma app. Clientes compartidos (mismos contactos de Odoo); vendedores, zonas, rutas, visitas, jornadas y en vivo separados por empresa (`vis_empresas`, `vis_vendedores.empresa_id`, `vis_zonas.empresa_id`, RLS con `vis_mi_empresa()` / `vis_vendedor_visible()`). Lo existente quedó en Camping 44. Facundo tiene `multi_empresa` y elige la empresa en el panel (`vis_cambiar_empresa`). El color de la interfaz sale de la empresa (`data-empresa`, `temaEmpresa()`): Camping 44 negro/rojo, Vitalica gris/naranja. La empresa de cada usuario (una o «Ambas» = `multi_empresa`) se elige en **Usuarios** (`/vendedores`) con `vis_asignar_empresa` (0014): solo un admin con ambas (`vis_soy_admin_multi()`); el admin de una empresa gestiona solo la suya (grants por columna + RLS). Quien tiene ambas aparece en la lista de las dos.
@@ -15,7 +16,7 @@ El plan completo está en `BRIEF.md`. Trabajar por fases y **parar al final de c
 - Invitaciones (Vendedores → «Enviar invitación», y sola al dar acceso): correo propio por Gmail SMTP (`lib/correo.ts`, server action `app/(admin)/vendedores/acciones.ts`) con `SMTP_USER` + `SMTP_PASS` (contraseña de aplicación) solo en Vercel. Solo un admin, solo a gente de su empresa. WhatsApp y Copiar como respaldo.
 - Clientes: 365 cargados el 09/10 desde un export de Contactos de Odoo (no versionado): 108 de la cartera con vendedor en Odoo + 257 empresas con compras. Vendedor asignado por cartera o por el responsable de la zona; 88 sin vendedor (vendedores de Odoo que no están en la app, o sin ciudad). Sin facturación todavía → todos figuran "sin movimiento" hasta cargar facturas o el sync.
 - Vercel: equipo C44 (`c49`), proyecto `gestion-visitas`, plan **Hobby** (cron 1×/día), región `gru1`.
-- Producción: https://gestion-visitas-eight.vercel.app (rama `main`, PRs #1 a #6 mergeados). URLs de Supabase Auth configuradas. Login con Google (y link por email como respaldo).
+- Producción: https://gestion-visitas-eight.vercel.app (rama `main`, PRs #1 a #7 mergeados). URLs de Supabase Auth configuradas. Login con Google (y link por email como respaldo).
 - Piloto: **Humberto Benítez** (cambió de Antonio), semana 12–16/10 = 2da del mes → zona **Asunción 2da y 4ta**. Sus ciudades están también en Asunción 1ra y 3ra, así que los clientes se reparten a mano entre las dos quincenas. Pendiente: decidir cómo se reparten los clientes de Asunción/Central entre las dos quincenas (hoy sin zona, todos de Humberto).
 
 ## Cómo probar
