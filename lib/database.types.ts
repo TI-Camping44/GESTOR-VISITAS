@@ -189,6 +189,7 @@ export type Database = {
       vis_reporte_zonas: { Args: { p_desde: string; p_hasta: string }; Returns: Record<string, unknown>[] }
       vis_clientes_sin_visita: { Args: { p_dias?: number; p_zona?: string }; Returns: Record<string, unknown>[] }
       vis_proximas_visitas: { Args: { p_hasta?: string }; Returns: ProximaVisita[] }
+      vis_mis_visitas: { Args: { p_desde: string; p_hasta: string }; Returns: MiVisita[] }
       vis_sugerir_paradas: { Args: { p_ruta: string }; Returns: Sugerida[] }
       vis_asignar_zonas_por_ciudad: { Args: never; Returns: number }
       vis_zona_historial: {
@@ -249,6 +250,13 @@ export type Perfil = {
 }
 
 export type Empresa = { id: string; nombre: string }
+
+export type MiVisita = {
+  id: string; fecha_hora: string; cliente_id: string; razon_social: string; ciudad: string | null; telefono: string | null
+  telefono_norm: string | null; resultado: string | null; es_venta: boolean; hizo_pedido: boolean; hizo_cobranza: boolean
+  monto_cobrado_gs: number | null; observaciones: string | null; proxima_visita: string | null; en_ruta: boolean
+  distancia_cliente_m: number | null
+}
 
 export type ProximaVisita = {
   cliente_id: string; razon_social: string; ciudad: string | null; direccion: string | null; telefono: string | null
