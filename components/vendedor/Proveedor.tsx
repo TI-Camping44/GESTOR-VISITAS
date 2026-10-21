@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { tracker } from '@/lib/tracking/tracker'
-import { contarPendientes } from '@/lib/offline/db'
+import { contarPendientes, guardarCache, leerCache } from '@/lib/offline/db'
 import { subirPendientes } from '@/lib/offline/subir'
 import { leerGps, nivelBateria } from '@/lib/gps'
 import { mensajeError } from '@/lib/utils'
@@ -48,17 +48,46 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
     await refrescarPendientes()
   }, [refrescarPendientes])
 
-  // Jornada abierta al entrar: si hay, el tracking sigue.
+  // Jornada abierta al entrar: si hay, el tracking sigue. Sin señal, la última conocida.
   useEffect(() => {
     let vivo = true
-    supabaseNavegador().from('vis_jornadas').select('*').eq('vendedor_id', inicial.id).is('fin', null).maybeSingle()
-      .then(({ data }) => {
-        if (!vivo) return
+    const clave = `jornada:${inicial.id}`
+    ;(async () => {
+      const cache = await leerCache<Jornada | null>(clave).catch(() => null)
+      if (cache && vivo) {
+        setJornada(cache.datos)
+        if (cache.datos) tracker.iniciar()
+        setCargando(false)
+      }
+      const { data, error } = await supabaseNavegador().from('vis_jornadas').select('*').eq('vendedor_id', inicial.id).is('fin', null).maybeSingle()
+      if (!vivo) return
+      if (!error) {
         setJornada(data)
         if (data) tracker.iniciar()
-        setCargando(false)
-      })
+        void guardarCache(clave, data).catch(() => {})
+      }
+      setCargando(false)
+    })()
     return () => { vivo = false }
+  }, [inicial.id])
+
+  // Con señal: guarda en el celular la cartera y los resultados (para registrar visitas sin señal
+  // a cualquier cliente propio) y las pantallas de la app con lo que necesitan para abrir (public/sw.js).
+  useEffect(() => {
+    if (!navigator.onLine) return
+    const sb = supabaseNavegador()
+    void sb.from('vis_clientes_v').select('id, razon_social, ciudad, direccion, lat, lng, estado')
+      .eq('vendedor_id', inicial.id).limit(3000)
+      .then(({ data }) => { if (data) void guardarCache(`cartera:${inicial.id}`, data).catch(() => {}) })
+    void sb.from('vis_resultados').select('*').eq('activo', true).order('orden')
+      .then(({ data }) => { if (data?.length) void guardarCache('resultados', data).catch(() => {}) })
+    if (!('serviceWorker' in navigator)) return
+    const clave = 'vis-precarga'
+    try { if (Date.now() - Number(localStorage.getItem(clave) ?? 0) < 6 * 3600_000) return } catch { /* sin almacenamiento: igual precarga */ }
+    void navigator.serviceWorker.ready.then((reg) => {
+      reg.active?.postMessage({ tipo: 'precargar', urls: ['/hoy', '/visitas', '/mapa', '/prospecto/nuevo', '/visita', '/offline'] })
+      try { localStorage.setItem(clave, String(Date.now())) } catch { /* nada */ }
+    })
   }, [inicial.id])
 
   // Señal, cola y subida periódica (las visitas offline se suben aunque no haya jornada).
@@ -88,8 +117,9 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
     })
     if (error) throw new Error(mensajeError(error))
     setJornada(data)
+    void guardarCache(`jornada:${inicial.id}`, data).catch(() => {})
     tracker.iniciar()
-  }, [])
+  }, [inicial.id])
 
   const terminarJornada = useCallback(async () => {
     if (!navigator.onLine) throw new Error('Necesitás señal para terminar la jornada (para subir el recorrido).')
@@ -101,8 +131,9 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
     if (error) throw new Error(mensajeError(error))
     await tracker.detener()
     setJornada(null)
+    void guardarCache(`jornada:${inicial.id}`, null).catch(() => {})
     await refrescarPendientes()
-  }, [subir, refrescarPendientes])
+  }, [subir, refrescarPendientes, inicial.id])
 
   return (
     <Contexto.Provider value={{ perfil, jornada, cargandoJornada, pendientes, enLinea, erroresSubida, iniciarJornada, terminarJornada, aceptarAviso, refrescarPendientes }}>

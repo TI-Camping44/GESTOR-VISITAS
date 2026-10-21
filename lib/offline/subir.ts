@@ -2,15 +2,14 @@
 // Sube lo que quedó en la cola. Idempotente del lado de la base: reintentar nunca duplica.
 import { abrir, type PosicionPendiente, type VisitaPendiente } from './db'
 import { supabaseNavegador } from '@/lib/supabase/client'
-import { mensajeError } from '@/lib/utils'
+import { esErrorDeRed, mensajeError } from '@/lib/utils'
 
 const LOTE_POSICIONES = 500
 let enCurso: Promise<ResultadoSubida> | null = null
 
 export type ResultadoSubida = { visitas: number; posiciones: number; errores: string[] }
 
-/** Los errores de red se reintentan; los rechazos de la base (validación) quedan marcados. */
-const esErrorDeRed = (e: unknown) => /fetch|network|Failed to fetch|Load failed|timeout/i.test(mensajeError(e))
+// Los errores de red se reintentan (esErrorDeRed); los rechazos de la base (validación) quedan marcados.
 
 export async function encolarVisita(v: VisitaPendiente) {
   await (await abrir()).put('visitas', v)

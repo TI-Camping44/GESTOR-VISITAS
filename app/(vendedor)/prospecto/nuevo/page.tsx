@@ -12,6 +12,7 @@ import { supabaseNavegador } from '@/lib/supabase/client'
 import { fmtDistancia } from '@/lib/geo'
 import { VIS } from '@/lib/config'
 import { mensajeError } from '@/lib/utils'
+import { urlVisita } from '@/lib/rutas'
 import type { Duplicado, Zona } from '@/lib/database.types'
 
 const OTRA = '__otra'
@@ -69,7 +70,7 @@ export default function NuevoProspecto() {
     if (error) return setError(mensajeError(error))
     const r = data as { ok: boolean; id?: string; visita_id?: string; duplicados?: Duplicado[] }
     // El alta ya cuenta como visita; el formulario que sigue la completa.
-    if (r.ok && r.id) router.push(`/visita/${r.id}${r.visita_id ? `?alta=${r.visita_id}` : ''}`)
+    if (r.ok && r.id) router.push(urlVisita(r.id, { alta: r.visita_id }))
     else setDuplicados(r.duplicados ?? [])
   }
 
@@ -129,7 +130,7 @@ export default function NuevoProspecto() {
                 <p className="text-sm text-tenue">
                   {d.motivo}{d.distancia_m != null && ` · a ${fmtDistancia(d.distancia_m)}`}{d.ciudad && ` · ${d.ciudad}`}{d.telefono && ` · ${d.telefono}`}
                 </p>
-                <Boton type="button" variante="secundario" className="mt-2" onClick={() => router.push(`/visita/${d.id}`)}>Es este</Boton>
+                <Boton type="button" variante="secundario" className="mt-2" onClick={() => router.push(urlVisita(d.id))}>Es este</Boton>
               </li>
             ))}
           </ul>
