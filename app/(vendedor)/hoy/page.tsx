@@ -10,6 +10,7 @@ import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
 import { fmtFecha, hace, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
+import { urlVisita } from '@/lib/rutas'
 import { COLOR_ESTADO } from '@/lib/config'
 import { linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
 import type { FilaTablero, ParadaDia, ProximaVisita } from '@/lib/database.types'
@@ -62,7 +63,7 @@ export default function Hoy() {
       id: p.parada_id, lat: p.lat!, lng: p.lng!, etiqueta: String(i + 1),
       color: p.visitada ? '#6b7280' : COLOR_ESTADO[p.estado],
       titulo: p.razon_social, detalle: p.visitada ? 'Ya visitado' : (p.ciudad ?? ''),
-      href: `/visita/${p.cliente_id}?parada=${p.parada_id}`, textoLink: 'Registrar visita',
+      href: urlVisita(p.cliente_id, { parada: p.parada_id }), textoLink: 'Registrar visita',
     })), [datos])
 
   const pendientesHoy = useMemo(() => (datos?.paradas ?? []).filter((p) => !p.visitada && p.lat != null && p.lng != null), [datos])
@@ -145,7 +146,7 @@ export default function Hoy() {
                       <CheckCircle2 className="size-4" aria-hidden /> Visitado
                     </span>
                   ) : (
-                    <Link href={`/visita/${p.cliente_id}?parada=${p.parada_id}`} className="flex-1">
+                    <Link href={urlVisita(p.cliente_id, { parada: p.parada_id })} className="flex-1">
                       <Boton className="w-full">Llegué · Registrar visita</Boton>
                     </Link>
                   )}
@@ -183,7 +184,7 @@ export default function Hoy() {
                     {x.ultima_observacion && <p className="mt-1 text-sm">{x.ultima_observacion}</p>}
                     <p className="mt-1 text-xs text-tenue">Última visita {fmtFecha(x.ultima_visita)} · quedaste en volver el {fmtFecha(x.proxima_visita)}</p>
                     <div className="mt-3 flex gap-2">
-                      <Link href={`/visita/${x.cliente_id}`} className="flex-1"><Boton variante="secundario" className="w-full">Registrar visita</Boton></Link>
+                      <Link href={urlVisita(x.cliente_id)} className="flex-1"><Boton variante="secundario" className="w-full">Registrar visita</Boton></Link>
                       {tel && <a href={tel} aria-label={`Llamar a ${x.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" /></a>}
                       {wa && <a href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp a ${x.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><MessageCircle className="size-4" /></a>}
                     </div>

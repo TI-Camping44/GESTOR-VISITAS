@@ -10,6 +10,7 @@ import { fmtDistancia } from '@/lib/geo'
 import { hace } from '@/lib/fechas'
 import { COLOR_ESTADO, ETIQUETA_ESTADO } from '@/lib/config'
 import { cn, mensajeError } from '@/lib/utils'
+import { urlVisita } from '@/lib/rutas'
 import type { EstadoCliente } from '@/lib/database.types'
 
 type C = { id: string; razon_social: string; ciudad: string | null; lat: number; lng: number; estado: EstadoCliente; ultima_visita: string | null; distancia_m?: number }
@@ -50,7 +51,7 @@ export default function MapaVendedor() {
   const puntos = useMemo<PuntoMapa[]>(() => visibles.map((c) => ({
     id: c.id, lat: c.lat, lng: c.lng, color: COLOR_ESTADO[c.estado], titulo: c.razon_social,
     detalle: `${ETIQUETA_ESTADO[c.estado]} · última visita ${hace(c.ultima_visita)}`,
-    href: `/visita/${c.id}`, textoLink: 'Registrar visita',
+    href: urlVisita(c.id), textoLink: 'Registrar visita',
   })), [visibles])
 
   const alternar = (e: EstadoCliente) => setFiltro((f) => {
@@ -92,7 +93,7 @@ export default function MapaVendedor() {
                   <p className="truncate font-medium">{c.razon_social}</p>
                   <div className="flex items-center gap-2"><PuntoEstado estado={c.estado} /><span className="text-xs text-tenue">{fmtDistancia(c.distancia_m)} · {c.ciudad ?? ''}</span></div>
                 </div>
-                <Link href={`/visita/${c.id}`} className="shrink-0 text-sm font-medium text-marca">Visitar →</Link>
+                <Link href={urlVisita(c.id)} className="shrink-0 text-sm font-medium text-marca">Visitar →</Link>
               </Tarjeta>
             </li>
           ))}

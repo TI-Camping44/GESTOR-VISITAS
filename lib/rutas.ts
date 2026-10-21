@@ -1,5 +1,13 @@
 import type { EstadoRuta } from '@/lib/database.types'
 
+/** Pantalla de registrar visita. Una sola dirección para todos los clientes: funciona sin señal. */
+export function urlVisita(clienteId: string, extra: { parada?: string | null; alta?: string | null } = {}) {
+  const q = new URLSearchParams({ c: clienteId })
+  if (extra.parada) q.set('parada', extra.parada)
+  if (extra.alta) q.set('alta', extra.alta)
+  return `/visita?${q}`
+}
+
 export const COLOR_ESTADO_RUTA: Record<EstadoRuta, string> = {
   borrador: 'bg-fondo text-tenue',
   publicada: 'bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-200',
