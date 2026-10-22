@@ -4,6 +4,7 @@ import { supabaseServidor } from '@/lib/supabase/server'
 import { NavAdmin } from '@/components/admin/NavAdmin'
 import { BotonSalir } from '@/components/BotonSalir'
 import { SelectorEmpresa } from '@/components/admin/SelectorEmpresa'
+import { SelectorTema } from '@/components/SelectorTema'
 import { temaEmpresa } from '@/lib/utils'
 
 export default async function LayoutAdmin({ children }: { children: React.ReactNode }) {
@@ -21,13 +22,14 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
         <div className="lg:sticky lg:top-3">
         <div className="mb-3 flex items-center justify-between gap-2 px-2 lg:block">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-barra-acento">{perfil.empresa ?? 'Camping 44'}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-barra-acento">{perfil.empresa ?? 'Camping 44'}{perfil.equipo && ` · ${perfil.equipo}`}</p>
             <p className="font-semibold">Visitas y rutas</p>
           </div>
           <p className="truncate text-xs text-barra-tenue lg:mt-1">{perfil.nombre}</p>
           {perfil.multi_empresa && <SelectorEmpresa actual={perfil.empresa_id} />}
         </div>
         <NavAdmin rol={perfil.rol} />
+        <SelectorTema enBarra className="mt-3 hidden lg:flex" />
         <BotonSalir className="mt-3 hidden w-full lg:flex" />
         </div>
       </aside>
