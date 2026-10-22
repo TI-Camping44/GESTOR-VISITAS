@@ -65,7 +65,7 @@ export function filaCliente(p: PartnerOdoo, origenActual: string | null | undefi
     ruc: texto(p.vat),
     telefono: telefonoOdoo(p),
     direccion: [texto(p.street), texto(p.street2)].filter(Boolean).join(', ') || null,
-    ciudad: texto(p.city),
+    ciudad: texto(p.city)?.replace(/\s*\([^)]*\)\s*$/, '') || null, // "ASUNCION (DISTRITO)" → "ASUNCION"
     departamento: Array.isArray(p.state_id) ? p.state_id[1] : null,
     lat_odoo: coords?.lat ?? null,
     lng_odoo: coords?.lng ?? null,

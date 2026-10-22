@@ -33,7 +33,9 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
   const [base, setBase] = useState<Cand[]>([])
   const [extras, setExtras] = useState<Cand[]>([])
   const [historial, setHistorial] = useState<HistorialZona[] | null>(null)
-  const [todasZonas, setTodasZonas] = useState(false)
+  // De dónde salen los candidatos: la zona de la ruta, la cartera del vendedor o todos.
+  const [fuente, setFuente] = useState<'zona' | 'cartera' | 'todas' | null>(null)
+  const [ciudad, setCiudad] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [diaSel, setDiaSel] = useState(0)
   const [destinoDup, setDestinoDup] = useState('')
@@ -75,13 +77,15 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
     })()
   }, [id, sb, cargarParadas])
 
-  // Candidatos: clientes de la zona de la ruta (o todos), más los que ya están en paradas.
+  // Candidatos: clientes de la zona de la ruta, de la cartera del vendedor o todos, más los que ya están en paradas.
+  const origenCands = fuente ?? (ruta?.zona_id ? 'zona' : 'cartera')
   useEffect(() => {
     if (!ruta) return
     let q = sb.from('vis_clientes_v').select(CAMPOS_CAND).order('razon_social').limit(3000)
-    if (ruta.zona_id && !todasZonas) q = q.eq('zona_id', ruta.zona_id)
+    if (origenCands === 'zona' && ruta.zona_id) q = q.eq('zona_id', ruta.zona_id)
+    if (origenCands === 'cartera') q = q.eq('vendedor_id', ruta.vendedor_id)
     q.then(({ data, error }) => { if (error) setError(mensajeError(error)); else setBase((data ?? []) as Cand[]) })
-  }, [ruta, todasZonas, sb])
+  }, [ruta, origenCands, sb])
 
   useEffect(() => {
     const conocidos = new Set([...base, ...extras].map((c) => c.id))
@@ -102,10 +106,25 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
   const diasDe = (cid: string) => new Set(paradas.filter((p) => p.cliente_id === cid).map((p) => p.dia))
   const origen = vendedor?.base_lat != null && vendedor.base_lng != null ? { lat: vendedor.base_lat, lng: vendedor.base_lng } : baseDeposito
 
+  // Ciudades de los candidatos ("ASUNCION" y "Asunción" son la misma), con cuántos clientes hay en cada una.
+  const claveCiudad = (c: string | null) => (c ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase()
+  const ciudades = useMemo(() => {
+    const m = new Map<string, { nombre: string; n: number }>()
+    for (const c of cands) {
+      const k = claveCiudad(c.ciudad)
+      if (!k) continue
+      const x = m.get(k)
+      if (x) x.n++
+      else m.set(k, { nombre: c.ciudad!.trim(), n: 1 })
+    }
+    return [...m.entries()].sort((a, b) => a[1].nombre.localeCompare(b[1].nombre, 'es'))
+  }, [cands])
+
   const filtrados = useMemo(() => {
     const t = busqueda.trim().toLowerCase()
-    return t ? cands.filter((c) => c.razon_social.toLowerCase().includes(t) || (c.ciudad ?? '').toLowerCase().includes(t)) : cands
-  }, [cands, busqueda])
+    return cands.filter((c) => (!ciudad || claveCiudad(c.ciudad) === ciudad)
+      && (!t || c.razon_social.toLowerCase().includes(t) || (c.ciudad ?? '').toLowerCase().includes(t)))
+  }, [cands, busqueda, ciudad])
 
   async function hacer(fn: () => Promise<{ error: unknown } | void>) {
     setOcupado(true)
@@ -116,6 +135,16 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
       await cargarParadas()
     } finally { setOcupado(false) }
   }
+
+  // Ruta por ciudad: todos los clientes de la ciudad elegida al día seleccionado (los que ya están ese día, no se repiten).
+  const agregarCiudad = (dia: string) => hacer(async () => {
+    const ya = new Set(delDia(dia).map((p) => p.cliente_id))
+    const nuevos = filtrados.filter((c) => !ya.has(c.id))
+    if (!nuevos.length) return
+    if (nuevos.length > 30 && !window.confirm(`¿Agregar ${nuevos.length} clientes a un solo día?`)) return
+    let orden = Math.max(0, ...delDia(dia).map((p) => p.orden))
+    return sb.from('vis_ruta_paradas').insert(nuevos.map((c) => ({ ruta_id: id, cliente_id: c.id, dia, orden: ++orden })))
+  })
 
   const alternarDia = (cid: string, dia: string) => hacer(async () => {
     const ya = paradas.find((p) => p.cliente_id === cid && p.dia === dia)
@@ -277,16 +306,27 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
         {/* Clientes candidatos */}
         <Tarjeta className="flex max-h-[80vh] flex-col gap-3 p-3">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="font-semibold">Clientes {zona && !todasZonas ? `de ${zona.nombre}` : ''}</h2>
-            {zona && (
-              <label className="flex items-center gap-1.5 text-xs text-tenue">
-                <input type="checkbox" checked={todasZonas} onChange={(e) => setTodasZonas(e.target.checked)} /> todas las zonas
-              </label>
-            )}
+            <h2 className="font-semibold">Clientes</h2>
+            <Selector value={origenCands} onChange={(e) => { setFuente(e.target.value as 'zona' | 'cartera' | 'todas'); setCiudad('') }} className="w-auto py-1 text-xs" aria-label="Qué clientes mostrar">
+              {zona && <option value="zona">De {zona.nombre}</option>}
+              <option value="cartera">Cartera de {vendedor?.nombre.split(' ')[0] ?? 'su vendedor'}</option>
+              <option value="todas">Todos</option>
+            </Selector>
           </div>
+          <div className="flex gap-2">
+            <Selector value={ciudad} onChange={(e) => setCiudad(e.target.value)} className="py-1 text-sm" aria-label="Ciudad">
+              <option value="">Todas las ciudades</option>
+              {ciudades.map(([k, c]) => <option key={k} value={k}>{c.nombre} ({c.n})</option>)}
+            </Selector>
+          </div>
+          {ciudad && filtrados.length > 0 && dias[diaSel] && (
+            <Boton variante="secundario" disabled={ocupado} onClick={() => void agregarCiudad(dias[diaSel]!)}>
+              Agregar {filtrados.length === 1 ? 'el cliente' : `los ${filtrados.length}`} de {ciudades.find(([k]) => k === ciudad)?.[1].nombre} al {fmtDia(dias[diaSel]!)}
+            </Boton>
+          )}
           <Entrada placeholder="Buscar por nombre o ciudad" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} aria-label="Buscar cliente" />
           <ul className="-mx-1 flex-1 overflow-y-auto">
-            {filtrados.length === 0 && <li className="px-1 py-4 text-center text-sm text-tenue">{cands.length ? 'Sin coincidencias.' : 'No hay clientes en esta zona. Asignalos en Clientes.'}</li>}
+            {filtrados.length === 0 && <li className="px-1 py-4 text-center text-sm text-tenue">{cands.length ? 'Sin coincidencias.' : origenCands === 'cartera' ? 'Este vendedor todavía no tiene clientes asignados.' : 'No hay clientes en esta zona. Asignalos en Clientes.'}</li>}
             {filtrados.slice(0, 400).map((c) => {
               const enDias = diasDe(c.id)
               return (
@@ -352,7 +392,7 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
                 </ol>
               )}
             </Tarjeta>
-            <Mapa puntos={puntos} claveEncuadre={`${id}-${cands.length > 0}-${todasZonas}`}
+            <Mapa puntos={puntos} claveEncuadre={`${id}-${cands.length > 0}-${origenCands}`}
               alClicPunto={(cid) => { if (!delDia(diaActivo).some((p) => p.cliente_id === cid)) void alternarDia(cid, diaActivo) }}
               className="h-96 w-full overflow-hidden rounded-xl border border-borde" />
           </div>

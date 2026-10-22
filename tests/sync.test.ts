@@ -30,6 +30,7 @@ test('Odoo no pisa una ubicación corregida en la calle', () => {
   assert.equal(nuevo.fila.lat, -25.3)
   assert.equal(nuevo.fila.origen_ubicacion, 'odoo')
   assert.equal(nuevo.fila.departamento, 'Central')
+  assert.equal(filaCliente({ ...p, city: 'ASUNCION (DISTRITO)' }, undefined, false).fila.ciudad, 'ASUNCION', 'ciudad sin el (DISTRITO)')
   const corregido = filaCliente(p, 'gps_visita', true)
   assert.equal(corregido.pisaUbicacion, false)
   assert.equal('lat' in corregido.fila, false, 'no manda lat/lng')
