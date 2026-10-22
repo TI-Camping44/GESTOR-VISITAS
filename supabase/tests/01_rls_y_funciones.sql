@@ -568,4 +568,17 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── Zona por equipo del vendedor (0017) ─────────────────────────────
+do $$ declare v uuid; begin
+  insert into vis_zonas (nombre, ciudades, equipo_id) values
+    ('Mayo Luque', array['Puerto Prueba'], (select id from vis_equipos where nombre = 'Mayorista')),
+    ('Externa Luque', array['Puerto Prueba'], (select id from vis_equipos where nombre = 'Venta externa'));
+  update vis_vendedores set equipo_id = (select id from vis_equipos where nombre = 'Venta externa') where nombre = 'Vico';
+  insert into vis_clientes (razon_social, ciudad, vendedor_id) values ('Ext de Luque', 'PUERTO PRUEBA (DISTRITO)', (select id from vis_vendedores where nombre = 'Vico')) returning id into v;
+  assert (select z.nombre from vis_clientes c join vis_zonas z on z.id = c.zona_id where c.id = v) = 'Externa Luque', 'cliente de Venta externa → zona de Venta externa, aunque la ciudad venga con (DISTRITO)';
+  update vis_clientes set vendedor_id = current_setting('test.antonio')::uuid where id = v;
+  assert (select z.nombre from vis_clientes c join vis_zonas z on z.id = c.zona_id where c.id = v) = 'Mayo Luque', 'pasa a Mayorista: toma la zona de Mayorista';
+  assert vis_ciudad_limpia('ASUNCION (DISTRITO)') = 'ASUNCION' and vis_ciudad_limpia('  ') is null, 'limpia la ciudad';
+end $$;
+
 select 'OK: todas las pruebas pasaron' as resultado;
