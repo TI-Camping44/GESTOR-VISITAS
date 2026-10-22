@@ -19,7 +19,7 @@ import { VIS } from '@/lib/config'
 import { esErrorDeRed, mensajeError } from '@/lib/utils'
 import type { EstadoCliente, ParadaDia, ProximaVisita, Resultado } from '@/lib/database.types'
 
-type ClienteVisita = { id: string; razon_social: string; ciudad: string | null; direccion: string | null; lat: number | null; lng: number | null; estado: EstadoCliente }
+type ClienteVisita = { id: string; razon_social: string; ciudad: string | null; direccion: string | null; lat: number | null; lng: number | null; estado: EstadoCliente; vendedor_id?: string | null }
 type Fin = { tipo: 'online' | 'offline'; alerta: number | null; sinUbicacion: boolean }
 
 async function comprimir(archivo: File, max = 1280): Promise<Blob> {
@@ -38,7 +38,7 @@ export default function RegistrarVisita() {
   const paradaId = busqueda.get('parada')
   const altaId = busqueda.get('alta') // visita creada con el alta del cliente: se completa, no se duplica
   const router = useRouter()
-  const { perfil, refrescarPendientes } = useVendedor()
+  const { perfil, refrescarPendientes, nombreVendedor } = useVendedor()
   const gps = useGps()
 
   const [cliente, setCliente] = useState<ClienteVisita | null>(null)
@@ -79,7 +79,7 @@ export default function RegistrarVisita() {
       if (guardado) setCliente(guardado)
 
       const [{ data, error }, r] = await Promise.all([
-        sb.from('vis_clientes_v').select('id, razon_social, ciudad, direccion, lat, lng, estado').eq('id', clienteId).maybeSingle(),
+        sb.from('vis_clientes_v').select('id, razon_social, ciudad, direccion, lat, lng, estado, vendedor_id').eq('id', clienteId).maybeSingle(),
         sb.from('vis_resultados').select('*').eq('activo', true).order('orden'),
       ])
       if (!vivo) return
@@ -195,6 +195,9 @@ export default function RegistrarVisita() {
         </div>
       </div>
 
+      {cliente.vendedor_id && cliente.vendedor_id !== perfil.id && (
+        <Aviso tipo="alerta">Este cliente es de <b>{nombreVendedor(cliente.vendedor_id)}</b>. Si lo visitás, la visita queda a tu nombre y su vendedor la ve en el historial.</Aviso>
+      )}
       {altaId && <Aviso tipo="ok">El cliente quedó cargado y la visita ya cuenta. Elegí el resultado y tocá <b>Guardar visita</b> para completarla.</Aviso>}
       <CapturaGps gps={gps} destino={destino} />
       {lejos && <Aviso tipo="alerta">Estás lejos de donde figura el cliente. Si está acá, al guardar te preguntamos si corregimos la ubicación.</Aviso>}

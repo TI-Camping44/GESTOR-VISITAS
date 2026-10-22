@@ -12,11 +12,11 @@ import { leerCache } from '@/lib/offline/db'
 import { urlVisita } from '@/lib/rutas'
 import type { EstadoCliente } from '@/lib/database.types'
 
-type Encontrado = { id: string; razon_social: string; ciudad: string | null; direccion: string | null; estado: EstadoCliente | null; ruc?: string | null }
+type Encontrado = { id: string; razon_social: string; ciudad: string | null; direccion: string | null; estado: EstadoCliente | null; ruc?: string | null; vendedor_id?: string | null }
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 export function BuscarCliente({ paradas }: { paradas: Map<string, string> }) {
-  const { perfil } = useVendedor()
+  const { perfil, nombreVendedor } = useVendedor()
   const [q, setQ] = useState('')
   const [cartera, setCartera] = useState<Encontrado[]>([])
   const [remotos, setRemotos] = useState<Encontrado[]>([])
@@ -30,7 +30,7 @@ export function BuscarCliente({ paradas }: { paradas: Map<string, string> }) {
     const texto = q.trim().replace(/[,()%*\\]/g, ' ')
     if (texto.length < 3 || !navigator.onLine) { setRemotos([]); return }
     const t = setTimeout(() => {
-      void supabaseNavegador().from('vis_clientes_v').select('id, razon_social, ciudad, direccion, estado, ruc')
+      void supabaseNavegador().from('vis_clientes_v').select('id, razon_social, ciudad, direccion, estado, ruc, vendedor_id')
         .or(`razon_social.ilike.*${texto}*,ciudad.ilike.*${texto}*,ruc.ilike.*${texto}*`).eq('activo', true).limit(15)
         .then(({ data }) => setRemotos((data ?? []) as Encontrado[]))
     }, 350)
@@ -67,6 +67,7 @@ export function BuscarCliente({ paradas }: { paradas: Map<string, string> }) {
                     <span className="block truncate font-medium">{c.razon_social}</span>
                     <span className="flex items-center gap-2 text-xs text-tenue">
                       {c.estado && <PuntoEstado estado={c.estado} />}{c.ciudad ?? 'Sin ciudad'}{parada && ' · en tu ruta de hoy'}
+                      {c.vendedor_id && c.vendedor_id !== perfil.id && <span className="text-amber-700 dark:text-amber-300">· de {nombreVendedor(c.vendedor_id)}</span>}
                     </span>
                   </span>
                   <span className="shrink-0 text-sm font-medium text-marca">Visitar →</span>
