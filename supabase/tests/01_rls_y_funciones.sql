@@ -581,4 +581,21 @@ do $$ declare v uuid; begin
   assert vis_ciudad_limpia('ASUNCION (DISTRITO)') = 'ASUNCION' and vis_ciudad_limpia('  ') is null, 'limpia la ciudad';
 end $$;
 
+-- ── Vecinos de otro vendedor (0018) ────────────────────────────────
+select pg_temp.como('beto@camping44.com.py') \gset
+set role authenticated;
+do $$ declare r record; begin
+  -- Ferretería López (de Antonio) está en -23.4064, -57.4344
+  select * into r from vis_vecinos_de_otros(-23.4070, -57.4344, 300);
+  assert r.vendedor = 'Antonio' and r.distancia_m between 50 and 80, format('vecino: %s', r);
+  assert not exists (select 1 from vis_vecinos_de_otros(-24.0912, -57.0800, 300) where vendedor = 'Beto'), 'no avisa por los propios';
+end $$;
+reset role;
+set role anon;
+do $$ begin
+  begin perform vis_vecinos_de_otros(-23.4, -57.4, 300); assert false, 'anon no la llama';
+  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;

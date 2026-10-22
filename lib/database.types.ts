@@ -198,6 +198,7 @@ export type Database = {
       vis_clientes_sin_visita: { Args: { p_dias?: number; p_zona?: string }; Returns: Record<string, unknown>[] }
       vis_proximas_visitas: { Args: { p_hasta?: string }; Returns: ProximaVisita[] }
       vis_mis_visitas: { Args: { p_desde: string; p_hasta: string }; Returns: MiVisita[] }
+      vis_vecinos_de_otros: { Args: { p_lat: number; p_lng: number; p_radio_m?: number }; Returns: { razon_social: string; vendedor: string; distancia_m: number }[] }
       vis_sugerir_paradas: { Args: { p_ruta: string }; Returns: Sugerida[] }
       vis_asignar_zonas_por_ciudad: { Args: never; Returns: number }
       vis_zona_historial: {

@@ -2,7 +2,8 @@
 // Alta de cliente/prospecto con geolocalización condicionada (requerimiento 1):
 // no se guarda sin razón social y teléfono, con GPS peor que el umbral, ni si parece
 // repetido (mismo RUC, mismo teléfono o a menos de 30 m con nombre parecido) salvo que
-// el vendedor confirme que es otro.
+// el vendedor confirme que es otro. Avisa (sin bloquear) si la ciudad es de la zona de otro
+// vendedor o si donde está parado hay clientes de otro vendedor.
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CapturaGps, useGps } from '@/components/vendedor/CapturaGps'
@@ -21,8 +22,9 @@ const orden = new Intl.Collator('es').compare
 export default function NuevoProspecto() {
   const router = useRouter()
   const gps = useGps()
-  const { perfil } = useVendedor()
-  const [zonas, setZonas] = useState<Pick<Zona, 'ciudades' | 'vendedor_id'>[]>([])
+  const { perfil, nombreVendedor } = useVendedor()
+  const [zonas, setZonas] = useState<Pick<Zona, 'nombre' | 'ciudades' | 'ciudades_alias' | 'vendedor_id'>[]>([])
+  const [vecinos, setVecinos] = useState<{ razon_social: string; vendedor: string; distancia_m: number }[]>([])
   const [otraCiudad, setOtraCiudad] = useState(false)
   const [f, setF] = useState({ razon_social: '', telefono: '', ruc: '', direccion: '', ciudad: '', notas: '' })
   const [duplicados, setDuplicados] = useState<Duplicado[] | null>(null)
@@ -34,7 +36,7 @@ export default function NuevoProspecto() {
   }
 
   useEffect(() => {
-    supabaseNavegador().from('vis_zonas').select('ciudades, vendedor_id').eq('activo', true)
+    supabaseNavegador().from('vis_zonas').select('nombre, ciudades, ciudades_alias, vendedor_id').eq('activo', true)
       .then(({ data }) => setZonas(data ?? []))
   }, [])
 
@@ -44,6 +46,25 @@ export default function NuevoProspecto() {
     const mias = unicas(zonas.filter((z) => z.vendedor_id === perfil.id))
     return { mias, otras: unicas(zonas).filter((c) => !mias.includes(c)) }
   }, [zonas, perfil.id])
+
+  // Zona de otro vendedor: la ciudad elegida está en una zona que trabaja otro.
+  const zonasDeOtros = useMemo(() => {
+    const n = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+    const c = n(f.ciudad)
+    if (!c) return []
+    return zonas.filter((z) => z.vendedor_id && z.vendedor_id !== perfil.id && [...z.ciudades, ...z.ciudades_alias].some((x) => n(x) === c))
+  }, [zonas, f.ciudad, perfil.id])
+
+  // Donde está parado: clientes de otro vendedor a menos de 300 m (con señal).
+  const lat = gps.lectura ? Math.round(gps.lectura.lat * 2000) / 2000 : null // ~50 m: no consulta en cada lectura
+  const lng = gps.lectura ? Math.round(gps.lectura.lng * 2000) / 2000 : null
+  useEffect(() => {
+    if (lat == null || lng == null || !navigator.onLine) return
+    let vivo = true
+    void supabaseNavegador().rpc('vis_vecinos_de_otros', { p_lat: lat, p_lng: lng, p_radio_m: 300 })
+      .then(({ data }) => { if (vivo) setVecinos((data ?? []) as typeof vecinos) })
+    return () => { vivo = false }
+  }, [lat, lng])
 
   function elegirCiudad(e: React.ChangeEvent<HTMLSelectElement>) {
     const otra = e.target.value === OTRA
@@ -111,6 +132,20 @@ export default function NuevoProspecto() {
           <Entrada id="ciudad-otra" aria-label="Nombre de la ciudad" className="mt-2" autoFocus placeholder="Nombre de la ciudad" value={f.ciudad} onChange={cambiar('ciudad')} />
         )}
       </div>
+      {(zonasDeOtros.length > 0 || vecinos.length > 0) && (
+        <Aviso tipo="alerta">
+          {zonasDeOtros.map((z) => (
+            <p key={z.nombre}>{f.ciudad} es de la zona <b>{z.nombre}</b>, que trabaja <b>{nombreVendedor(z.vendedor_id)}</b>.</p>
+          ))}
+          {vecinos.length > 0 && (
+            <p>
+              Cerca de donde estás hay clientes de otro vendedor: {vecinos.slice(0, 3).map((v) => `${v.razon_social} (${v.vendedor}, a ${fmtDistancia(v.distancia_m)})`).join('; ')}.
+              {' '}Fijate que no sea el mismo.
+            </p>
+          )}
+          <p className="mt-1 text-xs">Podés darlo de alta igual: queda a tu nombre y el supervisor lo ve.</p>
+        </Aviso>
+      )}
       <div>
         <Etiqueta htmlFor="dir">Dirección</Etiqueta>
         <Entrada id="dir" value={f.direccion} onChange={cambiar('direccion')} />
