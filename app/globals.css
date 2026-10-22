@@ -1,5 +1,14 @@
 @import 'tailwindcss';
 
+/* Tema claro/oscuro: data-tema en <html> ('claro' | 'oscuro'); sin el atributo sigue al sistema.
+   Lo elige cada usuario (components/SelectorTema.tsx) y se aplica antes de pintar (app/layout.tsx). */
+@custom-variant dark {
+  &:where([data-tema='oscuro'], [data-tema='oscuro'] *) { @slot; }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-tema='claro']), :root:not([data-tema='claro']) *) { @slot; }
+  }
+}
+
 /* Colores de la app. Cada empresa tiene su tema (data-empresa en el layout):
    Camping 44 negro y rojo, Vitalica naranja y gris, tomados de sus logos.
    Sin empresa (login, sin acceso): neutro. */
@@ -17,8 +26,18 @@
   --c-barra-hover: var(--c-fondo);
   --c-barra-acento: var(--c-marca);
 }
+:root[data-tema='oscuro'] {
+  --c-marca: #e5e5e5;
+  --c-marca-oscuro: #ffffff;
+  --c-fondo: #101010;
+  --c-superficie: #1a1a1a;
+  --c-tinta: #ececec;
+  --c-tenue: #a3a3a3;
+  --c-borde: #2e2e2e;
+  color-scheme: dark;
+}
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-tema='claro']) {
     --c-marca: #e5e5e5;
     --c-marca-oscuro: #ffffff;
     --c-fondo: #101010;
@@ -58,8 +77,30 @@
   --c-barra-hover: #626262;
   --c-barra-acento: #ffb37a;
 }
+[data-tema='oscuro'] [data-empresa='camping44'] {
+  --c-marca: #ff4040;
+  --c-marca-oscuro: #ff6b6b;
+  --c-fondo: #0e0e0e;
+  --c-superficie: #1a1a1a;
+  --c-tinta: #ececec;
+  --c-tenue: #a3a3a3;
+  --c-borde: #2e2e2e;
+  --c-barra: #000000;
+  --c-barra-hover: #1f1f1f;
+}
+[data-tema='oscuro'] [data-empresa='vitalica'] {
+  --c-marca: #fd8a35;
+  --c-marca-oscuro: #ffa25e;
+  --c-fondo: #121110;
+  --c-superficie: #1d1c1a;
+  --c-tinta: #ededed;
+  --c-tenue: #a8a8a8;
+  --c-borde: #34312e;
+  --c-barra: #2e2e2e;
+  --c-barra-hover: #3d3d3d;
+}
 @media (prefers-color-scheme: dark) {
-  [data-empresa='camping44'] {
+  :root:not([data-tema='claro']) [data-empresa='camping44'] {
     --c-marca: #ff4040;
     --c-marca-oscuro: #ff6b6b;
     --c-fondo: #0e0e0e;
@@ -70,7 +111,7 @@
     --c-barra: #000000;
     --c-barra-hover: #1f1f1f;
   }
-  [data-empresa='vitalica'] {
+  :root:not([data-tema='claro']) [data-empresa='vitalica'] {
     --c-marca: #fd8a35;
     --c-marca-oscuro: #ffa25e;
     --c-fondo: #121110;

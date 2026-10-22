@@ -499,4 +499,73 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── Equipos (0016): Mayorista y Venta externa en Camping 44 ──────────
+-- Supervisora → Mayorista con Antonio y Beto; Ale supervisa Venta externa con Vico.
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000000f4', 'ale@camping44.com.py'),
+  ('00000000-0000-0000-0000-0000000000f5', 'vico@camping44.com.py');
+update vis_vendedores set equipo_id = (select id from vis_equipos where nombre = 'Mayorista')
+  where email in ('super@camping44.com.py', 'antonio@camping44.com.py', 'beto@camping44.com.py');
+update vis_vendedores set empresa_activa = null where email = 'admin@camping44.com.py';
+insert into vis_vendedores (nombre, email, rol, equipo_id) values
+  ('Ale', 'ale@camping44.com.py', 'supervisor', (select id from vis_equipos where nombre = 'Venta externa')),
+  ('Vico', 'vico@camping44.com.py', 'vendedor', (select id from vis_equipos where nombre = 'Venta externa'));
+insert into vis_zonas (nombre, equipo_id) values ('Zona Externa', (select id from vis_equipos where nombre = 'Venta externa'));
+insert into vis_clientes (razon_social, ciudad, vendedor_id) values ('Cliente de Vico', 'Asunción', (select id from vis_vendedores where nombre = 'Vico'));
+insert into vis_rutas (nombre, vendedor_id, semana_inicio, estado)
+  values ('Ruta Vico', (select id from vis_vendedores where nombre = 'Vico'), date_trunc('week', vis_hoy())::date, 'publicada');
+insert into vis_jornadas (vendedor_id, inicio) values ((select id from vis_vendedores where nombre = 'Vico'), now() - interval '1 hour');
+insert into vis_posiciones (jornada_id, vendedor_id, fecha_hora, lat, lng)
+  select id, vendedor_id, now() - interval '5 minutes', -25.3, -57.6 from vis_jornadas where vendedor_id = (select id from vis_vendedores where nombre = 'Vico');
+insert into vis_visitas (cliente_id, vendedor_id, fecha_hora, origen)
+  values ((select id from vis_clientes where razon_social = 'Cliente de Vico'), (select id from vis_vendedores where nombre = 'Vico'), now() - interval '2 hours', 'app');
+select id as antonio_id from vis_vendedores where email = 'antonio@camping44.com.py' \gset
+select set_config('test.antonio', :'antonio_id', false) \gset
+
+select pg_temp.como('ale@camping44.com.py') \gset
+set role authenticated;
+do $$ declare n int; begin
+  assert vis_vincular_usuario() ->> 'equipo' = 'Venta externa', 'Ale es de Venta externa';
+  assert not exists (select 1 from vis_vendedores where nombre in ('Antonio', 'Beto', 'Supervisora')), 'Ale no ve a la gente de Mayorista';
+  assert exists (select 1 from vis_vendedores where nombre = 'Vico'), 've a los suyos';
+  assert (select array_agg(nombre order by nombre) from vis_zonas) = array['Zona Externa', 'Zona Prueba A', 'Zona Prueba B'], format('zonas de Ale: %s', (select array_agg(nombre order by nombre) from vis_zonas));
+  assert not exists (select 1 from vis_rutas r join vis_vendedores v on v.id = r.vendedor_id where v.nombre <> 'Vico') and exists (select 1 from vis_rutas), 'solo rutas de su equipo';
+  assert (select count(*) from vis_visitas) = (select count(*) from vis_visitas v where v.vendedor_id = (select id from vis_vendedores where nombre = 'Vico')) and exists (select 1 from vis_visitas), 'solo visitas de su equipo';
+  assert (select count(*) from vis_jornadas) = 1 and (select count(*) from vis_posicion_actual) = 1, 'en vivo: solo su equipo';
+  assert exists (select 1 from vis_clientes where razon_social = 'Ferretería López S.A.'), 'los clientes siguen compartidos';
+  update vis_clientes set notas = 'x' where razon_social = 'Ferretería López S.A.';
+  get diagnostics n = row_count; assert n = 0, 'no edita clientes de vendedores de Mayorista';
+  begin
+    update vis_clientes set vendedor_id = current_setting('test.antonio')::uuid where razon_social = 'Cliente de Vico';
+    assert false, 'no asigna clientes a vendedores de otro equipo';
+  exception when insufficient_privilege then null; end;
+  begin perform vis_asignar_equipo((select id from vis_vendedores where nombre = 'Vico'), null); assert false, 'un supervisor no cambia equipos';
+  exception when raise_exception then null; end;
+  insert into vis_zonas (nombre) values ('Zona Nueva Externa');
+  assert (select q.nombre from vis_zonas z join vis_equipos q on q.id = z.equipo_id where z.nombre = 'Zona Nueva Externa') = 'Venta externa', 'la zona que crea es de su equipo';
+end $$;
+reset role;
+
+select pg_temp.como('super@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert not exists (select 1 from vis_vendedores where nombre in ('Ale', 'Vico')), 'Mayorista no ve a Venta externa';
+  assert not exists (select 1 from vis_zonas where nombre like 'Zona%Externa'), 'ni sus zonas';
+  assert not exists (select 1 from vis_rutas where nombre = 'Ruta Vico'), 'ni sus rutas';
+  assert exists (select 1 from vis_vendedores where nombre = 'Antonio'), 've a los suyos';
+end $$;
+reset role;
+
+select pg_temp.como('admin@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert exists (select 1 from vis_vendedores where nombre = 'Vico') and exists (select 1 from vis_vendedores where nombre = 'Antonio'), 'sin equipo ve los dos';
+  perform vis_asignar_equipo((select id from vis_vendedores where nombre = 'Vico'), (select id from vis_equipos where nombre = 'Mayorista'));
+  assert (select q.nombre from vis_vendedores v join vis_equipos q on q.id = v.equipo_id where v.nombre = 'Vico') = 'Mayorista', 'el admin cambia el equipo';
+  begin perform vis_asignar_equipo((select id from vis_vendedores where nombre = 'Hugo'), (select id from vis_equipos where nombre = 'Mayorista'));
+    assert false, 'no se asigna un equipo de otra empresa';
+  exception when raise_exception then null; end;
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;

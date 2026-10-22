@@ -11,6 +11,7 @@ import { guardarCache, leerCache } from '@/lib/offline/db'
 import { fmtFecha, hace, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
 import { urlVisita } from '@/lib/rutas'
+import { BuscarCliente } from '@/components/vendedor/BuscarCliente'
 import { COLOR_ESTADO } from '@/lib/config'
 import { linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
 import type { FilaTablero, ParadaDia, ProximaVisita } from '@/lib/database.types'
@@ -72,6 +73,8 @@ export default function Hoy() {
   const extra = pendientes.visitas
   const enRuta = new Set((datos?.paradas ?? []).map((p) => p.cliente_id))
   const proximas = (datos?.pendientes ?? []).filter((x) => !enRuta.has(x.cliente_id))
+  const paradasPorCliente = useMemo(() => new Map((datos?.paradas ?? []).map((p) => [p.cliente_id, p.parada_id])), [datos])
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-baseline justify-between gap-2">
@@ -90,12 +93,14 @@ export default function Hoy() {
         {extra > 0 && <p className="col-span-2 text-xs text-tenue">Incluye {extra} sin subir todavía</p>}
       </Tarjeta>
 
+      <BuscarCliente paradas={paradasPorCliente} />
+
       {guardadoEl && <Aviso tipo="alerta">Sin conexión: mostrando la ruta guardada {hace(new Date(guardadoEl))}.</Aviso>}
       {error && <Aviso tipo="error">{error}</Aviso>}
 
       {datos && datos.paradas.length === 0 && (
         <Vacio titulo="No tenés paradas para hoy">
-          Si visitás a alguien igual, buscalo en <Link href="/mapa" className="font-medium text-marca underline">Mapa</Link> o
+          Si visitás a alguien igual, buscalo arriba o en <Link href="/mapa" className="font-medium text-marca underline">Mapa</Link>, o
           dalo de alta en <Link href="/prospecto/nuevo" className="font-medium text-marca underline">Nuevo cliente</Link>.
         </Vacio>
       )}

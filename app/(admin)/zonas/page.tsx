@@ -1,12 +1,13 @@
 'use client'
 // Zonas (BRIEF §6 supervisor 5): nombre, color, ciudades, semana del mes en que se visita y
-// vendedor responsable. Los clientes toman la zona por su ciudad. Polígonos: Fase 2.
+// vendedor responsable y equipo (Mayorista / Venta externa; sin equipo = de todos). Los clientes
+// toman la zona por su ciudad. Polígonos: Fase 2.
 import { useCallback, useEffect, useState } from 'react'
 import { AreaTexto, Aviso, Boton, Entrada, Etiqueta, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { ORDINAL_SEMANA } from '@/lib/fechas'
 import { cn, mensajeError } from '@/lib/utils'
-import type { Vendedor, Zona } from '@/lib/database.types'
+import type { Equipo, Vendedor, Zona } from '@/lib/database.types'
 
 type ZonaConConteo = Zona & { clientes: { count: number }[] }
 const lista = (texto: string) => [...new Set(texto.split(/[,\n]/).map((c) => c.trim()).filter(Boolean))]
@@ -16,6 +17,8 @@ export default function Zonas() {
   const sb = supabaseNavegador()
   const [zonas, setZonas] = useState<ZonaConConteo[]>([])
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
+  const [equipos, setEquipos] = useState<Equipo[]>([])
+  const [miEquipo, setMiEquipo] = useState<string | null>(null)
   const [nombre, setNombre] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
@@ -28,6 +31,8 @@ export default function Zonas() {
   useEffect(() => {
     void cargar()
     sb.from('vis_vendedores').select('*').eq('activo', true).order('nombre').then(({ data }) => setVendedores(data ?? []))
+    sb.from('vis_equipos').select('id, empresa_id, nombre').order('created_at').then(({ data }) => setEquipos(data ?? []))
+    sb.rpc('vis_mi_equipo').then(({ data }) => setMiEquipo(data ?? null))
   }, [cargar, sb])
 
   async function crear(e: React.FormEvent) {
@@ -62,7 +67,7 @@ export default function Zonas() {
 
       {zonas.length === 0 ? <Vacio titulo="Sin zonas" /> : (
         <ul className="flex flex-col gap-3">
-          {zonas.map((z) => <FilaZona key={z.id} zona={z} vendedores={vendedores} alGuardar={(m) => { setOk(m); setError(null); void cargar() }} alFallar={setError} />)}
+          {zonas.map((z) => <FilaZona key={z.id} zona={z} vendedores={vendedores} equipos={equipos.filter((q) => q.empresa_id === z.empresa_id)} cambiaEquipo={!miEquipo} alGuardar={(m) => { setOk(m); setError(null); void cargar() }} alFallar={setError} />)}
         </ul>
       )}
 
@@ -79,12 +84,15 @@ export default function Zonas() {
   )
 }
 
-function FilaZona({ zona: z, vendedores, alGuardar, alFallar }: { zona: ZonaConConteo; vendedores: Vendedor[]; alGuardar: (m: string) => void; alFallar: (m: string) => void }) {
+function FilaZona({ zona: z, vendedores, equipos, cambiaEquipo, alGuardar, alFallar }: {
+  zona: ZonaConConteo; vendedores: Vendedor[]; equipos: Equipo[]; cambiaEquipo: boolean; alGuardar: (m: string) => void; alFallar: (m: string) => void
+}) {
   const sb = supabaseNavegador()
   const [f, setF] = useState({
     nombre: z.nombre, color: z.color, frecuencia: z.frecuencia ?? '', semanas: new Set(z.semanas_mes), vendedor_id: z.vendedor_id ?? '',
-    ciudades: z.ciudades.join(', '), alias: z.ciudades_alias.join(', '), activo: z.activo,
+    ciudades: z.ciudades.join(', '), alias: z.ciudades_alias.join(', '), activo: z.activo, equipo_id: z.equipo_id ?? '',
   })
+  const equipo = equipos.find((q) => q.id === z.equipo_id)?.nombre
   const [abierta, setAbierta] = useState(false)
   const responsable = vendedores.find((v) => v.id === z.vendedor_id)?.nombre ?? z.responsable
 
@@ -92,6 +100,7 @@ function FilaZona({ zona: z, vendedores, alGuardar, alFallar }: { zona: ZonaConC
     const { error } = await sb.from('vis_zonas').update({
       nombre: f.nombre.trim(), color: f.color, frecuencia: f.frecuencia.trim() || null, semanas_mes: [...f.semanas].sort(),
       vendedor_id: f.vendedor_id || null, activo: f.activo,
+      ...(cambiaEquipo ? { equipo_id: f.equipo_id || null } : {}),
       ciudades: lista(f.ciudades), ciudades_alias: lista(f.alias),
     }).eq('id', z.id)
     if (error) alFallar(error.code === '23505' ? 'Ya existe una zona con ese nombre.' : mensajeError(error))
@@ -106,6 +115,7 @@ function FilaZona({ zona: z, vendedores, alGuardar, alFallar }: { zona: ZonaConC
           <span className="font-semibold">{z.nombre}</span>
           <span className="text-sm text-tenue">{z.frecuencia ?? (z.semanas_mes.length ? z.semanas_mes.map((n) => ORDINAL_SEMANA[n]).join(' y ') + ' semana' : 'sin frecuencia')}</span>
           <span className="text-sm text-tenue">· {responsable ?? 'sin vendedor'}</span>
+          {equipos.length > 0 && <span className="rounded-full border border-borde px-2 py-0.5 text-xs text-tenue">{equipo ?? 'Todos los equipos'}</span>}
           <span className="ml-auto text-sm text-tenue tabular">{z.clientes[0]?.count ?? 0} clientes · {z.ciudades.length} ciudades</span>
         </button>
         {!abierta && z.ciudades.length > 0 && <p className="px-4 pb-3 text-sm text-tenue">{z.ciudades.join(', ')}</p>}
@@ -133,6 +143,15 @@ function FilaZona({ zona: z, vendedores, alGuardar, alFallar }: { zona: ZonaConC
                 {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nombre}</option>)}
               </Selector>
             </div>
+            {cambiaEquipo && equipos.length > 0 && (
+              <div>
+                <Etiqueta htmlFor={`e-${z.id}`}>Equipo</Etiqueta>
+                <Selector id={`e-${z.id}`} value={f.equipo_id} onChange={(e) => setF({ ...f, equipo_id: e.target.value })}>
+                  <option value="">Todos los equipos</option>
+                  {equipos.map((q) => <option key={q.id} value={q.id}>{q.nombre}</option>)}
+                </Selector>
+              </div>
+            )}
             <div className="md:col-span-2">
               <Etiqueta htmlFor={`ci-${z.id}`}>Ciudades (separadas por coma; son las que el vendedor elige al dar de alta un cliente)</Etiqueta>
               <AreaTexto id={`ci-${z.id}`} value={f.ciudades} onChange={(e) => setF({ ...f, ciudades: e.target.value })} />

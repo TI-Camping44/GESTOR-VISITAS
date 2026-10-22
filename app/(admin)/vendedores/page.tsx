@@ -1,5 +1,5 @@
 'use client'
-// Usuarios (BRIEF §6 supervisor 6): dar acceso (por email), rol, empresa, metas, punto de salida.
+// Usuarios (BRIEF §6 supervisor 6): dar acceso (por email), rol, empresa, equipo, metas, punto de salida.
 // Solo el admin modifica; el supervisor ve la lista. El admin de todas las empresas (TI) elige
 // la empresa de cada uno (una o Ambas); el admin de una empresa gestiona solo la suya.
 // También el punto de salida del depósito y la invitación por correo (se manda sola al dar acceso).
@@ -11,7 +11,7 @@ import { supabaseNavegador } from '@/lib/supabase/client'
 import { fmtFecha } from '@/lib/fechas'
 import { leerCoordenadas } from '@/lib/geo'
 import { mensajeError } from '@/lib/utils'
-import type { Empresa, Perfil, Rol, Vendedor } from '@/lib/database.types'
+import type { Empresa, Equipo, Perfil, Rol, Vendedor } from '@/lib/database.types'
 
 const ROLES: Record<Rol, string> = { vendedor: 'Vendedor', supervisor: 'Supervisor', admin: 'Admin' }
 const AMBAS = 'ambas'
@@ -21,8 +21,9 @@ export default function Vendedores() {
   const sb = supabaseNavegador()
   const [lista, setLista] = useState<Vendedor[]>([])
   const [perfil, setPerfil] = useState<Perfil | null>(null)
-  const [nuevo, setNuevo] = useState({ nombre: '', email: '', telefono: '', rol: 'vendedor' as Rol, empresa: '' })
+  const [nuevo, setNuevo] = useState({ nombre: '', email: '', telefono: '', rol: 'vendedor' as Rol, empresa: '', equipo: '' })
   const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [equipos, setEquipos] = useState<Equipo[]>([])
   const [deposito, setDeposito] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
@@ -37,6 +38,7 @@ export default function Vendedores() {
     void cargar()
     sb.rpc('vis_vincular_usuario').then(({ data }) => setPerfil((data as Perfil | null) ?? null))
     sb.from('vis_empresas').select('id, nombre').order('created_at').then(({ data }) => setEmpresas(data ?? []))
+    sb.from('vis_equipos').select('id, empresa_id, nombre').order('created_at').then(({ data }) => setEquipos(data ?? []))
     sb.from('vis_config').select('base_lat, base_lng').maybeSingle().then(({ data }) => setDeposito(coordTexto(data?.base_lat ?? null, data?.base_lng ?? null)))
   }, [sb, cargar])
 
@@ -46,6 +48,21 @@ export default function Vendedores() {
   const nombreEmpresa = (id: string) => empresas.find((e) => e.id === id)?.nombre ?? ''
   const empresaDe = (v: Pick<Vendedor, 'empresa_id' | 'multi_empresa'>) =>
     v.multi_empresa ? empresas.map((e) => e.nombre).join(' y ') : nombreEmpresa(v.empresa_id)
+
+  // Equipos (Mayorista / Venta externa): los cambia un admin sin equipo de esa empresa, o TI.
+  const equiposDe = (empresaId: string | null | undefined) => equipos.filter((q) => q.empresa_id === empresaId)
+  const nombreEquipo = (id: string | null) => equipos.find((q) => q.id === id)?.nombre ?? ''
+  const puedeEquipo = (v: Vendedor) => esAdmin && !v.multi_empresa && equiposDe(v.empresa_id).length > 0
+    && (soyTI || (v.empresa_id === perfil?.empresa_id && !perfil?.equipo_id))
+  const empresaNueva = nuevo.empresa && nuevo.empresa !== AMBAS ? nuevo.empresa : nuevo.empresa === AMBAS ? null : perfil?.empresa_id
+
+  async function asignarEquipo(v: Vendedor, equipo: string) {
+    setError(null); setOk(null)
+    const { error } = await sb.rpc('vis_asignar_equipo', { p_vendedor: v.id, p_equipo: equipo || null })
+    if (error) setError(mensajeError(error))
+    else setOk(`${v.nombre}: ${equipo ? `ahora es de ${nombreEquipo(equipo)}` : 'sin equipo (lo ven solo admins y gerencia)'}.`)
+    void cargar()
+  }
 
   async function asignarEmpresa(v: Vendedor, valor: string) {
     setError(null); setOk(null)
@@ -76,10 +93,14 @@ export default function Vendedores() {
       const { error: e2 } = await sb.rpc('vis_asignar_empresa', { p_vendedor: data.id, p_empresa: ambas ? data.empresa_id : nuevo.empresa, p_ambas: ambas })
       if (e2) { setError(`${data.nombre} quedó en ${nombreEmpresa(data.empresa_id)}: ${mensajeError(e2)}`); void cargar(); return }
     }
+    if (nuevo.equipo) {
+      const { error: e3 } = await sb.rpc('vis_asignar_equipo', { p_vendedor: data.id, p_equipo: nuevo.equipo })
+      if (e3) { setError(`${data.nombre} quedó sin equipo: ${mensajeError(e3)}`); void cargar(); return }
+    }
     const r = await enviarInvitacion(data.id)
     if ('ok' in r) setOk(`${data.nombre} ya tiene acceso y le mandamos la invitación a ${data.email}.`)
     else setError(`${data.nombre} ya tiene acceso, pero no se pudo mandar la invitación: ${r.error}`)
-    setNuevo({ nombre: '', email: '', telefono: '', rol: 'vendedor', empresa: '' })
+    setNuevo({ nombre: '', email: '', telefono: '', rol: 'vendedor', empresa: '', equipo: '' })
     void cargar()
   }
 
@@ -115,9 +136,18 @@ export default function Vendedores() {
               {soyTI && (
                 <div>
                   <Etiqueta htmlFor="v-empresa">Empresa</Etiqueta>
-                  <Selector id="v-empresa" value={nuevo.empresa || (perfil?.empresa_id ?? '')} onChange={(e) => setNuevo({ ...nuevo, empresa: e.target.value })}>
+                  <Selector id="v-empresa" value={nuevo.empresa || (perfil?.empresa_id ?? '')} onChange={(e) => setNuevo({ ...nuevo, empresa: e.target.value, equipo: '' })}>
                     {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
                     <option value={AMBAS}>Ambas</option>
+                  </Selector>
+                </div>
+              )}
+              {(soyTI || !perfil?.equipo_id) && equiposDe(empresaNueva).length > 0 && (
+                <div>
+                  <Etiqueta htmlFor="v-equipo">Equipo</Etiqueta>
+                  <Selector id="v-equipo" value={nuevo.equipo} onChange={(e) => setNuevo({ ...nuevo, equipo: e.target.value })}>
+                    <option value="">Sin equipo (todos)</option>
+                    {equiposDe(empresaNueva).map((q) => <option key={q.id} value={q.id}>{q.nombre}</option>)}
                   </Selector>
                 </div>
               )}
@@ -136,10 +166,10 @@ export default function Vendedores() {
       )}
 
       <Tarjeta className="overflow-x-auto p-0">
-        <table className="w-full min-w-[1120px] text-sm">
+        <table className="w-full min-w-[1280px] text-sm">
           <thead>
             <tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-tenue">
-              <th className="px-4 py-2 font-medium">Nombre / email</th><th className="px-2 py-2 font-medium">Rol</th><th className="px-2 py-2 font-medium">Empresa</th>
+              <th className="px-4 py-2 font-medium">Nombre / email</th><th className="px-2 py-2 font-medium">Rol</th><th className="px-2 py-2 font-medium">Empresa</th><th className="px-2 py-2 font-medium">Equipo</th>
               <th className="px-2 py-2 font-medium">Meta día</th><th className="px-2 py-2 font-medium">Meta semana</th>
               <th className="px-2 py-2 font-medium">Punto de salida</th><th className="px-2 py-2 font-medium">Estado / invitar</th><th className="px-4 py-2 font-medium">Activo</th>
             </tr>
@@ -165,6 +195,19 @@ export default function Vendedores() {
                     </Selector>
                   ) : (
                     <span className="text-xs">{v.multi_empresa ? 'Ambas' : nombreEmpresa(v.empresa_id)}</span>
+                  )}
+                </td>
+                <td className="px-2 py-2">
+                  {puedeEquipo(v) ? (
+                    <Selector value={v.equipo_id ?? ''} onChange={(e) => void asignarEquipo(v, e.target.value)} className="w-40" aria-label={`Equipo de ${v.nombre}`}>
+                      <option value="">Sin equipo</option>
+                      {equiposDe(v.empresa_id).map((q) => <option key={q.id} value={q.id}>{q.nombre}</option>)}
+                    </Selector>
+                  ) : (
+                    <span className="text-xs">{nombreEquipo(v.equipo_id) || '—'}</span>
+                  )}
+                  {v.rol !== 'admin' && !v.multi_empresa && !v.equipo_id && equiposDe(v.empresa_id).length > 0 && (
+                    <p className="mt-1 max-w-40 text-xs text-amber-700 dark:text-amber-300">Sin equipo: no lo ve ningún supervisor de equipo.</p>
                   )}
                 </td>
                 <td className="px-2 py-2"><Entrada disabled={!editable(v)} type="number" min={1} defaultValue={v.meta_diaria} className="w-20" aria-label="Meta diaria"

@@ -22,7 +22,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es-PY" className={plex.variable}>
+    <html lang="es-PY" className={plex.variable} suppressHydrationWarning>
+      <head>
+        {/* Tema elegido (components/SelectorTema.tsx), antes de pintar para que no parpadee. */}
+        <script dangerouslySetInnerHTML={{ __html: "try{var t=localStorage.getItem('vis-tema');if(t==='claro'||t==='oscuro')document.documentElement.setAttribute('data-tema',t)}catch(e){}" }} />
+      </head>
       <body className="font-sans antialiased">
         {children}
         <RegistrarSW />

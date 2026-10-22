@@ -86,7 +86,7 @@ export type Database = {
         Relationships: Rel[]
       }
       vis_vendedores: {
-        Row: { activo: boolean; auth_user_id: string | null; base_lat: number | null; base_lng: number | null; created_at: string; email: string; id: string; meta_diaria: number; meta_semanal: number; nombre: string; odoo_user_id: number | null; rol: Database['public']['Enums']['vis_rol']; telefono: string | null; tracking_aceptado_el: string | null; empresa_id: string; multi_empresa: boolean; empresa_activa: string | null }
+        Row: { activo: boolean; auth_user_id: string | null; base_lat: number | null; base_lng: number | null; created_at: string; email: string; id: string; meta_diaria: number; meta_semanal: number; nombre: string; odoo_user_id: number | null; rol: Database['public']['Enums']['vis_rol']; telefono: string | null; tracking_aceptado_el: string | null; empresa_id: string; multi_empresa: boolean; empresa_activa: string | null; equipo_id: string | null }
         Insert: { activo?: boolean; auth_user_id?: string | null; base_lat?: number | null; base_lng?: number | null; created_at?: string; email: string; id?: string; meta_diaria?: number; meta_semanal?: number; nombre: string; odoo_user_id?: number | null; rol?: Database['public']['Enums']['vis_rol']; telefono?: string | null; tracking_aceptado_el?: string | null; empresa_id?: string }
         Update: Partial<Database['public']['Tables']['vis_vendedores']['Insert']>
         Relationships: []
@@ -115,9 +115,15 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['vis_empresas']['Insert']>
         Relationships: []
       }
+      vis_equipos: {
+        Row: { created_at: string; empresa_id: string; id: string; nombre: string }
+        Insert: { created_at?: string; empresa_id: string; id?: string; nombre: string }
+        Update: Partial<Database['public']['Tables']['vis_equipos']['Insert']>
+        Relationships: []
+      }
       vis_zonas: {
-        Row: { activo: boolean; ciudades: string[]; ciudades_alias: string[]; color: string; created_at: string; frecuencia: string | null; id: string; nombre: string; poligono: unknown; responsable: string | null; semanas_mes: number[]; vendedor_id: string | null; empresa_id: string }
-        Insert: { activo?: boolean; ciudades?: string[]; ciudades_alias?: string[]; color?: string; created_at?: string; frecuencia?: string | null; id?: string; nombre: string; poligono?: unknown; responsable?: string | null; semanas_mes?: number[]; vendedor_id?: string | null }
+        Row: { activo: boolean; ciudades: string[]; ciudades_alias: string[]; color: string; created_at: string; frecuencia: string | null; id: string; nombre: string; poligono: unknown; responsable: string | null; semanas_mes: number[]; vendedor_id: string | null; empresa_id: string; equipo_id: string | null }
+        Insert: { activo?: boolean; ciudades?: string[]; ciudades_alias?: string[]; color?: string; created_at?: string; frecuencia?: string | null; id?: string; nombre: string; poligono?: unknown; responsable?: string | null; semanas_mes?: number[]; vendedor_id?: string | null; equipo_id?: string | null }
         Update: Partial<Database['public']['Tables']['vis_zonas']['Insert']>
         Relationships: []
       }
@@ -138,6 +144,8 @@ export type Database = {
       vis_cambiar_empresa: { Args: { p_empresa: string }; Returns: undefined }
       vis_mi_empresa: { Args: never; Returns: string }
       vis_soy_admin_multi: { Args: never; Returns: boolean }
+      vis_mi_equipo: { Args: never; Returns: string | null }
+      vis_asignar_equipo: { Args: { p_vendedor: string; p_equipo: string | null }; Returns: undefined }
       vis_asignar_empresa: { Args: { p_vendedor: string; p_empresa: string; p_ambas: boolean }; Returns: undefined }
       vis_aceptar_tracking: { Args: never; Returns: string }
       vis_actualizar_ubicacion: {
@@ -247,9 +255,11 @@ export type Perfil = {
   id: string; nombre: string; email: string; rol: Rol; meta_diaria: number; meta_semanal: number
   tracking_aceptado_el: string | null
   empresa_id: string | null; empresa: string | null; multi_empresa: boolean
+  equipo_id?: string | null; equipo?: string | null
 }
 
 export type Empresa = { id: string; nombre: string }
+export type Equipo = { id: string; empresa_id: string; nombre: string }
 
 export type MiVisita = {
   id: string; fecha_hora: string; cliente_id: string; razon_social: string; ciudad: string | null; telefono: string | null
