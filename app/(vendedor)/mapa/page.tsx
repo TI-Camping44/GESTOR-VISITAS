@@ -1,5 +1,6 @@
 'use client'
 // Mapa del vendedor (BRIEF §6 vendedor 4): sus clientes por color, filtro por estado y "cerca mío".
+// Por defecto solo los propios; si se muestran otros, cada uno dice de qué vendedor es.
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
@@ -10,21 +11,24 @@ import { fmtDistancia } from '@/lib/geo'
 import { hace } from '@/lib/fechas'
 import { COLOR_ESTADO, ETIQUETA_ESTADO } from '@/lib/config'
 import { cn, mensajeError } from '@/lib/utils'
+import { useVendedor } from '@/components/vendedor/Proveedor'
 import { urlVisita } from '@/lib/rutas'
 import type { EstadoCliente } from '@/lib/database.types'
 
-type C = { id: string; razon_social: string; ciudad: string | null; lat: number; lng: number; estado: EstadoCliente; ultima_visita: string | null; distancia_m?: number }
+type C = { id: string; razon_social: string; ciudad: string | null; lat: number; lng: number; estado: EstadoCliente; ultima_visita: string | null; vendedor_id?: string | null; distancia_m?: number }
 const ESTADOS: EstadoCliente[] = ['activo', 'potencial', 'inactivo']
 
 export default function MapaVendedor() {
+  const { perfil, nombreVendedor } = useVendedor()
   const [clientes, setClientes] = useState<C[]>([])
+  const [soloMios, setSoloMios] = useState(true)
   const [filtro, setFiltro] = useState<Set<EstadoCliente>>(new Set(ESTADOS))
   const [cerca, setCerca] = useState<{ radio: number; lista: C[]; yo: { lat: number; lng: number } } | null>(null)
   const [buscando, setBuscando] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    supabaseNavegador().from('vis_clientes_v').select('id, razon_social, ciudad, lat, lng, estado, ultima_visita')
+    supabaseNavegador().from('vis_clientes_v').select('id, razon_social, ciudad, lat, lng, estado, ultima_visita, vendedor_id')
       .not('lat', 'is', null).limit(5000)
       .then(({ data, error }) => {
         if (error) setError(mensajeError(error))
@@ -39,7 +43,8 @@ export default function MapaVendedor() {
       const yo = await ubicacionRapida()
       const { data, error } = await supabaseNavegador().rpc('vis_clientes_cercanos', { p_lat: yo.lat, p_lng: yo.lng, p_radio_m: radioKm * 1000 })
       if (error) throw error
-      setCerca({ radio: radioKm, lista: (data ?? []) as C[], yo: { lat: yo.lat, lng: yo.lng } })
+      const duenio = new Map(clientes.map((c) => [c.id, c.vendedor_id ?? null]))
+      setCerca({ radio: radioKm, lista: ((data ?? []) as C[]).map((c) => ({ ...c, vendedor_id: duenio.get(c.id) ?? null })), yo: { lat: yo.lat, lng: yo.lng } })
     } catch (e) {
       setError(mensajeError(e))
     } finally {
@@ -47,12 +52,15 @@ export default function MapaVendedor() {
     }
   }
 
-  const visibles = (cerca?.lista ?? clientes).filter((c) => filtro.has(c.estado))
+  const deOtro = (c: C) => !!c.vendedor_id && c.vendedor_id !== perfil.id
+  const hayDeOtros = clientes.some(deOtro)
+  const visibles = (cerca?.lista ?? clientes).filter((c) => filtro.has(c.estado) && !(soloMios && deOtro(c)))
   const puntos = useMemo<PuntoMapa[]>(() => visibles.map((c) => ({
     id: c.id, lat: c.lat, lng: c.lng, color: COLOR_ESTADO[c.estado], titulo: c.razon_social,
-    detalle: `${ETIQUETA_ESTADO[c.estado]} · última visita ${hace(c.ultima_visita)}`,
+    detalle: `${ETIQUETA_ESTADO[c.estado]} · última visita ${hace(c.ultima_visita)}`
+      + (c.vendedor_id && c.vendedor_id !== perfil.id ? ` · Cliente de ${nombreVendedor(c.vendedor_id)}` : !c.vendedor_id ? ' · Sin vendedor asignado' : ''),
     href: urlVisita(c.id), textoLink: 'Registrar visita',
-  })), [visibles])
+  })), [visibles, perfil.id, nombreVendedor])
 
   const alternar = (e: EstadoCliente) => setFiltro((f) => {
     const n = new Set(f)
@@ -79,6 +87,12 @@ export default function MapaVendedor() {
         ))}
         {cerca && <Boton variante="fantasma" onClick={() => setCerca(null)}>Ver todos</Boton>}
       </div>
+      {hayDeOtros && (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={soloMios} onChange={(e) => setSoloMios(e.target.checked)} />
+          Solo mis clientes <span className="text-tenue">(destildá para ver también los de otros vendedores)</span>
+        </label>
+      )}
       {error && <Aviso tipo="error">{error}</Aviso>}
 
       <Mapa puntos={puntos} agrupar={!cerca} yo={cerca?.yo ?? null} claveEncuadre={cerca ? `cerca-${cerca.radio}` : `todos-${clientes.length}`} className="h-[55vh] w-full overflow-hidden rounded-xl border border-borde" />
@@ -92,6 +106,7 @@ export default function MapaVendedor() {
                 <div className="min-w-0">
                   <p className="truncate font-medium">{c.razon_social}</p>
                   <div className="flex items-center gap-2"><PuntoEstado estado={c.estado} /><span className="text-xs text-tenue">{fmtDistancia(c.distancia_m)} · {c.ciudad ?? ''}</span></div>
+                  {deOtro(c) && <p className="text-xs text-amber-700 dark:text-amber-300">Cliente de {nombreVendedor(c.vendedor_id)}</p>}
                 </div>
                 <Link href={urlVisita(c.id)} className="shrink-0 text-sm font-medium text-marca">Visitar →</Link>
               </Tarjeta>
@@ -99,7 +114,7 @@ export default function MapaVendedor() {
           ))}
         </ul>
       )}
-      {!cerca && <p className="text-xs text-tenue">{clientes.length} clientes con ubicación. Tocá un punto para registrar una visita.</p>}
+      {!cerca && <p className="text-xs text-tenue">{visibles.length} clientes con ubicación{soloMios && hayDeOtros ? ' (solo los tuyos)' : ''}. Tocá un punto para registrar una visita.</p>}
     </div>
   )
 }

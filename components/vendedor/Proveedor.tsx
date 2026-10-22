@@ -20,6 +20,8 @@ type Ctx = {
   terminarJornada: () => Promise<void>
   aceptarAviso: () => Promise<void>
   refrescarPendientes: () => Promise<void>
+  /** Nombre del vendedor de un cliente (null si no tiene; 'otro vendedor' si no es visible). */
+  nombreVendedor: (id: string | null | undefined) => string | null
 }
 
 const Contexto = createContext<Ctx | null>(null)
@@ -37,6 +39,7 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
   const [pendientes, setPendientes] = useState({ visitas: 0, posiciones: 0 })
   const [enLinea, setEnLinea] = useState(true)
   const [erroresSubida, setErrores] = useState<string[]>([])
+  const [vendedores, setVendedores] = useState<Record<string, string>>({})
 
   const refrescarPendientes = useCallback(async () => {
     setPendientes(await contarPendientes().catch(() => ({ visitas: 0, posiciones: 0 })))
@@ -70,6 +73,20 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
     })()
     return () => { vivo = false }
   }, [inicial.id])
+
+  // Nombres de los vendedores (para avisar cuando un cliente es de otro). Sin señal, los guardados.
+  useEffect(() => {
+    let vivo = true
+    void leerCache<Record<string, string>>('vendedores').then((c) => { if (c && vivo) setVendedores(c.datos) }).catch(() => {})
+    void supabaseNavegador().from('vis_vendedores').select('id, nombre').then(({ data }) => {
+      if (!data || !vivo) return
+      const m = Object.fromEntries(data.map((v) => [v.id, v.nombre]))
+      setVendedores(m)
+      void guardarCache('vendedores', m).catch(() => {})
+    })
+    return () => { vivo = false }
+  }, [])
+  const nombreVendedor = useCallback((id: string | null | undefined) => (id ? vendedores[id] ?? 'otro vendedor' : null), [vendedores])
 
   // Con señal: guarda en el celular la cartera y los resultados (para registrar visitas sin señal
   // a cualquier cliente propio) y las pantallas de la app con lo que necesitan para abrir (public/sw.js).
@@ -136,7 +153,7 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
   }, [subir, refrescarPendientes, inicial.id])
 
   return (
-    <Contexto.Provider value={{ perfil, jornada, cargandoJornada, pendientes, enLinea, erroresSubida, iniciarJornada, terminarJornada, aceptarAviso, refrescarPendientes }}>
+    <Contexto.Provider value={{ perfil, jornada, cargandoJornada, pendientes, enLinea, erroresSubida, iniciarJornada, terminarJornada, aceptarAviso, refrescarPendientes, nombreVendedor }}>
       {children}
     </Contexto.Provider>
   )
