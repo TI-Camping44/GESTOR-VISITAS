@@ -115,6 +115,12 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['vis_empresas']['Insert']>
         Relationships: []
       }
+      vis_alertas_alta: {
+        Row: { id: number; cliente_id: string; vendedor_id: string; zona_id: string | null; dueno_zona_id: string | null; vecinos: VecinoAlerta[]; creada_el: string; revisada_el: string | null; revisada_por: string | null; decision: 'pasado' | 'queda' | null }
+        Insert: { cliente_id: string; vendedor_id: string; zona_id?: string | null; dueno_zona_id?: string | null; vecinos?: VecinoAlerta[] }
+        Update: { revisada_el?: string | null; revisada_por?: string | null; decision?: 'pasado' | 'queda' | null }
+        Relationships: []
+      }
       vis_equipos: {
         Row: { created_at: string; empresa_id: string; id: string; nombre: string }
         Insert: { created_at?: string; empresa_id: string; id?: string; nombre: string }
@@ -260,6 +266,7 @@ export type Perfil = {
 }
 
 export type Empresa = { id: string; nombre: string }
+export type VecinoAlerta = { cliente_id: string; razon_social: string; vendedor_id: string; vendedor: string; distancia_m: number }
 export type Equipo = { id: string; empresa_id: string; nombre: string }
 
 export type MiVisita = {
