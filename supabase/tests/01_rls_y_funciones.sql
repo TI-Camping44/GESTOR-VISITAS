@@ -598,4 +598,42 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── Altas a revisar (0019) ─────────────────────────────────────────
+select pg_temp.como('beto@camping44.com.py') \gset
+set role authenticated;
+do $$ declare r jsonb; begin
+  -- Beto da de alta un cliente a ~60 m de la Ferretería López (de Antonio).
+  r := vis_crear_prospecto(jsonb_build_object('razon_social', 'Kiosco Vecino', 'telefono', '0981 777 888', 'ciudad', 'Concepción',
+    'lat', -23.4070, 'lng', -57.4344, 'precision_m', 10, 'forzar', true));
+  assert (r ->> 'ok')::boolean, format('alta: %s', r);
+  assert not exists (select 1 from vis_alertas_alta), 'el vendedor no ve las alertas';
+end $$;
+reset role;
+do $$ declare a vis_alertas_alta; begin
+  select * into a from vis_alertas_alta where cliente_id = (select id from vis_clientes where razon_social = 'Kiosco Vecino');
+  assert a.id is not null, 'quedó la alerta';
+  assert a.vecinos -> 0 ->> 'vendedor' = 'Antonio', format('vecinos: %s', a.vecinos);
+  assert (a.vecinos -> 0 ->> 'distancia_m')::numeric between 50 and 80, 'con la distancia';
+end $$;
+select pg_temp.como('super@camping44.com.py') \gset
+set role authenticated;
+do $$ declare n int; begin
+  assert exists (select 1 from vis_alertas_alta a join vis_clientes c on c.id = a.cliente_id where c.razon_social = 'Kiosco Vecino'), 'la supervisora la ve';
+  update vis_alertas_alta set revisada_el = now(), revisada_por = vis_mi_id(), decision = 'queda'
+  where cliente_id = (select id from vis_clientes where razon_social = 'Kiosco Vecino');
+  get diagnostics n = row_count; assert n = 1, 'y la resuelve';
+end $$;
+reset role;
+select pg_temp.como('ale@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert not exists (select 1 from vis_alertas_alta), 'otro equipo no la ve';
+end $$;
+reset role;
+do $$ begin
+  insert into vis_clientes (odoo_partner_id, razon_social, lat, lng, creado_por, vendedor_id)
+  values (99001, 'De Odoo', -23.4071, -57.4344, null, (select id from vis_vendedores where nombre = 'Beto'));
+  assert not exists (select 1 from vis_alertas_alta a join vis_clientes c on c.id = a.cliente_id where c.razon_social = 'De Odoo'), 'lo del sync no alerta';
+end $$;
+
 select 'OK: todas las pruebas pasaron' as resultado;
