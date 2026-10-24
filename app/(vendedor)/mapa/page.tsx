@@ -1,5 +1,6 @@
 'use client'
-// Mapa del vendedor (BRIEF §6 vendedor 4): sus clientes por color, filtro por estado y "cerca mío".
+// Mis clientes: en lista (toda la cartera, también sin ubicación) o en el mapa (BRIEF §6 vendedor 4):
+// por color, filtro por estado y "cerca mío".
 // Por defecto solo los propios; si se muestran otros, cada uno dice de qué vendedor es.
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -13,6 +14,7 @@ import { COLOR_ESTADO, ETIQUETA_ESTADO } from '@/lib/config'
 import { cn, mensajeError } from '@/lib/utils'
 import { useVendedor } from '@/components/vendedor/Proveedor'
 import { urlVisita } from '@/lib/rutas'
+import { ListaClientes } from '@/components/vendedor/ListaClientes'
 import type { EstadoCliente } from '@/lib/database.types'
 
 type C = { id: string; razon_social: string; ciudad: string | null; lat: number; lng: number; estado: EstadoCliente; ultima_visita: string | null; vendedor_id?: string | null; distancia_m?: number }
@@ -20,6 +22,7 @@ const ESTADOS: EstadoCliente[] = ['activo', 'potencial', 'inactivo']
 
 export default function MapaVendedor() {
   const { perfil, nombreVendedor } = useVendedor()
+  const [vista, setVista] = useState<'lista' | 'mapa'>('lista')
   const [clientes, setClientes] = useState<C[]>([])
   const [soloMios, setSoloMios] = useState(true)
   const [filtro, setFiltro] = useState<Set<EstadoCliente>>(new Set(ESTADOS))
@@ -72,6 +75,16 @@ export default function MapaVendedor() {
   return (
     <div className="flex flex-col gap-3">
       <h1 className="text-xl font-semibold">Mis clientes</h1>
+      <div className="flex rounded-xl bg-fondo p-1 ring-1 ring-borde" role="tablist">
+        {(['lista', 'mapa'] as const).map((v) => (
+          <button key={v} role="tab" aria-selected={vista === v} onClick={() => setVista(v)}
+            className={cn('flex-1 rounded-lg py-2 text-sm font-medium', vista === v ? 'bg-superficie text-tinta shadow-sm' : 'text-tenue')}>
+            {v === 'lista' ? 'Lista' : 'Mapa'}
+          </button>
+        ))}
+      </div>
+      {vista === 'lista' ? <ListaClientes /> : (
+        <>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por estado">
         {ESTADOS.map((e) => (
           <button key={e} type="button" onClick={() => alternar(e)} aria-pressed={filtro.has(e)}
@@ -115,6 +128,8 @@ export default function MapaVendedor() {
         </ul>
       )}
       {!cerca && <p className="text-xs text-tenue">{visibles.length} clientes con ubicación{soloMios && hayDeOtros ? ' (solo los tuyos)' : ''}. Tocá un punto para registrar una visita.</p>}
+        </>
+      )}
     </div>
   )
 }

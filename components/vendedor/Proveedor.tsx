@@ -93,7 +93,7 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
   useEffect(() => {
     if (!navigator.onLine) return
     const sb = supabaseNavegador()
-    void sb.from('vis_clientes_v').select('id, razon_social, ciudad, direccion, lat, lng, estado')
+    void sb.from('vis_clientes_v').select('id, razon_social, ciudad, direccion, lat, lng, estado, telefono, telefono_norm, ruc, ultima_visita, ultima_factura_fecha, ventas_6m_gs')
       .eq('vendedor_id', inicial.id).limit(3000)
       .then(({ data }) => { if (data) void guardarCache(`cartera:${inicial.id}`, data).catch(() => {}) })
     void sb.from('vis_resultados').select('*').eq('activo', true).order('orden')

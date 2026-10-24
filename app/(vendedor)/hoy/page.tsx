@@ -2,7 +2,7 @@
 // Hoy: la ruta del día con contador, mapa y acciones por parada (BRIEF §6 vendedor 1).
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Phone, MessageCircle, Navigation, CheckCircle2 } from 'lucide-react'
+import { Phone, MessageCircle, Navigation, CheckCircle2, SkipForward, Undo2 } from 'lucide-react'
 import { useVendedor } from '@/components/vendedor/Proveedor'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, Boton, PuntoEstado, Tarjeta, Vacio } from '@/components/ui'
@@ -58,16 +58,33 @@ export default function Hoy() {
     return () => { vivo = false }
   }, [clave, hoy, perfil.id, perfil.rol])
 
+  // Paradas que el vendedor decide saltar hoy: salen del recorrido de Google Maps y del mapa.
+  // Quedan en el celular solo por el día (el tablero igual muestra planificadas vs. hechas).
+  const claveSaltadas = `saltadas:${perfil.id}:${hoy}`
+  const [saltadas, setSaltadas] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    try { setSaltadas(new Set(JSON.parse(localStorage.getItem(claveSaltadas) ?? '[]') as string[])) } catch { /* sin almacenamiento */ }
+  }, [claveSaltadas])
+  function saltar(paradaId: string, si: boolean) {
+    setSaltadas((s) => {
+      const n = new Set(s)
+      if (si) n.add(paradaId)
+      else n.delete(paradaId)
+      try { localStorage.setItem(claveSaltadas, JSON.stringify([...n])) } catch { /* nada */ }
+      return n
+    })
+  }
+
   const puntos = useMemo<PuntoMapa[]>(() => (datos?.paradas ?? [])
-    .filter((p) => p.lat != null && p.lng != null)
+    .filter((p) => p.lat != null && p.lng != null && !saltadas.has(p.parada_id))
     .map((p, i) => ({
       id: p.parada_id, lat: p.lat!, lng: p.lng!, etiqueta: String(i + 1),
       color: p.visitada ? '#6b7280' : COLOR_ESTADO[p.estado],
       titulo: p.razon_social, detalle: p.visitada ? 'Ya visitado' : (p.ciudad ?? ''),
       href: urlVisita(p.cliente_id, { parada: p.parada_id }), textoLink: 'Registrar visita',
-    })), [datos])
+    })), [datos, saltadas])
 
-  const pendientesHoy = useMemo(() => (datos?.paradas ?? []).filter((p) => !p.visitada && p.lat != null && p.lng != null), [datos])
+  const pendientesHoy = useMemo(() => (datos?.paradas ?? []).filter((p) => !p.visitada && !saltadas.has(p.parada_id) && p.lat != null && p.lng != null), [datos, saltadas])
   const links = useMemo(() => linksGoogleMaps(null, pendientesHoy.map((p) => ({ lat: p.lat!, lng: p.lng! }))), [pendientesHoy])
 
   const extra = pendientes.visitas
@@ -122,9 +139,11 @@ export default function Hoy() {
         {datos?.paradas.map((p, i) => {
           const tel = linkTel(p.telefono)
           const wa = linkWhatsApp(p.telefono_norm)
+          const salteada = !p.visitada && saltadas.has(p.parada_id)
+          const comoLlegar = p.lat != null && p.lng != null ? `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}` : null
           return (
             <li key={p.parada_id}>
-              <Tarjeta className={p.visitada ? 'opacity-70' : undefined}>
+              <Tarjeta className={p.visitada || salteada ? 'opacity-70' : undefined}>
                 <div className="flex items-start gap-3">
                   <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full text-sm font-semibold text-white" style={{ background: p.visitada ? '#6b7280' : COLOR_ESTADO[p.estado] }}>
                     {i + 1}
@@ -143,8 +162,21 @@ export default function Hoy() {
                       </p>
                     )}
                     {p.lat == null && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Sin ubicación cargada: al registrar la visita se puede guardar.</p>}
+                    {salteada && <p className="mt-1 text-xs font-medium text-tenue">Salteada hoy: no está en el recorrido.</p>}
                   </div>
                 </div>
+                {!p.visitada && (
+                  <div className="mt-3 flex gap-2">
+                    {comoLlegar && (
+                      <a href={comoLlegar} target="_blank" rel="noreferrer" className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-borde text-sm font-medium">
+                        <Navigation className="size-4 text-marca" aria-hidden /> Cómo llegar
+                      </a>
+                    )}
+                    <button type="button" onClick={() => saltar(p.parada_id, !salteada)} className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-borde text-sm font-medium">
+                      {salteada ? <><Undo2 className="size-4" aria-hidden /> Volver a incluir</> : <><SkipForward className="size-4" aria-hidden /> Saltar</>}
+                    </button>
+                  </div>
+                )}
                 <div className="mt-3 flex gap-2">
                   {p.visitada ? (
                     <span className="inline-flex flex-1 items-center justify-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-400">

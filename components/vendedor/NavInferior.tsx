@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CalendarCheck, History, Map, UserPlus, LayoutDashboard } from 'lucide-react'
+import { CalendarCheck, History, Users, UserPlus, LayoutDashboard } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useVendedor } from './Proveedor'
 
@@ -11,7 +11,7 @@ export function NavInferior() {
   const items = [
     { href: '/hoy', texto: 'Hoy', Icono: CalendarCheck },
     { href: '/visitas', texto: 'Visitas', Icono: History },
-    { href: '/mapa', texto: 'Mapa', Icono: Map },
+    { href: '/mapa', texto: 'Clientes', Icono: Users },
     { href: '/prospecto/nuevo', texto: 'Nuevo cliente', Icono: UserPlus },
     ...(perfil.rol !== 'vendedor' ? [{ href: '/tablero', texto: 'Panel', Icono: LayoutDashboard }] : []),
   ]
