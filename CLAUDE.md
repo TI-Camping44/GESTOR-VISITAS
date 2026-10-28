@@ -26,7 +26,7 @@ El plan completo está en `BRIEF.md`. Trabajar por fases y **parar al final de c
 - Invitaciones (Vendedores → «Enviar invitación», y sola al dar acceso): correo propio por Gmail SMTP (`lib/correo.ts`, server action `app/(admin)/vendedores/acciones.ts`) con `SMTP_USER` + `SMTP_PASS` (contraseña de aplicación) solo en Vercel. Solo un admin, solo a gente de su empresa. WhatsApp y Copiar como respaldo.
 - Clientes: 365 cargados el 09/10 desde un export de Contactos de Odoo (no versionado): 108 de la cartera con vendedor en Odoo + 257 empresas con compras. Vendedor asignado por cartera o por el responsable de la zona; 88 sin vendedor (vendedores de Odoo que no están en la app, o sin ciudad). Sin facturación todavía → todos figuran "sin movimiento" hasta cargar facturas o el sync.
 - Vercel: equipo C44 (`c49`), proyecto `gestion-visitas`, plan **Hobby** (cron 1×/día), región `gru1`.
-- Producción: https://gestion-visitas-eight.vercel.app (rama `main`, PRs #1 a #16 mergeados). URLs de Supabase Auth configuradas. Login con Google (y link por email como respaldo).
+- Producción: https://gestion-visitas-eight.vercel.app (rama `main`, PRs #1 a #17 mergeados). URLs de Supabase Auth configuradas. Login con Google (y link por email como respaldo).
 - Piloto: **Humberto Benítez** (cambió de Antonio), semana 12–16/10 = 2da del mes → zona **Asunción 2da y 4ta**. Sus ciudades están también en Asunción 1ra y 3ra, así que los clientes se reparten a mano entre las dos quincenas. Pendiente: decidir cómo se reparten los clientes de Asunción/Central entre las dos quincenas (hoy sin zona, todos de Humberto).
 
 ## Cómo probar
