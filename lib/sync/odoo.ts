@@ -35,13 +35,64 @@ export type Revision = {
   facturas12m: number
   vendedores: { odooId: number; nombre: string; email: string | null; facturas: number; enApp: string | null }[]
   camposFaltantes: string[]
+  sucursales: Sucursales | { error: string }
+}
+
+// Sucursales (Vitalica): en Odoo son contactos hijos de la empresa. Para decidir cómo traerlas hay que saber
+// si la factura va a nombre de la sucursal (partner_id) o la sucursal es la dirección de entrega (partner_shipping_id).
+export type Sucursales = {
+  tiposHijos: { tipo: string; cantidad: number }[]
+  campoEntrega: boolean
+  porCompania: {
+    compania: string
+    facturas: number
+    aSucursal: number
+    entregaSucursal: number | null
+    ejemplos: { nombre: string; facturas: number; monto: number }[]
+  }[]
+}
+
+const TIPO_CONTACTO: Record<string, string> = { contact: 'Contacto', invoice: 'Dirección de factura', delivery: 'Dirección de entrega', other: 'Otra dirección', private: 'Dirección privada', followup: 'Seguimiento' }
+
+// Lee de todas las compañías del usuario (no solo ODOO_COMPANY_ID): la de Vitalica es otra.
+async function revisarSucursales(companias: number[], campoEntrega: boolean): Promise<Sucursales> {
+  const context = { allowed_company_ids: companias }
+  const base = [['move_type', '=', 'out_invoice'], ['state', '=', 'posted'], ['invoice_date', '>=', sumarDias(fechaIso(), -365)]]
+  const contar = (dominio: unknown[]) => odooCall<Fila[]>('account.move', 'read_group', [dominio, ['company_id'], ['company_id']], { lazy: false, context })
+  const [tipos, total, aSucursal, entrega] = await Promise.all([
+    odooCall<Fila[]>('res.partner', 'read_group', [[['parent_id', '!=', false], ['active', '=', true]], ['type'], ['type']], { lazy: false, context }),
+    contar(base),
+    contar([...base, ['partner_id.parent_id', '!=', false]]),
+    campoEntrega ? contar([...base, ['partner_shipping_id.parent_id', '!=', false]]) : Promise.resolve(null),
+  ])
+  const por = (gs: Fila[] | null, id: number) => gs ? Number(gs.find((g) => m2o(g.company_id)?.id === id)?.__count ?? 0) : null
+  const porCompania = await Promise.all(total.map(async (g) => {
+    const c = m2o(g.company_id)
+    const id = c?.id ?? 0
+    const nEntrega = por(entrega, id)
+    const nSucursal = por(aSucursal, id) ?? 0
+    // Ejemplos por el campo donde más aparece la sucursal.
+    const campo = nEntrega != null && nEntrega > nSucursal ? 'partner_shipping_id' : 'partner_id'
+    const top = await odooCall<Fila[]>('account.move', 'read_group', [
+      [...base, ['company_id', '=', id], [`${campo}.parent_id`, '!=', false]], [campo, 'amount_untaxed_signed:sum'], [campo],
+    ], { lazy: false, orderby: 'amount_untaxed_signed desc', limit: 8, context })
+    return {
+      compania: c?.name ?? 'Sin compañía', facturas: Number(g.__count ?? 0), aSucursal: nSucursal, entregaSucursal: nEntrega,
+      ejemplos: top.map((t) => ({ nombre: m2o(t[campo])?.name ?? '—', facturas: Number(t.__count ?? 0), monto: Math.round(Number(t.amount_untaxed_signed ?? 0)) })),
+    }
+  }))
+  return {
+    tiposHijos: tipos.map((t) => ({ tipo: TIPO_CONTACTO[String(t.type)] ?? String(t.type), cantidad: Number(t.__count ?? 0) })).sort((a, b) => b.cantidad - a.cantidad),
+    campoEntrega,
+    porCompania: porCompania.sort((a, b) => b.facturas - a.facturas),
+  }
 }
 
 export async function revisarOdoo(): Promise<Revision> {
   const cfg = odooConfig()
   const ver = await odooVersion()
   const uid = await odooLogin(true)
-  const [yo] = await odooCall<Fila[]>('res.users', 'search_read', [[['id', '=', uid]]], { fields: ['name', 'login'] })
+  const [yo] = await odooCall<Fila[]>('res.users', 'search_read', [[['id', '=', uid]]], { fields: ['name', 'login', 'company_ids'] })
   const companias = await odooCall<Fila[]>('res.company', 'search_read', [[]], { fields: ['id', 'name'], order: 'id asc' })
   const [cPartner, cMove] = await Promise.all([
     odooCall<Record<string, unknown>>('res.partner', 'fields_get', [], { attributes: ['type'] }),
@@ -59,6 +110,9 @@ export async function revisarOdoo(): Promise<Revision> {
   const ids = porVendedor.map((g) => m2o(g.invoice_user_id)?.id).filter((x): x is number => !!x)
   const usuarios = ids.length ? await odooCall<Fila[]>('res.users', 'search_read', [[['id', 'in', ids]]], { fields: ['id', 'name', 'login'], context: { active_test: false } }) : []
   const { data: app } = await supabaseServicio().from('vis_vendedores').select('nombre, email')
+  const misCompanias = Array.isArray(yo?.company_ids) ? (yo.company_ids as number[]) : companias.map((c) => Number(c.id))
+  const sucursales = await revisarSucursales(misCompanias, 'partner_shipping_id' in cMove)
+    .catch((e: unknown) => ({ error: e instanceof Error ? e.message : String(e) }))
   const porEmail = new Map((app ?? []).map((v) => [v.email.toLowerCase(), v.nombre]))
   return {
     version: String((ver as { server_version?: string }).server_version ?? ''),
@@ -73,6 +127,7 @@ export async function revisarOdoo(): Promise<Revision> {
       return { odooId: Number(u?.id ?? 0), nombre: String(u?.name ?? m2o(g.invoice_user_id)?.name ?? 'Sin vendedor'), email, facturas: Number(g.__count ?? 0), enApp: email ? porEmail.get(email) ?? null : null }
     }).sort((a, b) => b.facturas - a.facturas),
     camposFaltantes: faltan,
+    sucursales,
   }
 }
 

@@ -148,6 +148,45 @@ function TarjetaRevision({ r }: { r: Revision }) {
         </table>
         <p className="mt-1 text-xs text-tenue">Se reconocen por email: para que un vendedor reciba su cartera, cargalo en Usuarios con el mismo email que usa en Odoo.</p>
       </div>
+      <BloqueSucursales s={r.sucursales} />
     </Tarjeta>
+  )
+}
+
+// Para decidir cómo traer las sucursales: si la factura va a nombre de la sucursal o la sucursal es la dirección de entrega.
+function BloqueSucursales({ s }: { s: Revision['sucursales'] }) {
+  if ('error' in s) return <Aviso tipo="alerta">No se pudieron revisar las sucursales: {s.error}</Aviso>
+  const n = (x: number) => x.toLocaleString('es-PY')
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="font-medium">Sucursales (contactos hijos de una empresa)</p>
+      <p className="text-tenue">En Odoo: {s.tiposHijos.map((t) => `${t.tipo} ${n(t.cantidad)}`).join(' · ') || 'ninguno'}.</p>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px]">
+          <thead><tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-tenue">
+            <th className="py-1 pr-2 font-medium">Compañía</th><th className="px-2 py-1 text-right font-medium">Facturas 12 meses</th>
+            <th className="px-2 py-1 text-right font-medium">A nombre de una sucursal</th>
+            {s.campoEntrega && <th className="px-2 py-1 text-right font-medium">Con entrega en una sucursal</th>}
+          </tr></thead>
+          <tbody>
+            {s.porCompania.map((c) => (
+              <tr key={c.compania} className="border-b border-borde last:border-0">
+                <td className="py-1 pr-2">{c.compania}</td><td className="px-2 py-1 text-right tabular">{n(c.facturas)}</td>
+                <td className="px-2 py-1 text-right tabular">{n(c.aSucursal)}</td>
+                {s.campoEntrega && <td className="px-2 py-1 text-right tabular">{n(c.entregaSucursal ?? 0)}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {s.porCompania.filter((c) => c.ejemplos.length).map((c) => (
+        <div key={c.compania}>
+          <p className="text-xs font-medium uppercase tracking-wide text-tenue">Sucursales que más compraron · {c.compania}</p>
+          <ul className="mt-1 text-sm">
+            {c.ejemplos.map((e) => <li key={e.nombre}>{e.nombre} <span className="text-tenue">· {n(e.facturas)} facturas · Gs. {n(e.monto)}</span></li>)}
+          </ul>
+        </div>
+      ))}
+    </div>
   )
 }
