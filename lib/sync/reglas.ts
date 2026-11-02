@@ -119,7 +119,11 @@ export function resumirSucursales(facturas: FacturaSucursal[], desde6m: string, 
 /** Nombre de la sucursal en la app: "EMPRESA · SUCURSAL". Las direcciones de entrega suelen no tener nombre: va la calle o la ciudad. */
 export function nombreSucursal(empresa: string | null, p: PartnerOdoo): string {
   const propio = texto(p.name) ?? texto(p.street) ?? texto(p.city)?.replace(/\s*\([^)]*\)\s*$/, '') ?? `Sucursal ${p.id}`
-  return empresa && !propio.toUpperCase().startsWith(empresa.toUpperCase()) ? `${empresa} · ${propio}` : propio
+  // Odoo muestra la empresa con su RUC ("VIGOR SA - 80082790-2"): sin el RUC.
+  const emp = empresa?.replace(/\s*[-:]\s*\d{5,9}-\d\b/g, '').trim() || null
+  // "VENTURIO S.A. (SDG)" ya dice de qué empresa es: no se repite.
+  const letras = (t: string) => t.normalize('NFD').replace(/[^A-Za-z0-9]/g, '').toUpperCase() // "Vigor S.A." = "VIGOR SA"
+  return emp && !letras(propio).startsWith(letras(emp)) ? `${emp} · ${propio}` : propio
 }
 
 /** Tipos de contacto hijo que pueden ser una sucursal. Un "contacto" es una persona y comparte la dirección de la empresa. */
