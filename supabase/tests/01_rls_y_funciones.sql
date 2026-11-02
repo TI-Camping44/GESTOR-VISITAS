@@ -742,4 +742,18 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── Restaurar ubicaciones pisadas por el sync (0022) ────────────────
+do $$ declare v uuid; begin
+  insert into vis_clientes (odoo_partner_id, razon_social, lat, lng, origen_ubicacion)
+  values (99200, 'Pisado por Odoo', -25.0, -57.0, 'odoo') returning id into v;
+  insert into vis_cliente_ubicaciones_hist (cliente_id, lat, lng, precision_m, origen, motivo, created_at)
+  values (v, -25.1, -57.1, 9, 'gps_visita', 'vieja', now() - interval '3 days'),
+         (v, -25.2, -57.2, 8, 'gps_visita', 'la última', now() - interval '1 day');
+end $$;
+\i supabase/migrations/0022_vis_restaurar_ubicaciones.sql
+do $$ declare c vis_clientes; begin
+  select * into c from vis_clientes where razon_social = 'Pisado por Odoo';
+  assert c.lat = -25.2 and c.lng = -57.2 and c.origen_ubicacion = 'gps_visita', format('vuelve a la última ubicación de la calle: %s %s %s', c.lat, c.lng, c.origen_ubicacion);
+end $$;
+
 select 'OK: todas las pruebas pasaron' as resultado;
