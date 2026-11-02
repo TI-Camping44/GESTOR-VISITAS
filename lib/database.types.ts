@@ -149,8 +149,8 @@ export type Database = {
         Relationships: []
       }
       vis_productos: {
-        Row: { activo: boolean; empresa_id: string; id: string; nombre: string; orden: number }
-        Insert: { activo?: boolean; empresa_id: string; id?: string; nombre: string; orden?: number }
+        Row: { activo: boolean; codigo: string | null; empresa_id: string; id: string; nombre: string; odoo_product_id: number | null; orden: number }
+        Insert: { activo?: boolean; codigo?: string | null; empresa_id: string; id?: string; nombre: string; odoo_product_id?: number | null; orden?: number }
         Update: Partial<Database['public']['Tables']['vis_productos']['Insert']>
         Relationships: []
       }

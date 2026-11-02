@@ -5,7 +5,7 @@
 --  · Médicos: no están en Odoo, los carga la visitadora. Un médico atiende en uno o más lugares
 --    y en un lugar atienden varios (vis_medico_lugares).
 --  · Visita a un médico: vis_visitas con medico_id y los productos presentados / muestras dejadas.
---  · Productos: lista de la empresa que carga el admin (vis_productos).
+--  · Productos: los que facturó la empresa en Odoo (sync) más los que agregue el admin (vis_productos).
 --  · Resultados de visita médica: vis_resultados.tipo = 'medica'.
 
 -- ── Tipo de usuario ────────────────────────────────────────────────
@@ -61,13 +61,17 @@ create table vis_medico_lugares (
 create index on vis_medico_lugares (lugar_id);
 
 -- ── Productos ──────────────────────────────────────────────────────
+-- Los trae el sync de Odoo (los que facturó la empresa en 12 meses); un admin los oculta o agrega otros.
 create table vis_productos (
-  id          uuid primary key default gen_random_uuid(),
-  empresa_id  uuid not null references vis_empresas(id) on delete cascade,
-  nombre      text not null check (btrim(nombre) <> ''),
-  activo      boolean not null default true,
-  orden       int not null default 0,
-  unique (empresa_id, nombre)
+  id              uuid primary key default gen_random_uuid(),
+  empresa_id      uuid not null references vis_empresas(id) on delete cascade,
+  nombre          text not null check (btrim(nombre) <> ''),
+  codigo          text,
+  odoo_product_id int,
+  activo          boolean not null default true,
+  orden           int not null default 0,
+  unique (empresa_id, nombre),
+  unique (empresa_id, odoo_product_id)
 );
 
 -- ── Visitas a médicos ──────────────────────────────────────────────

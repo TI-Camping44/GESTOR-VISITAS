@@ -149,6 +149,15 @@ function TarjetaRevision({ r }: { r: Revision }) {
         <p className="mt-1 text-xs text-tenue">Se reconocen por email: para que un vendedor reciba su cartera, cargalo en Usuarios con el mismo email que usa en Odoo.</p>
       </div>
       <BloqueSucursales s={r.sucursales} />
+      <div>
+        <p className="font-medium">Usuarios de Odoo en Vitalica</p>
+        {'error' in r.usuariosVitalica ? <p className="text-tenue">{r.usuariosVitalica.error}</p> : (
+          <ul className="mt-1 text-sm">
+            {r.usuariosVitalica.map((u) => <li key={u.email}>{u.nombre} <span className="text-tenue">· {u.email} · {u.enApp ? 'ya está en la app' : 'no está en la app'}</span></li>)}
+          </ul>
+        )}
+        <p className="mt-1 text-xs text-tenue">Para darle acceso a alguien, copiá su correo en Usuarios → Dar acceso.</p>
+      </div>
     </Tarjeta>
   )
 }

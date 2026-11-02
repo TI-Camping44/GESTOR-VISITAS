@@ -36,6 +36,8 @@ export type Revision = {
   vendedores: { odooId: number; nombre: string; email: string | null; facturas: number; enApp: string | null }[]
   camposFaltantes: string[]
   sucursales: Sucursales | { error: string }
+  /** Usuarios internos de Odoo de la compañía Vitalica (para encontrar el correo de alguien y darle acceso). */
+  usuariosVitalica: { nombre: string; email: string; enApp: string | null }[] | { error: string }
 }
 
 // Sucursales (Vitalica): en Odoo son contactos hijos de la empresa. Para decidir cómo traerlas hay que saber
@@ -113,6 +115,11 @@ export async function revisarOdoo(): Promise<Revision> {
   const misCompanias = Array.isArray(yo?.company_ids) ? (yo.company_ids as number[]) : companias.map((c) => Number(c.id))
   const sucursales = await revisarSucursales(misCompanias, 'partner_shipping_id' in cMove)
     .catch((e: unknown) => ({ error: e instanceof Error ? e.message : String(e) }))
+  const vitalica = companias.find((c) => /vitalica/i.test(String(c.name)))
+  const usuariosVitalica = !vitalica ? { error: 'No hay una compañía Vitalica en Odoo.' } : await odooCall<Fila[]>('res.users', 'search_read',
+    [[['company_ids', 'in', [Number(vitalica.id)]], ['share', '=', false]]], { fields: ['name', 'login'], order: 'name asc', context: { allowed_company_ids: [Number(vitalica.id)] } })
+    .then((us) => us.map((u) => { const email = String(u.login ?? '').toLowerCase(); return { nombre: String(u.name ?? ''), email, enApp: porEmail.get(email) ?? null } }))
+    .catch((e: unknown) => ({ error: e instanceof Error ? e.message : String(e) }))
   const porEmail = new Map((app ?? []).map((v) => [v.email.toLowerCase(), v.nombre]))
   return {
     version: String((ver as { server_version?: string }).server_version ?? ''),
@@ -128,6 +135,7 @@ export async function revisarOdoo(): Promise<Revision> {
     }).sort((a, b) => b.facturas - a.facturas),
     camposFaltantes: faltan,
     sucursales,
+    usuariosVitalica,
   }
 }
 
@@ -324,6 +332,55 @@ export async function sincronizarOdoo(): Promise<ResultadoSync> {
         }
       }
       return { leidos: facturas.length, insertados, actualizados }
+    }))
+
+    // 5. Productos de Vitalica (para la visita médica): los que facturó en 12 meses, primero los más vendidos.
+    //    Los nuevos entran visibles; los que un admin ocultó siguen ocultos; solo se actualiza nombre y código.
+    pasos.push(await conLog('productos', async () => {
+      const [{ data: empresas, error }, companias] = await Promise.all([
+        sb.from('vis_empresas').select('id, nombre'),
+        odooCall<Fila[]>('res.company', 'search_read', [[]], { fields: ['id', 'name'] }),
+      ])
+      if (error) throw new Error(error.message)
+      const empresaApp = (empresas ?? []).find((e) => /vitalica/i.test(e.nombre))
+      const compania = companias.find((c) => /vitalica/i.test(String(c.name)))
+      if (!empresaApp || !compania) return { leidos: 0, insertados: 0, actualizados: 0 }
+      const cid = Number(compania.id)
+      const context = { allowed_company_ids: [cid] }
+      const grupos = await odooCall<Fila[]>('account.move.line', 'read_group', [
+        [['move_id.move_type', '=', 'out_invoice'], ['parent_state', '=', 'posted'], ['company_id', '=', cid], ['date', '>=', desde12m], ['product_id', '!=', false]],
+        ['product_id', 'quantity:sum'], ['product_id'],
+      ], { lazy: false, orderby: 'quantity desc', context })
+      const ids = grupos.map((g) => m2o(g.product_id)?.id).filter((x): x is number => !!x)
+      const prods = new Map<number, Fila>()
+      for (const lote of lotes(ids)) {
+        for (const p of await odooCall<Fila[]>('product.product', 'search_read', [[['id', 'in', lote]]], { fields: ['id', 'name', 'default_code'], context: { ...context, active_test: false } })) prods.set(Number(p.id), p)
+      }
+      const { data: actuales, error: e1 } = await sb.from('vis_productos').select('id, nombre, odoo_product_id').eq('empresa_id', empresaApp.id)
+      if (e1) throw new Error(e1.message)
+      const porOdoo = new Map((actuales ?? []).filter((p) => p.odoo_product_id != null).map((p) => [p.odoo_product_id!, p]))
+      const porNombre = new Map((actuales ?? []).map((p) => [p.nombre.trim().toLowerCase(), p]))
+      const vistos = new Set<string>()
+      let insertados = 0
+      let actualizados = 0
+      for (const [i, id] of ids.entries()) {
+        const p = prods.get(id)
+        const nombre = typeof p?.name === 'string' ? p.name.trim() : ''
+        if (!nombre || vistos.has(nombre.toLowerCase())) continue // variantes con el mismo nombre: una sola
+        vistos.add(nombre.toLowerCase())
+        const codigo = typeof p?.default_code === 'string' && p.default_code.trim() ? p.default_code.trim() : null
+        const ex = porOdoo.get(id) ?? porNombre.get(nombre.toLowerCase())
+        if (ex) {
+          const { error: e2 } = await sb.from('vis_productos').update({ nombre, codigo, odoo_product_id: id, orden: i + 1 }).eq('id', ex.id)
+          if (e2) throw new Error(e2.message)
+          actualizados++
+        } else {
+          const { error: e2 } = await sb.from('vis_productos').insert({ empresa_id: empresaApp.id, nombre, codigo, odoo_product_id: id, orden: i + 1 })
+          if (e2) throw new Error(e2.message)
+          insertados++
+        }
+      }
+      return { leidos: ids.length, insertados, actualizados }
     }))
     return { ok: true, pasos }
   } catch (e) {

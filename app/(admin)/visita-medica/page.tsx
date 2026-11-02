@@ -168,11 +168,11 @@ export default function VisitaMedica() {
         </Tarjeta>
         <Tarjeta className="flex flex-col gap-2">
           <h2 className="font-semibold">Lista de productos</h2>
-          <p className="text-sm text-tenue">La visitadora los elige al registrar la visita, con las muestras que deja.</p>
+          <p className="text-sm text-tenue">Llegan solos de Odoo: lo que facturó la empresa en 12 meses, primero lo más vendido (se actualizan con cada sincronización). La visitadora los elige al registrar la visita; los que no se presentan a médicos, ocultalos.</p>
           <ul className="flex flex-col gap-1">
             {productos.map((p) => (
               <li key={p.id} className="flex items-center justify-between gap-2 border-b border-borde py-1 last:border-0">
-                <span className={cn(!p.activo && 'text-tenue line-through')}>{p.nombre}</span>
+                <span className={cn(!p.activo && 'text-tenue line-through')}>{p.nombre}{p.codigo && <span className="text-xs text-tenue"> · {p.codigo}</span>}</span>
                 {esAdmin && <button type="button" className="text-xs text-tenue underline" onClick={() => void cambiarProducto(p, { activo: !p.activo })}>{p.activo ? 'Ocultar' : 'Volver a mostrar'}</button>}
               </li>
             ))}
