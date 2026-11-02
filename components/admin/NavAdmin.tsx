@@ -1,11 +1,11 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart3, Route, Radio, Users, MapPinned, UserCog, RefreshCw, Smartphone, FileBarChart, ShieldAlert } from 'lucide-react'
+import { BarChart3, Route, Radio, Users, MapPinned, UserCog, RefreshCw, Smartphone, FileBarChart, ShieldAlert, Stethoscope } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Rol } from '@/lib/database.types'
 
-export function NavAdmin({ rol, altas = 0 }: { rol: Rol; altas?: number }) {
+export function NavAdmin({ rol, altas = 0, medica = false }: { rol: Rol; altas?: number; medica?: boolean }) {
   const ruta = usePathname()
   const items = [
     { href: '/tablero', texto: 'Tablero', Icono: BarChart3 },
@@ -14,6 +14,7 @@ export function NavAdmin({ rol, altas = 0 }: { rol: Rol; altas?: number }) {
     { href: '/en-vivo', texto: 'En vivo', Icono: Radio },
     { href: '/clientes', texto: 'Clientes', Icono: Users },
     { href: '/altas', texto: 'Altas a revisar', Icono: ShieldAlert, contador: altas },
+    ...(medica ? [{ href: '/visita-medica', texto: 'Visita médica', Icono: Stethoscope }] : []),
     { href: '/zonas', texto: 'Zonas', Icono: MapPinned },
     { href: '/vendedores', texto: 'Usuarios', Icono: UserCog },
     ...(rol === 'admin' ? [{ href: '/sync', texto: 'Sync Odoo', Icono: RefreshCw }] : []),

@@ -10,7 +10,7 @@ import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
 import { fmtFecha, hace, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
-import { urlVisita } from '@/lib/rutas'
+import { urlParaVisitar } from '@/lib/rutas'
 import { BuscarCliente } from '@/components/vendedor/BuscarCliente'
 import { COLOR_ESTADO } from '@/lib/config'
 import { linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
@@ -19,7 +19,7 @@ import type { FilaTablero, ParadaDia, ProximaVisita } from '@/lib/database.types
 type Datos = { paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[] }
 
 export default function Hoy() {
-  const { perfil, pendientes } = useVendedor()
+  const { perfil, pendientes, esMedica } = useVendedor()
   const [datos, setDatos] = useState<Datos | null>(null)
   const [guardadoEl, setGuardadoEl] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -81,8 +81,8 @@ export default function Hoy() {
       id: p.parada_id, lat: p.lat!, lng: p.lng!, etiqueta: String(i + 1),
       color: p.visitada ? '#6b7280' : COLOR_ESTADO[p.estado],
       titulo: p.razon_social, detalle: p.visitada ? 'Ya visitado' : (p.ciudad ?? ''),
-      href: urlVisita(p.cliente_id, { parada: p.parada_id }), textoLink: 'Registrar visita',
-    })), [datos, saltadas])
+      href: urlParaVisitar(esMedica, p.cliente_id, { parada: p.parada_id }), textoLink: esMedica ? 'Ver médicos' : 'Registrar visita',
+    })), [datos, saltadas, esMedica])
 
   const pendientesHoy = useMemo(() => (datos?.paradas ?? []).filter((p) => !p.visitada && !saltadas.has(p.parada_id) && p.lat != null && p.lng != null), [datos, saltadas])
   const links = useMemo(() => linksGoogleMaps(null, pendientesHoy.map((p) => ({ lat: p.lat!, lng: p.lng! }))), [pendientesHoy])
@@ -117,8 +117,9 @@ export default function Hoy() {
 
       {datos && datos.paradas.length === 0 && (
         <Vacio titulo="No tenés paradas para hoy">
+          {esMedica ? <>Buscá el lugar arriba o en <Link href="/mapa" className="font-medium text-marca underline">Lugares</Link>, o cargalo en <Link href="/lugar/nuevo" className="font-medium text-marca underline">Nuevo lugar</Link>.</> : <>
           Si visitás a alguien igual, buscalo arriba o en <Link href="/mapa" className="font-medium text-marca underline">Mapa</Link>, o
-          dalo de alta en <Link href="/prospecto/nuevo" className="font-medium text-marca underline">Nuevo cliente</Link>.
+          dalo de alta en <Link href="/prospecto/nuevo" className="font-medium text-marca underline">Nuevo cliente</Link>.</>}
         </Vacio>
       )}
 
@@ -183,8 +184,8 @@ export default function Hoy() {
                       <CheckCircle2 className="size-4" aria-hidden /> Visitado
                     </span>
                   ) : (
-                    <Link href={urlVisita(p.cliente_id, { parada: p.parada_id })} className="flex-1">
-                      <Boton className="w-full">Llegué · Registrar visita</Boton>
+                    <Link href={urlParaVisitar(esMedica, p.cliente_id, { parada: p.parada_id })} className="flex-1">
+                      <Boton className="w-full">{esMedica ? 'Llegué · Ver médicos' : 'Llegué · Registrar visita'}</Boton>
                     </Link>
                   )}
                   {tel && <a href={tel} aria-label={`Llamar a ${p.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" /></a>}
@@ -221,7 +222,7 @@ export default function Hoy() {
                     {x.ultima_observacion && <p className="mt-1 text-sm">{x.ultima_observacion}</p>}
                     <p className="mt-1 text-xs text-tenue">Última visita {fmtFecha(x.ultima_visita)} · quedaste en volver el {fmtFecha(x.proxima_visita)}</p>
                     <div className="mt-3 flex gap-2">
-                      <Link href={urlVisita(x.cliente_id)} className="flex-1"><Boton variante="secundario" className="w-full">Registrar visita</Boton></Link>
+                      <Link href={urlParaVisitar(esMedica, x.cliente_id)} className="flex-1"><Boton variante="secundario" className="w-full">{esMedica ? 'Ver médicos' : 'Registrar visita'}</Boton></Link>
                       {tel && <a href={tel} aria-label={`Llamar a ${x.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" /></a>}
                       {wa && <a href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp a ${x.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><MessageCircle className="size-4" /></a>}
                     </div>

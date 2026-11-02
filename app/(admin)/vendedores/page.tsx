@@ -11,9 +11,10 @@ import { supabaseNavegador } from '@/lib/supabase/client'
 import { fmtFecha } from '@/lib/fechas'
 import { leerCoordenadas } from '@/lib/geo'
 import { mensajeError } from '@/lib/utils'
-import type { Empresa, Equipo, Perfil, Rol, Vendedor } from '@/lib/database.types'
+import type { Empresa, Equipo, Perfil, Rol, TipoUsuario, Vendedor } from '@/lib/database.types'
 
 const ROLES: Record<Rol, string> = { vendedor: 'Vendedor', supervisor: 'Supervisor', admin: 'Admin' }
+const TIPOS: Record<TipoUsuario, string> = { ventas: 'App de ventas', medica: 'Visita médica' }
 const AMBAS = 'ambas'
 const coordTexto = (lat: number | null, lng: number | null) => (lat != null && lng != null ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : '')
 
@@ -21,7 +22,7 @@ export default function Vendedores() {
   const sb = supabaseNavegador()
   const [lista, setLista] = useState<Vendedor[]>([])
   const [perfil, setPerfil] = useState<Perfil | null>(null)
-  const [nuevo, setNuevo] = useState({ nombre: '', email: '', telefono: '', rol: 'vendedor' as Rol, empresa: '', equipo: '' })
+  const [nuevo, setNuevo] = useState({ nombre: '', email: '', telefono: '', rol: 'vendedor' as Rol, tipo: 'ventas' as TipoUsuario, empresa: '', equipo: '' })
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [equipos, setEquipos] = useState<Equipo[]>([])
   const [deposito, setDeposito] = useState('')
@@ -73,7 +74,7 @@ export default function Vendedores() {
     void cargar()
   }
 
-  async function actualizar(id: string, cambios: Partial<Pick<Vendedor, 'nombre' | 'telefono' | 'rol' | 'meta_diaria' | 'meta_semanal' | 'base_lat' | 'base_lng' | 'activo'>>) {
+  async function actualizar(id: string, cambios: Partial<Pick<Vendedor, 'nombre' | 'telefono' | 'rol' | 'tipo' | 'meta_diaria' | 'meta_semanal' | 'base_lat' | 'base_lng' | 'activo'>>) {
     setError(null)
     const { error } = await sb.from('vis_vendedores').update(cambios).eq('id', id)
     if (error) setError(mensajeError(error))
@@ -86,7 +87,7 @@ export default function Vendedores() {
     if (!nuevo.nombre.trim() || !email.includes('@')) return setError('Completá nombre y email.')
     setError(null); setOk(null)
     const { data, error } = await sb.from('vis_vendedores')
-      .insert({ nombre: nuevo.nombre.trim(), email, rol: nuevo.rol, telefono: nuevo.telefono.trim() || null }).select('*').single()
+      .insert({ nombre: nuevo.nombre.trim(), email, rol: nuevo.rol, tipo: nuevo.rol === 'vendedor' ? nuevo.tipo : 'ventas', telefono: nuevo.telefono.trim() || null }).select('*').single()
     if (error) return setError(error.code === '23505' ? 'Ese email ya tiene acceso.' : mensajeError(error))
     if (soyTI && nuevo.empresa && (nuevo.empresa === AMBAS || nuevo.empresa !== data.empresa_id)) {
       const ambas = nuevo.empresa === AMBAS
@@ -100,7 +101,7 @@ export default function Vendedores() {
     const r = await enviarInvitacion(data.id)
     if ('ok' in r) setOk(`${data.nombre} ya tiene acceso y le mandamos la invitación a ${data.email}.`)
     else setError(`${data.nombre} ya tiene acceso, pero no se pudo mandar la invitación: ${r.error}`)
-    setNuevo({ nombre: '', email: '', telefono: '', rol: 'vendedor', empresa: '', equipo: '' })
+    setNuevo({ nombre: '', email: '', telefono: '', rol: 'vendedor', tipo: 'ventas', empresa: '', equipo: '' })
     void cargar()
   }
 
@@ -133,6 +134,14 @@ export default function Vendedores() {
                   {Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </Selector>
               </div>
+              {nuevo.rol === 'vendedor' && (
+                <div>
+                  <Etiqueta htmlFor="v-tipo">App</Etiqueta>
+                  <Selector id="v-tipo" value={nuevo.tipo} onChange={(e) => setNuevo({ ...nuevo, tipo: e.target.value as TipoUsuario })}>
+                    {Object.entries(TIPOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </Selector>
+                </div>
+              )}
               {soyTI && (
                 <div>
                   <Etiqueta htmlFor="v-empresa">Empresa</Etiqueta>
@@ -186,6 +195,11 @@ export default function Vendedores() {
                   <Selector disabled={!editable(v)} value={v.rol} onChange={(e) => void actualizar(v.id, { rol: e.target.value as Rol })} className="w-36" aria-label="Rol">
                     {Object.entries(ROLES).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
                   </Selector>
+                  {v.rol === 'vendedor' && (
+                    <Selector disabled={!editable(v)} value={v.tipo ?? 'ventas'} onChange={(e) => void actualizar(v.id, { tipo: e.target.value as TipoUsuario })} className="mt-1 min-h-8 w-36 py-1 text-xs" aria-label={`App de ${v.nombre}`}>
+                      {Object.entries(TIPOS).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
+                    </Selector>
+                  )}
                 </td>
                 <td className="px-2 py-2">
                   {soyTI ? (

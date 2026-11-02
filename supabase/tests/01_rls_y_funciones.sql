@@ -673,4 +673,73 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── Visita médica (0021) ───────────────────────────────────────────
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000fa', 'vale@vitalica.com.py');
+insert into vis_vendedores (nombre, email, rol, empresa_id, tipo, tracking_aceptado_el)
+  values ('Vale', 'vale@vitalica.com.py', 'vendedor', (select id from vis_empresas where nombre = 'Vitalica'), 'medica', now());
+select pg_temp.como('vale@vitalica.com.py') \gset
+set role authenticated;
+do $$ declare r jsonb; v_lugar uuid; v_med uuid; begin
+  assert vis_vincular_usuario() ->> 'tipo' = 'medica', 'el perfil trae el tipo';
+  r := vis_crear_lugar(jsonb_build_object('nombre', 'Hospital Central', 'tipo_lugar', 'Hospital', 'ciudad', 'Asunción',
+    'lat', -25.2900, 'lng', -57.6200, 'precision_m', 12));
+  v_lugar := (r ->> 'id')::uuid;
+  assert (select categoria from vis_clientes where id = v_lugar) = 'lugar', 'el lugar se crea como lugar';
+  assert (select vendedor_id from vis_clientes where id = v_lugar) = vis_mi_id(), 'y es de ella';
+  insert into vis_medicos (empresa_id, nombre, especialidad, visitadora_id, creado_por)
+    values (vis_mi_empresa(), 'Dra. Gómez', 'Pediatría', vis_mi_id(), vis_mi_id()) returning id into v_med;
+  insert into vis_medico_lugares (medico_id, lugar_id, horario) values (v_med, v_lugar, 'Lun y Mié 8 a 12');
+  insert into vis_medicos (empresa_id, nombre, especialidad, visitadora_id, creado_por)
+    values (vis_mi_empresa(), 'Dr. Ruiz', 'Clínica médica', vis_mi_id(), vis_mi_id());
+  insert into vis_medico_lugares (medico_id, lugar_id) values ((select id from vis_medicos where nombre = 'Dr. Ruiz'), v_lugar);
+  assert (select jsonb_array_length(lugares) from vis_medicos_v where id = v_med) = 1, 'el médico con su lugar';
+  r := vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_lugar, 'medico_id', v_med,
+    'resultado_id', (select id from vis_resultados where nombre = 'Dejó muestras'),
+    'productos', jsonb_build_array(jsonb_build_object('producto', 'Vitamina C', 'muestras', 3)),
+    'lat', -25.2901, 'lng', -57.6201, 'precision_m', 10));
+  assert (select productos -> 0 ->> 'muestras' from vis_visitas where id = (r ->> 'id')::uuid) = '3', 'la visita guarda las muestras';
+  assert (select ultima_visita from vis_medicos_v where id = v_med) is not null, 'y cuenta como última visita del médico';
+  assert (select razon_social from vis_mis_visitas(vis_hoy(), vis_hoy()) where id = (r ->> 'id')::uuid) = 'Dra. Gómez · Hospital Central', 'en Mis visitas: médico · lugar';
+  begin
+    insert into vis_productos (empresa_id, nombre) values (vis_mi_empresa(), 'Prueba');
+    assert false, 'la visitadora no carga productos';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+do $$ begin
+  assert not exists (select 1 from vis_alertas_alta a join vis_clientes c on c.id = a.cliente_id where c.categoria = 'lugar'), 'un lugar no genera alta a revisar';
+end $$;
+select set_config('test.medico', (select id::text from vis_medicos where nombre = 'Dra. Gómez'), false) \gset
+select pg_temp.como('hugo@vitalica.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert not exists (select 1 from vis_medicos), 'otro vendedor no ve los médicos de la visitadora';
+  assert not exists (select 1 from vis_clientes where categoria = 'lugar'), 'ni sus lugares';
+  begin
+    perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(),
+      'cliente_id', (select id from vis_clientes where razon_social = 'Cliente de Hugo'), 'medico_id', current_setting('test.medico')));
+    assert false, 'no puede registrar visita a un médico ajeno';
+  exception when raise_exception then
+    assert sqlerrm like '%médico%', sqlerrm;
+  end;
+end $$;
+reset role;
+select pg_temp.como('sergio@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert (select count(*) from vis_medicos) = 2, 'el admin de Vitalica ve los médicos';
+  insert into vis_productos (empresa_id, nombre) values (vis_mi_empresa(), 'Vitamina C');
+  assert (select count(*) from vis_productos) = 1, 'y carga productos';
+end $$;
+reset role;
+select pg_temp.como('super@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert not exists (select 1 from vis_medicos), 'Camping 44 no ve los médicos de Vitalica';
+  assert not exists (select 1 from vis_productos), 'ni sus productos';
+  assert not exists (select 1 from vis_clientes where categoria = 'lugar'), 'ni sus lugares';
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;
