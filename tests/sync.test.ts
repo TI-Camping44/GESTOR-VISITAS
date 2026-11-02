@@ -64,4 +64,7 @@ test('sucursales: nombre en la app', () => {
   assert.equal(nombreSucursal('LICHTON S.A.', { id: 3, name: false, street: 'Av. España 123' }), 'LICHTON S.A. · Av. España 123')
   assert.equal(nombreSucursal('LICHTON S.A.', { id: 3, name: 'LICHTON S.A. - Multiplaza' }), 'LICHTON S.A. - Multiplaza', 'no repite la empresa')
   assert.equal(nombreSucursal(null, { id: 3, name: false }), 'Sucursal 3')
+  assert.equal(nombreSucursal('VIGOR SA - 80082790-2', { id: 3, name: 'Vigor S.A. Ava España' }), 'Vigor S.A. Ava España', 'sin el RUC y sin repetir la empresa')
+  assert.equal(nombreSucursal('VENTURIO SOCIEDAD ANONIMA - 80162932-2', { id: 3, name: 'VENTURIO SOCIEDAD ANONIMA (SDG)' }), 'VENTURIO SOCIEDAD ANONIMA (SDG)')
+  assert.equal(nombreSucursal('GARAGE CROSS SOCIEDAD ANONIMA - GARAGE CROSS S.A. :80108473-3 - 80108473-3', { id: 3, name: 'GTC-LUQUE' }), 'GARAGE CROSS SOCIEDAD ANONIMA - GARAGE CROSS S.A. · GTC-LUQUE')
 })
