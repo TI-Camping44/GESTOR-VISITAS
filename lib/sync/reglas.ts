@@ -79,3 +79,48 @@ export function filaCliente(p: PartnerOdoo, origenActual: string | null | undefi
   }
   return { fila, pisaUbicacion }
 }
+
+// ── Sucursales (Vitalica) ──────────────────────────────────────────────
+/** Una factura de Vitalica con sus contactos: cliente (partner_id), entrega (partner_shipping_id) y empresa (commercial_partner_id). */
+export type FacturaSucursal = { partnerId: number | null; entregaId: number | null; empresaId: number | null; userId: number | null; fecha: string | null; monto: number }
+
+/** A qué sucursal va la factura: la dirección de entrega si es otra que la empresa; si no, el cliente si es otro. */
+export function sucursalDeFactura(f: FacturaSucursal): number | null {
+  if (f.entregaId && f.empresaId && f.entregaId !== f.empresaId) return f.entregaId
+  if (f.partnerId && f.empresaId && f.partnerId !== f.empresaId) return f.partnerId
+  return null
+}
+
+export type ResumenSucursal = { empresaId: number; ultima: string | null; ventas6m: number; facturas6m: number }
+
+/** Por sucursal: su empresa, la última factura, lo vendido en 6 meses y el vendedor de la última factura de 12 meses. */
+export function resumirSucursales(facturas: FacturaSucursal[], desde6m: string, desde12m: string) {
+  const resumen = new Map<number, ResumenSucursal>()
+  const grupos = new Map<string, GrupoFacturas>()
+  for (const f of facturas) {
+    const s = sucursalDeFactura(f)
+    if (!s || !f.empresaId) continue
+    const r = resumen.get(s) ?? { empresaId: f.empresaId, ultima: null, ventas6m: 0, facturas6m: 0 }
+    if (f.fecha && (!r.ultima || f.fecha > r.ultima)) r.ultima = f.fecha
+    if (f.fecha && f.fecha >= desde6m) { r.ventas6m += f.monto; r.facturas6m++ }
+    resumen.set(s, r)
+    if (f.fecha && f.fecha >= desde12m && f.userId != null) {
+      const k = `${s}:${f.userId}`
+      const g = grupos.get(k) ?? { partnerId: s, userId: f.userId, ultima: null, monto: 0 }
+      if (!g.ultima || f.fecha > g.ultima) g.ultima = f.fecha
+      g.monto += f.monto
+      grupos.set(k, g)
+    }
+  }
+  for (const r of resumen.values()) r.ventas6m = Math.round(r.ventas6m)
+  return { resumen, vendedor: vendedorPorFacturas([...grupos.values()]) }
+}
+
+/** Nombre de la sucursal en la app: "EMPRESA · SUCURSAL". Las direcciones de entrega suelen no tener nombre: va la calle o la ciudad. */
+export function nombreSucursal(empresa: string | null, p: PartnerOdoo): string {
+  const propio = texto(p.name) ?? texto(p.street) ?? texto(p.city)?.replace(/\s*\([^)]*\)\s*$/, '') ?? `Sucursal ${p.id}`
+  return empresa && !propio.toUpperCase().startsWith(empresa.toUpperCase()) ? `${empresa} · ${propio}` : propio
+}
+
+/** Tipos de contacto hijo que pueden ser una sucursal. Un "contacto" es una persona y comparte la dirección de la empresa. */
+export const TIPOS_SUCURSAL = ['delivery', 'other', 'invoice']

@@ -7,7 +7,7 @@ import 'server-only'
 import { m2o, odooCall, odooConfig, odooLogin, odooVersion, searchReadAll } from '@/lib/odoo'
 import { supabaseServicio } from '@/lib/supabase/servicio'
 import { fechaIso, sumarDias } from '@/lib/fechas'
-import { filaCliente, vendedorPorFacturas, type GrupoFacturas, type PartnerOdoo } from './reglas'
+import { filaCliente, nombreSucursal, resumirSucursales, TIPOS_SUCURSAL, vendedorPorFacturas, type GrupoFacturas, type PartnerOdoo } from './reglas'
 
 type Fila = Record<string, unknown>
 const DOMINIO_CLIENTES = [['customer_rank', '>', 0], ['parent_id', '=', false], ['active', '=', true]]
@@ -206,7 +206,8 @@ export async function sincronizarOdoo(): Promise<ResultadoSync> {
 
     // 3. Clientes: los que facturaron en 2 años, los que ya están en la app y los de la cartera de un vendedor de la app.
     pasos.push(await conLog('clientes', async () => {
-      const { data: actuales, error } = await sb.from('vis_clientes').select('id, odoo_partner_id, origen_ubicacion, vendedor_id').not('odoo_partner_id', 'is', null)
+      // Las sucursales (empresa_id) las mantiene el paso 4.
+      const { data: actuales, error } = await sb.from('vis_clientes').select('id, odoo_partner_id, origen_ubicacion, vendedor_id').not('odoo_partner_id', 'is', null).is('empresa_id', null)
       if (error) throw new Error(error.message)
       const existentes = new Map((actuales ?? []).map((c) => [c.odoo_partner_id!, c]))
       const ids = new Set<number>([...existentes.keys()])
@@ -248,6 +249,81 @@ export async function sincronizarOdoo(): Promise<ResultadoSync> {
         }
       }
       return { leidos: partners.size, insertados, actualizados }
+    }))
+
+    // 4. Sucursales de Vitalica: cada contacto hijo al que Vitalica le factura o le entrega es un cliente
+    //    de Vitalica, colgado de su empresa. Se leen las facturas de la compañía Vitalica de Odoo.
+    pasos.push(await conLog('sucursales', async () => {
+      const [{ data: empresas, error }, companias] = await Promise.all([
+        sb.from('vis_empresas').select('id, nombre'),
+        odooCall<Fila[]>('res.company', 'search_read', [[]], { fields: ['id', 'name'] }),
+      ])
+      if (error) throw new Error(error.message)
+      const empresaApp = (empresas ?? []).find((e) => /vitalica/i.test(e.nombre))
+      const compania = companias.find((c) => /vitalica/i.test(String(c.name)))
+      if (!empresaApp || !compania) return { leidos: 0, insertados: 0, actualizados: 0 }
+      const cid = Number(compania.id)
+      const context = { allowed_company_ids: [cid] }
+      const cMove = await odooCall<Record<string, unknown>>('account.move', 'fields_get', [], { attributes: ['type'], context })
+      const facturas = await searchReadAll<Fila>('account.move',
+        [['move_type', '=', 'out_invoice'], ['state', '=', 'posted'], ['company_id', '=', cid], ['invoice_date', '>=', desde24m]],
+        ['partner_id', 'commercial_partner_id', 'invoice_user_id', 'invoice_date', 'amount_untaxed_signed', ...('partner_shipping_id' in cMove ? ['partner_shipping_id'] : [])],
+        { pageSize: 1000, context })
+      const { resumen, vendedor } = resumirSucursales(facturas.map((f) => ({
+        partnerId: m2o(f.partner_id)?.id ?? null, entregaId: m2o(f.partner_shipping_id)?.id ?? null, empresaId: m2o(f.commercial_partner_id)?.id ?? null,
+        userId: m2o(f.invoice_user_id)?.id ?? null, fecha: typeof f.invoice_date === 'string' ? f.invoice_date : null, monto: Number(f.amount_untaxed_signed ?? 0),
+      })), desde6m, desde12m)
+
+      const { data: actuales, error: e1 } = await sb.from('vis_clientes').select('id, odoo_partner_id, origen_ubicacion, vendedor_id').eq('empresa_id', empresaApp.id).not('odoo_partner_id', 'is', null)
+      if (e1) throw new Error(e1.message)
+      const existentes = new Map((actuales ?? []).map((c) => [c.odoo_partner_id!, c]))
+      type Hijo = PartnerOdoo & { parent_id?: unknown; type?: unknown; commercial_partner_id?: unknown; user_id?: unknown; active?: boolean }
+      const hijos: Hijo[] = []
+      for (const lote of lotes([...new Set([...resumen.keys(), ...existentes.keys()])], 1000)) {
+        hijos.push(...await odooCall<Hijo[]>('res.partner', 'search_read', [[['id', 'in', lote]]], { fields: [...CAMPOS_PARTNER, 'parent_id', 'type', 'commercial_partner_id', 'active'], context: { active_test: false } }))
+      }
+      // La empresa de cada sucursal, si está en la app.
+      const padres = new Map<number, string>()
+      const empresasOdoo = [...new Set(hijos.map((h) => m2o(h.commercial_partner_id)?.id).filter((x): x is number => !!x))]
+      for (const lote of lotes(empresasOdoo)) {
+        const { data, error: e2 } = await sb.from('vis_clientes').select('id, odoo_partner_id').is('empresa_id', null).in('odoo_partner_id', lote)
+        if (e2) throw new Error(e2.message)
+        for (const c of data ?? []) padres.set(c.odoo_partner_id!, c.id)
+      }
+      // Vendedor: el de Vitalica de su última factura de 12 meses; si no, el que tenía; si no, el de la ficha.
+      const deVitalica = (u: number | null | undefined) => { const v = u ? odooAApp.get(u) : undefined; return v && empresaDe.get(v) === empresaApp.id ? v : undefined }
+
+      const conUbicacion: Fila[] = []
+      const sinUbicacion: Fila[] = []
+      let insertados = 0
+      let actualizados = 0
+      for (const h of hijos) {
+        const ex = existentes.get(h.id)
+        const empresaOdoo = m2o(h.commercial_partner_id)
+        // Solo direcciones (entrega, otra, factura) de una empresa: un "contacto" es una persona.
+        if (!ex && (!m2o(h.parent_id) || !empresaOdoo || empresaOdoo.id === h.id || !TIPOS_SUCURSAL.includes(String(h.type)) || h.active === false)) continue
+        const { fila, pisaUbicacion } = filaCliente(h, ex?.origen_ubicacion, !!ex)
+        const r = resumen.get(h.id)
+        Object.assign(fila, {
+          razon_social: nombreSucursal(empresaOdoo?.name ?? null, h),
+          empresa_id: empresaApp.id,
+          cliente_padre_id: empresaOdoo ? padres.get(empresaOdoo.id) ?? null : null,
+          ultima_factura_fecha: r?.ultima ?? null,
+          ventas_6m_gs: r?.ventas6m ?? 0,
+          facturas_6m: r?.facturas6m ?? 0,
+          vendedor_id: deVitalica(vendedor.get(h.id)) ?? ex?.vendedor_id ?? deVitalica(m2o(h.user_id)?.id) ?? null,
+        })
+        ;(pisaUbicacion ? conUbicacion : sinUbicacion).push(fila)
+        if (ex) actualizados++
+        else insertados++
+      }
+      for (const grupo of [conUbicacion, sinUbicacion]) {
+        for (const lote of lotes(grupo)) {
+          const { error: e3 } = await sb.from('vis_clientes').upsert(lote as never, { onConflict: 'odoo_partner_id' })
+          if (e3) throw new Error(e3.message)
+        }
+      }
+      return { leidos: facturas.length, insertados, actualizados }
     }))
     return { ok: true, pasos }
   } catch (e) {

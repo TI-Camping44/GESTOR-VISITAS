@@ -17,7 +17,8 @@ export type Database = {
       }
       vis_clientes: {
         Row: {
-          activo: boolean; ciudad: string | null; creado_por: string | null; created_at: string; departamento: string | null
+          activo: boolean; ciudad: string | null; cliente_padre_id: string | null; creado_por: string | null; created_at: string; departamento: string | null
+          empresa_id: string | null
           direccion: string | null; es_ejemplo: boolean; facturas_6m: number; id: string; lat: number | null; lat_odoo: number | null
           lng: number | null; lng_odoo: number | null; notas: string | null; odoo_alta_fecha: string | null; odoo_partner_id: number | null
           origen_ubicacion: Database['public']['Enums']['vis_origen_ubic'] | null; razon_social: string; ruc: string | null
@@ -26,7 +27,8 @@ export type Database = {
           updated_at: string; vendedor_id: string | null; ventas_6m_gs: number; zona_id: string | null
         }
         Insert: {
-          activo?: boolean; ciudad?: string | null; creado_por?: string | null; created_at?: string; departamento?: string | null
+          activo?: boolean; ciudad?: string | null; cliente_padre_id?: string | null; creado_por?: string | null; created_at?: string; departamento?: string | null
+          empresa_id?: string | null
           direccion?: string | null; es_ejemplo?: boolean; facturas_6m?: number; id?: string; lat?: number | null; lat_odoo?: number | null
           lng?: number | null; lng_odoo?: number | null; notas?: string | null; odoo_alta_fecha?: string | null; odoo_partner_id?: number | null
           origen_ubicacion?: Database['public']['Enums']['vis_origen_ubic'] | null; razon_social: string; ruc?: string | null

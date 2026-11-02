@@ -636,4 +636,41 @@ do $$ begin
   assert not exists (select 1 from vis_alertas_alta a join vis_clientes c on c.id = a.cliente_id where c.razon_social = 'De Odoo'), 'lo del sync no alerta';
 end $$;
 
+-- ── Sucursales de Vitalica (0020) ──────────────────────────────────
+do $$ begin
+  insert into vis_clientes (odoo_partner_id, razon_social, empresa_id, cliente_padre_id, vendedor_id, telefono, lat, lng)
+  values (99100, 'De Odoo · Sucursal Centro', (select id from vis_empresas where nombre = 'Vitalica'),
+          (select id from vis_clientes where razon_social = 'De Odoo'), (select id from vis_vendedores where nombre = 'Hugo'),
+          '0981 400 400', -23.4075, -57.4350);
+end $$;
+select pg_temp.como('hugo@vitalica.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert exists (select 1 from vis_clientes_v where razon_social = 'De Odoo · Sucursal Centro'), 'Hugo ve su sucursal';
+end $$;
+reset role;
+select pg_temp.como('sergio@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert exists (select 1 from vis_clientes where razon_social = 'De Odoo · Sucursal Centro'), 'el admin de Vitalica la ve';
+  assert exists (select 1 from vis_clientes where razon_social = 'De Odoo'), 'y los clientes compartidos';
+end $$;
+reset role;
+select pg_temp.como('super@camping44.com.py') \gset
+set role authenticated;
+do $$ declare n int; begin
+  assert not exists (select 1 from vis_clientes where empresa_id is not null), 'Camping 44 no ve las sucursales de Vitalica';
+  assert exists (select 1 from vis_clientes where razon_social = 'De Odoo'), 'pero sí la empresa (compartida)';
+  update vis_clientes set notas = 'x' where razon_social = 'De Odoo · Sucursal Centro';
+  get diagnostics n = row_count; assert n = 0, 'ni la puede editar';
+end $$;
+reset role;
+select pg_temp.como('beto@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert not exists (select 1 from vis_buscar_duplicados('Sucursal Centro', '0981 400 400', null, -23.4075, -57.4350)),
+    'los duplicados no muestran sucursales de otra empresa';
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;
