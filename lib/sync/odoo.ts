@@ -25,6 +25,18 @@ function dominioFacturas(desde?: string) {
 
 const lotes = <T,>(xs: T[], n = LOTE) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, (i + 1) * n))
 
+// Supabase devuelve como mucho 1000 filas por consulta: se lee de a páginas (ordenadas por id) hasta el final.
+// Sin esto, a los clientes después del 1000 se los trataba como nuevos y Odoo les pisaba la ubicación corregida.
+async function leerTodo<T>(pagina: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
+  const filas: T[] = []
+  for (let desde = 0; ; desde += 1000) {
+    const { data, error } = await pagina(desde, desde + 999)
+    if (error) throw new Error(error.message)
+    filas.push(...(data ?? []))
+    if ((data?.length ?? 0) < 1000) return filas
+  }
+}
+
 // ── Revisión (para el panel, antes de sincronizar) ─────────────────────
 export type Revision = {
   version: string
@@ -173,8 +185,7 @@ export async function sincronizarOdoo(): Promise<ResultadoSync> {
       const grupos = await odooCall<Fila[]>('account.move', 'read_group', [dominioFacturas(desde24m), ['invoice_user_id'], ['invoice_user_id']], { lazy: false })
       const ids = grupos.map((g) => m2o(g.invoice_user_id)?.id).filter((x): x is number => !!x)
       const usuarios = ids.length ? await odooCall<Fila[]>('res.users', 'search_read', [[['id', 'in', ids]]], { fields: ['id', 'login'], context: { active_test: false } }) : []
-      const { data: app, error } = await sb.from('vis_vendedores').select('id, email, odoo_user_id, empresa_id')
-      if (error) throw new Error(error.message)
+      const app = await leerTodo((d, h) => sb.from('vis_vendedores').select('id, email, odoo_user_id, empresa_id').order('id').range(d, h))
       for (const v of app ?? []) empresaDe.set(v.id, v.empresa_id)
       let actualizados = 0
       for (const u of usuarios) {
@@ -215,8 +226,8 @@ export async function sincronizarOdoo(): Promise<ResultadoSync> {
     // 3. Clientes: los que facturaron en 2 años, los que ya están en la app y los de la cartera de un vendedor de la app.
     pasos.push(await conLog('clientes', async () => {
       // Las sucursales (empresa_id) las mantiene el paso 4.
-      const { data: actuales, error } = await sb.from('vis_clientes').select('id, odoo_partner_id, origen_ubicacion, vendedor_id').not('odoo_partner_id', 'is', null).is('empresa_id', null)
-      if (error) throw new Error(error.message)
+      const actuales = await leerTodo((d, h) => sb.from('vis_clientes').select('id, odoo_partner_id, origen_ubicacion, vendedor_id')
+        .not('odoo_partner_id', 'is', null).is('empresa_id', null).order('id').range(d, h))
       const existentes = new Map((actuales ?? []).map((c) => [c.odoo_partner_id!, c]))
       const ids = new Set<number>([...existentes.keys()])
       for (const [p, f] of ultima) if (f >= desde24m) ids.add(p)
@@ -282,8 +293,8 @@ export async function sincronizarOdoo(): Promise<ResultadoSync> {
         userId: m2o(f.invoice_user_id)?.id ?? null, fecha: typeof f.invoice_date === 'string' ? f.invoice_date : null, monto: Number(f.amount_untaxed_signed ?? 0),
       })), desde6m, desde12m)
 
-      const { data: actuales, error: e1 } = await sb.from('vis_clientes').select('id, odoo_partner_id, origen_ubicacion, vendedor_id').eq('empresa_id', empresaApp.id).not('odoo_partner_id', 'is', null)
-      if (e1) throw new Error(e1.message)
+      const actuales = await leerTodo((d, h) => sb.from('vis_clientes').select('id, odoo_partner_id, origen_ubicacion, vendedor_id')
+        .eq('empresa_id', empresaApp.id).not('odoo_partner_id', 'is', null).order('id').range(d, h))
       const existentes = new Map((actuales ?? []).map((c) => [c.odoo_partner_id!, c]))
       type Hijo = PartnerOdoo & { parent_id?: unknown; type?: unknown; commercial_partner_id?: unknown; user_id?: unknown; active?: boolean }
       const hijos: Hijo[] = []
@@ -356,8 +367,7 @@ export async function sincronizarOdoo(): Promise<ResultadoSync> {
       for (const lote of lotes(ids)) {
         for (const p of await odooCall<Fila[]>('product.product', 'search_read', [[['id', 'in', lote]]], { fields: ['id', 'name', 'default_code'], context: { ...context, active_test: false } })) prods.set(Number(p.id), p)
       }
-      const { data: actuales, error: e1 } = await sb.from('vis_productos').select('id, nombre, odoo_product_id').eq('empresa_id', empresaApp.id)
-      if (e1) throw new Error(e1.message)
+      const actuales = await leerTodo((d, h) => sb.from('vis_productos').select('id, nombre, odoo_product_id').eq('empresa_id', empresaApp.id).order('id').range(d, h))
       const porOdoo = new Map((actuales ?? []).filter((p) => p.odoo_product_id != null).map((p) => [p.odoo_product_id!, p]))
       const porNombre = new Map((actuales ?? []).map((p) => [p.nombre.trim().toLowerCase(), p]))
       const vistos = new Set<string>()
