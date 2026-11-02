@@ -13,7 +13,7 @@ import { hace } from '@/lib/fechas'
 import { COLOR_ESTADO, ETIQUETA_ESTADO } from '@/lib/config'
 import { cn, mensajeError } from '@/lib/utils'
 import { useVendedor } from '@/components/vendedor/Proveedor'
-import { urlVisita } from '@/lib/rutas'
+import { urlParaVisitar } from '@/lib/rutas'
 import { ListaClientes } from '@/components/vendedor/ListaClientes'
 import type { EstadoCliente } from '@/lib/database.types'
 
@@ -21,7 +21,7 @@ type C = { id: string; razon_social: string; ciudad: string | null; lat: number;
 const ESTADOS: EstadoCliente[] = ['activo', 'potencial', 'inactivo']
 
 export default function MapaVendedor() {
-  const { perfil, nombreVendedor } = useVendedor()
+  const { perfil, nombreVendedor, esMedica } = useVendedor()
   const [vista, setVista] = useState<'lista' | 'mapa'>('lista')
   const [clientes, setClientes] = useState<C[]>([])
   const [soloMios, setSoloMios] = useState(true)
@@ -62,8 +62,8 @@ export default function MapaVendedor() {
     id: c.id, lat: c.lat, lng: c.lng, color: COLOR_ESTADO[c.estado], titulo: c.razon_social,
     detalle: `${ETIQUETA_ESTADO[c.estado]} · última visita ${hace(c.ultima_visita)}`
       + (c.vendedor_id && c.vendedor_id !== perfil.id ? ` · Cliente de ${nombreVendedor(c.vendedor_id)}` : !c.vendedor_id ? ' · Sin vendedor asignado' : ''),
-    href: urlVisita(c.id), textoLink: 'Registrar visita',
-  })), [visibles, perfil.id, nombreVendedor])
+    href: urlParaVisitar(esMedica, c.id), textoLink: esMedica ? 'Ver médicos' : 'Registrar visita',
+  })), [visibles, perfil.id, nombreVendedor, esMedica])
 
   const alternar = (e: EstadoCliente) => setFiltro((f) => {
     const n = new Set(f)
@@ -74,7 +74,10 @@ export default function MapaVendedor() {
 
   return (
     <div className="flex flex-col gap-3">
-      <h1 className="text-xl font-semibold">Mis clientes</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">{esMedica ? 'Mis lugares' : 'Mis clientes'}</h1>
+        {esMedica && <Link href="/lugar/nuevo" className="rounded-lg bg-marca px-2.5 py-1.5 text-sm font-medium text-white">+ Nuevo lugar</Link>}
+      </div>
       <div className="flex rounded-xl bg-fondo p-1 ring-1 ring-borde" role="tablist">
         {(['lista', 'mapa'] as const).map((v) => (
           <button key={v} role="tab" aria-selected={vista === v} onClick={() => setVista(v)}
@@ -121,7 +124,7 @@ export default function MapaVendedor() {
                   <div className="flex items-center gap-2"><PuntoEstado estado={c.estado} /><span className="text-xs text-tenue">{fmtDistancia(c.distancia_m)} · {c.ciudad ?? ''}</span></div>
                   {deOtro(c) && <p className="text-xs text-amber-700 dark:text-amber-300">Cliente de {nombreVendedor(c.vendedor_id)}</p>}
                 </div>
-                <Link href={urlVisita(c.id)} className="shrink-0 text-sm font-medium text-marca">Visitar →</Link>
+                <Link href={urlParaVisitar(esMedica, c.id)} className="shrink-0 text-sm font-medium text-marca">{esMedica ? 'Médicos →' : 'Visitar →'}</Link>
               </Tarjeta>
             </li>
           ))}

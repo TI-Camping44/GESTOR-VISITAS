@@ -11,7 +11,7 @@ import { guardarCache, leerCache } from '@/lib/offline/db'
 import { fmtFecha, fmtGuaranies, hace } from '@/lib/fechas'
 import { ETIQUETA_ESTADO, COLOR_ESTADO } from '@/lib/config'
 import { cn, linkTel, linkWhatsApp } from '@/lib/utils'
-import { urlVisita } from '@/lib/rutas'
+import { urlParaVisitar } from '@/lib/rutas'
 import type { EstadoCliente } from '@/lib/database.types'
 
 export type ClienteCartera = {
@@ -26,7 +26,7 @@ const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLower
 const POR_PAGINA = 60
 
 export function ListaClientes() {
-  const { perfil } = useVendedor()
+  const { perfil, esMedica } = useVendedor()
   const [clientes, setClientes] = useState<ClienteCartera[] | null>(null)
   const [sinSenal, setSinSenal] = useState(false)
   const [q, setQ] = useState('')
@@ -64,17 +64,18 @@ export function ListaClientes() {
   const conteo = useMemo(() => Object.fromEntries(ESTADOS.map((e) => [e, (clientes ?? []).filter((c) => c.estado === e).length])), [clientes])
   const alternar = (e: EstadoCliente) => setEstados((s) => { const n = new Set(s); if (n.has(e)) n.delete(e); else n.add(e); return n })
 
-  if (!clientes) return <p className="text-sm text-tenue">Cargando tus clientes…</p>
+  const palabra = esMedica ? 'lugares' : 'clientes'
+  if (!clientes) return <p className="text-sm text-tenue">Cargando tus {palabra}…</p>
 
   return (
     <div className="flex flex-col gap-3">
-      {sinSenal && <Aviso tipo="info">Sin señal: mostrando tus clientes guardados en el celular.</Aviso>}
+      {sinSenal && <Aviso tipo="info">Sin señal: mostrando tus {palabra} guardados en el celular.</Aviso>}
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-tenue" aria-hidden />
         <Entrada value={q} onChange={(e) => { setQ(e.target.value); setMostrar(POR_PAGINA) }} placeholder="Buscar por nombre, ciudad o RUC" className="pl-9" aria-label="Buscar cliente" />
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {ESTADOS.map((e) => (
+        {!esMedica && ESTADOS.map((e) => (
           <button key={e} type="button" onClick={() => alternar(e)} aria-pressed={estados.has(e)}
             className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm', estados.has(e) ? 'border-borde bg-superficie' : 'border-transparent bg-fondo opacity-50')}>
             <span className="size-2.5 rounded-full" style={{ background: COLOR_ESTADO[e] }} aria-hidden />{ETIQUETA_ESTADO[e]} <span className="text-tenue">{conteo[e]}</span>
@@ -82,13 +83,15 @@ export function ListaClientes() {
         ))}
         <Selector value={orden} onChange={(e) => setOrden(e.target.value as Orden)} className="ml-auto w-auto py-1 text-sm" aria-label="Ordenar">
           <option value="visita">Hace más que no visito</option>
-          <option value="compras">Los que más compran</option>
+          {!esMedica && <option value="compras">Los que más compran</option>}
           <option value="nombre">Por nombre</option>
         </Selector>
       </div>
-      <p className="text-sm text-tenue">{lista.length} de {clientes.length} clientes</p>
+      <p className="text-sm text-tenue">{lista.length} de {clientes.length} {palabra}</p>
 
-      {clientes.length === 0 && <Vacio titulo="Todavía no tenés clientes asignados">Los asigna el supervisor, o llegan solos desde Odoo con tus facturas.</Vacio>}
+      {clientes.length === 0 && (esMedica
+        ? <Vacio titulo="Todavía no cargaste lugares"><Link href="/lugar/nuevo" className="font-medium text-marca underline">Cargá el primer hospital o consultorio</Link>, parado ahí.</Vacio>
+        : <Vacio titulo="Todavía no tenés clientes asignados">Los asigna el supervisor, o llegan solos desde Odoo con tus facturas.</Vacio>)}
 
       <ul className="flex flex-col gap-2">
         {lista.slice(0, mostrar).map((c) => {
@@ -101,9 +104,9 @@ export function ListaClientes() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{c.razon_social}</p>
-                    <p className="flex items-center gap-2 text-xs text-tenue"><PuntoEstado estado={c.estado} />{c.ciudad ?? 'Sin ciudad'}{c.lat == null && ' · sin ubicación'}</p>
+                    <p className="flex items-center gap-2 text-xs text-tenue">{!esMedica && <PuntoEstado estado={c.estado} />}{c.ciudad ?? 'Sin ciudad'}{c.lat == null && ' · sin ubicación'}</p>
                   </div>
-                  <Link href={urlVisita(c.id)} className="shrink-0 text-sm font-medium text-marca">Visitar →</Link>
+                  <Link href={urlParaVisitar(esMedica, c.id)} className="shrink-0 text-sm font-medium text-marca">{esMedica ? 'Médicos →' : 'Visitar →'}</Link>
                 </div>
                 <p className="mt-1 text-xs text-tenue">
                   Última visita: {hace(c.ultima_visita)}

@@ -11,6 +11,8 @@ import type { Jornada, Perfil } from '@/lib/database.types'
 
 type Ctx = {
   perfil: Perfil
+  /** Visitadora médica: ve lugares y médicos en vez de clientes. */
+  esMedica: boolean
   jornada: Jornada | null
   cargandoJornada: boolean
   pendientes: { visitas: number; posiciones: number }
@@ -98,14 +100,21 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
       .then(({ data }) => { if (data) void guardarCache(`cartera:${inicial.id}`, data).catch(() => {}) })
     void sb.from('vis_resultados').select('*').eq('activo', true).order('orden')
       .then(({ data }) => { if (data?.length) void guardarCache('resultados', data).catch(() => {}) })
+    if (inicial.tipo === 'medica') {
+      void sb.from('vis_medicos_v').select('*').order('nombre').limit(3000)
+        .then(({ data }) => { if (data) void guardarCache(`medicos:${inicial.id}`, data).catch(() => {}) })
+      void sb.from('vis_productos').select('*').eq('activo', true).order('orden').order('nombre')
+        .then(({ data }) => { if (data) void guardarCache('productos', data).catch(() => {}) })
+    }
     if (!('serviceWorker' in navigator)) return
     const clave = 'vis-precarga'
     try { if (Date.now() - Number(localStorage.getItem(clave) ?? 0) < 6 * 3600_000) return } catch { /* sin almacenamiento: igual precarga */ }
     void navigator.serviceWorker.ready.then((reg) => {
-      reg.active?.postMessage({ tipo: 'precargar', urls: ['/hoy', '/visitas', '/mapa', '/prospecto/nuevo', '/visita', '/offline'] })
+      const urls = inicial.tipo === 'medica' ? ['/hoy', '/visitas', '/mapa', '/medicos', '/lugar', '/visita', '/offline'] : ['/hoy', '/visitas', '/mapa', '/prospecto/nuevo', '/visita', '/offline']
+      reg.active?.postMessage({ tipo: 'precargar', urls })
       try { localStorage.setItem(clave, String(Date.now())) } catch { /* nada */ }
     })
-  }, [inicial.id])
+  }, [inicial.id, inicial.tipo])
 
   // Señal, cola y subida periódica (las visitas offline se suben aunque no haya jornada).
   useEffect(() => {
@@ -153,7 +162,7 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
   }, [subir, refrescarPendientes, inicial.id])
 
   return (
-    <Contexto.Provider value={{ perfil, jornada, cargandoJornada, pendientes, enLinea, erroresSubida, iniciarJornada, terminarJornada, aceptarAviso, refrescarPendientes, nombreVendedor }}>
+    <Contexto.Provider value={{ perfil, esMedica: perfil.tipo === 'medica', jornada, cargandoJornada, pendientes, enLinea, erroresSubida, iniciarJornada, terminarJornada, aceptarAviso, refrescarPendientes, nombreVendedor }}>
       {children}
     </Contexto.Provider>
   )

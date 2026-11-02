@@ -18,6 +18,8 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
   }
   // Clientes dados de alta en zona de otro vendedor, sin revisar (las de su gente, por RLS).
   const { count: altas } = await sb.from('vis_alertas_alta').select('id', { count: 'exact', head: true }).is('revisada_el', null)
+  // Visita médica: el menú aparece si la empresa tiene alguna visitadora.
+  const { count: visitadoras } = await sb.from('vis_vendedores').select('id', { count: 'exact', head: true }).eq('tipo', 'medica').eq('activo', true)
   return (
     <div data-empresa={temaEmpresa(perfil.empresa)} className="min-h-full bg-fondo text-tinta lg:grid lg:grid-cols-[220px_1fr]">
       <aside className="border-b border-borde bg-barra px-3 py-3 text-barra-tinta lg:border-b-0 lg:border-r">
@@ -30,7 +32,7 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
           <p className="truncate text-xs text-barra-tenue lg:mt-1">{perfil.nombre}</p>
           {perfil.multi_empresa && <SelectorEmpresa actual={perfil.empresa_id} />}
         </div>
-        <NavAdmin rol={perfil.rol} altas={altas ?? 0} />
+        <NavAdmin rol={perfil.rol} altas={altas ?? 0} medica={(visitadoras ?? 0) > 0} />
         <SelectorTema enBarra className="mt-3 hidden lg:flex" />
         <BotonSalir className="mt-3 hidden w-full lg:flex" />
         </div>

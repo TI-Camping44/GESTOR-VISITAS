@@ -9,14 +9,14 @@ import { useVendedor } from '@/components/vendedor/Proveedor'
 import { Entrada, PuntoEstado, Tarjeta } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { leerCache } from '@/lib/offline/db'
-import { urlVisita } from '@/lib/rutas'
+import { urlParaVisitar } from '@/lib/rutas'
 import type { EstadoCliente } from '@/lib/database.types'
 
 type Encontrado = { id: string; razon_social: string; ciudad: string | null; direccion: string | null; estado: EstadoCliente | null; ruc?: string | null; vendedor_id?: string | null }
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 export function BuscarCliente({ paradas }: { paradas: Map<string, string> }) {
-  const { perfil, nombreVendedor } = useVendedor()
+  const { perfil, nombreVendedor, esMedica } = useVendedor()
   const [q, setQ] = useState('')
   const [cartera, setCartera] = useState<Encontrado[]>([])
   const [remotos, setRemotos] = useState<Encontrado[]>([])
@@ -48,13 +48,15 @@ export function BuscarCliente({ paradas }: { paradas: Map<string, string> }) {
 
   return (
     <Tarjeta className="flex flex-col gap-2">
-      <label htmlFor="buscar-cliente" className="text-sm font-medium">¿Visitar a otro cliente?</label>
+      <label htmlFor="buscar-cliente" className="text-sm font-medium">{esMedica ? "¿Ir a otro lugar?" : "¿Visitar a otro cliente?"}</label>
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-tenue" aria-hidden />
         <Entrada id="buscar-cliente" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nombre, ciudad o RUC" className="pl-9" autoComplete="off" />
       </div>
       {q.trim().length >= 2 && resultados.length === 0 && (
-        <p className="text-sm text-tenue">No aparece entre tus clientes. Si es nuevo, dalo de alta en <Link href="/prospecto/nuevo" className="font-medium text-marca underline">Nuevo cliente</Link>.</p>
+        <p className="text-sm text-tenue">{esMedica
+          ? <>No aparece entre tus lugares. Si es nuevo, cargalo en <Link href="/lugar/nuevo" className="font-medium text-marca underline">Nuevo lugar</Link>.</>
+          : <>No aparece entre tus clientes. Si es nuevo, dalo de alta en <Link href="/prospecto/nuevo" className="font-medium text-marca underline">Nuevo cliente</Link>.</>}</p>
       )}
       {resultados.length > 0 && (
         <ul className="flex flex-col divide-y divide-borde">
@@ -62,7 +64,7 @@ export function BuscarCliente({ paradas }: { paradas: Map<string, string> }) {
             const parada = paradas.get(c.id)
             return (
               <li key={c.id}>
-                <Link href={urlVisita(c.id, { parada })} className="flex items-center justify-between gap-3 py-2">
+                <Link href={urlParaVisitar(esMedica, c.id, { parada })} className="flex items-center justify-between gap-3 py-2">
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{c.razon_social}</span>
                     <span className="flex items-center gap-2 text-xs text-tenue">

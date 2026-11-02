@@ -8,6 +8,24 @@ export function urlVisita(clienteId: string, extra: { parada?: string | null; al
   return `/visita?${q}`
 }
 
+/** Visita médica: el lugar (hospital, consultorio) con sus médicos. */
+export function urlLugar(lugarId: string, extra: { parada?: string | null } = {}) {
+  const q = new URLSearchParams({ c: lugarId })
+  if (extra.parada) q.set('parada', extra.parada)
+  return `/lugar?${q}`
+}
+
+/** Visita a un médico en un lugar (misma pantalla de visita: funciona sin señal). */
+export function urlVisitaMedico(lugarId: string, medicoId: string, extra: { parada?: string | null } = {}) {
+  const q = new URLSearchParams({ c: lugarId, m: medicoId })
+  if (extra.parada) q.set('parada', extra.parada)
+  return `/visita?${q}`
+}
+
+/** A dónde va «Visitar» desde una parada o un cliente: la visitadora médica pasa por el lugar y elige el médico. */
+export const urlParaVisitar = (medica: boolean, clienteId: string, extra: { parada?: string | null } = {}) =>
+  medica ? urlLugar(clienteId, extra) : urlVisita(clienteId, extra)
+
 export const COLOR_ESTADO_RUTA: Record<EstadoRuta, string> = {
   borrador: 'bg-fondo text-tenue',
   publicada: 'bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-200',

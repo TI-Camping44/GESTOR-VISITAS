@@ -18,7 +18,7 @@ export type Database = {
       vis_clientes: {
         Row: {
           activo: boolean; ciudad: string | null; cliente_padre_id: string | null; creado_por: string | null; created_at: string; departamento: string | null
-          empresa_id: string | null
+          empresa_id: string | null; categoria: 'cliente' | 'lugar'; tipo_lugar: string | null
           direccion: string | null; es_ejemplo: boolean; facturas_6m: number; id: string; lat: number | null; lat_odoo: number | null
           lng: number | null; lng_odoo: number | null; notas: string | null; odoo_alta_fecha: string | null; odoo_partner_id: number | null
           origen_ubicacion: Database['public']['Enums']['vis_origen_ubic'] | null; razon_social: string; ruc: string | null
@@ -28,7 +28,7 @@ export type Database = {
         }
         Insert: {
           activo?: boolean; ciudad?: string | null; cliente_padre_id?: string | null; creado_por?: string | null; created_at?: string; departamento?: string | null
-          empresa_id?: string | null
+          empresa_id?: string | null; categoria?: 'cliente' | 'lugar'; tipo_lugar?: string | null
           direccion?: string | null; es_ejemplo?: boolean; facturas_6m?: number; id?: string; lat?: number | null; lat_odoo?: number | null
           lng?: number | null; lng_odoo?: number | null; notas?: string | null; odoo_alta_fecha?: string | null; odoo_partner_id?: number | null
           origen_ubicacion?: Database['public']['Enums']['vis_origen_ubic'] | null; razon_social: string; ruc?: string | null
@@ -64,8 +64,8 @@ export type Database = {
         Relationships: Rel[]
       }
       vis_resultados: {
-        Row: { activo: boolean; es_venta: boolean; id: number; nombre: string; orden: number }
-        Insert: { activo?: boolean; es_venta?: boolean; id?: number; nombre: string; orden?: number }
+        Row: { activo: boolean; es_venta: boolean; id: number; nombre: string; orden: number; tipo: TipoUsuario }
+        Insert: { activo?: boolean; es_venta?: boolean; id?: number; nombre: string; orden?: number; tipo?: TipoUsuario }
         Update: Partial<Database['public']['Tables']['vis_resultados']['Insert']>
         Relationships: []
       }
@@ -88,8 +88,8 @@ export type Database = {
         Relationships: Rel[]
       }
       vis_vendedores: {
-        Row: { activo: boolean; auth_user_id: string | null; base_lat: number | null; base_lng: number | null; created_at: string; email: string; id: string; meta_diaria: number; meta_semanal: number; nombre: string; odoo_user_id: number | null; rol: Database['public']['Enums']['vis_rol']; telefono: string | null; tracking_aceptado_el: string | null; empresa_id: string; multi_empresa: boolean; empresa_activa: string | null; equipo_id: string | null }
-        Insert: { activo?: boolean; auth_user_id?: string | null; base_lat?: number | null; base_lng?: number | null; created_at?: string; email: string; id?: string; meta_diaria?: number; meta_semanal?: number; nombre: string; odoo_user_id?: number | null; rol?: Database['public']['Enums']['vis_rol']; telefono?: string | null; tracking_aceptado_el?: string | null; empresa_id?: string }
+        Row: { activo: boolean; auth_user_id: string | null; base_lat: number | null; base_lng: number | null; created_at: string; email: string; id: string; meta_diaria: number; meta_semanal: number; nombre: string; odoo_user_id: number | null; rol: Database['public']['Enums']['vis_rol']; telefono: string | null; tracking_aceptado_el: string | null; empresa_id: string; multi_empresa: boolean; empresa_activa: string | null; equipo_id: string | null; tipo: TipoUsuario }
+        Insert: { activo?: boolean; auth_user_id?: string | null; base_lat?: number | null; base_lng?: number | null; created_at?: string; email: string; id?: string; meta_diaria?: number; meta_semanal?: number; nombre: string; odoo_user_id?: number | null; rol?: Database['public']['Enums']['vis_rol']; telefono?: string | null; tracking_aceptado_el?: string | null; empresa_id?: string; tipo?: TipoUsuario }
         Update: Partial<Database['public']['Tables']['vis_vendedores']['Insert']>
         Relationships: []
       }
@@ -99,14 +99,14 @@ export type Database = {
           fecha_hora: string; fotos: string[]; hizo_cobranza: boolean; hizo_pedido: boolean; id: string; lat: number | null; lng: number | null
           monto_cobrado_gs: number | null; observaciones: string | null; odoo_visita_id: number | null; origen: Database['public']['Enums']['vis_origen_visita']
           precision_m: number | null; proxima_visita: string | null; resultado_id: number | null; ruta_parada_id: string | null
-          vendedor_id: string | null; zona_id: string | null
+          vendedor_id: string | null; zona_id: string | null; medico_id: string | null; productos: ProductoVisita[]
         }
         Insert: {
           capturada_offline?: boolean; client_uuid?: string | null; cliente_id: string; created_at?: string; distancia_cliente_m?: number | null
           fecha_hora?: string; fotos?: string[]; hizo_cobranza?: boolean; hizo_pedido?: boolean; id?: string; lat?: number | null; lng?: number | null
           monto_cobrado_gs?: number | null; observaciones?: string | null; odoo_visita_id?: number | null; origen?: Database['public']['Enums']['vis_origen_visita']
           precision_m?: number | null; proxima_visita?: string | null; resultado_id?: number | null; ruta_parada_id?: string | null
-          vendedor_id?: string | null; zona_id?: string | null
+          vendedor_id?: string | null; zona_id?: string | null; medico_id?: string | null; productos?: ProductoVisita[]
         }
         Update: Partial<Database['public']['Tables']['vis_visitas']['Insert']>
         Relationships: Rel[]
@@ -129,6 +129,31 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['vis_equipos']['Insert']>
         Relationships: []
       }
+      vis_medicos: {
+        Row: {
+          activo: boolean; created_at: string; creado_por: string | null; email: string | null; empresa_id: string; especialidad: string | null
+          frecuencia_dias: number; id: string; nombre: string; notas: string | null; telefono: string | null; telefono_norm: string | null
+          updated_at: string; visitadora_id: string | null
+        }
+        Insert: {
+          activo?: boolean; creado_por?: string | null; email?: string | null; empresa_id: string; especialidad?: string | null
+          frecuencia_dias?: number; id?: string; nombre: string; notas?: string | null; telefono?: string | null; visitadora_id?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['vis_medicos']['Insert']>
+        Relationships: []
+      }
+      vis_medico_lugares: {
+        Row: { medico_id: string; lugar_id: string; horario: string | null }
+        Insert: { medico_id: string; lugar_id: string; horario?: string | null }
+        Update: Partial<Database['public']['Tables']['vis_medico_lugares']['Insert']>
+        Relationships: []
+      }
+      vis_productos: {
+        Row: { activo: boolean; codigo: string | null; empresa_id: string; id: string; nombre: string; odoo_product_id: number | null; orden: number }
+        Insert: { activo?: boolean; codigo?: string | null; empresa_id: string; id?: string; nombre: string; odoo_product_id?: number | null; orden?: number }
+        Update: Partial<Database['public']['Tables']['vis_productos']['Insert']>
+        Relationships: []
+      }
       vis_zonas: {
         Row: { activo: boolean; ciudades: string[]; ciudades_alias: string[]; color: string; created_at: string; frecuencia: string | null; id: string; nombre: string; poligono: unknown; responsable: string | null; semanas_mes: number[]; vendedor_id: string | null; empresa_id: string; equipo_id: string | null }
         Insert: { activo?: boolean; ciudades?: string[]; ciudades_alias?: string[]; color?: string; created_at?: string; frecuencia?: string | null; id?: string; nombre: string; poligono?: unknown; responsable?: string | null; semanas_mes?: number[]; vendedor_id?: string | null; equipo_id?: string | null }
@@ -141,6 +166,10 @@ export type Database = {
         Row: { [K in keyof Database['public']['Tables']['vis_clientes']['Row']]: Database['public']['Tables']['vis_clientes']['Row'][K] | null } & {
           estado: EstadoCliente | null; ultima_visita: string | null
         }
+        Relationships: Rel[]
+      }
+      vis_medicos_v: {
+        Row: Database['public']['Tables']['vis_medicos']['Row'] & { ultima_visita: string | null; lugares: LugarDeMedico[] }
         Relationships: Rel[]
       }
       vis_resumen_diario: {
@@ -170,6 +199,7 @@ export type Database = {
         Returns: { ciudad: string; distancia_m: number; estado: EstadoCliente; id: string; lat: number; lng: number; razon_social: string; telefono: string; telefono_norm: string; ultima_visita: string | null }[]
       }
       vis_crear_prospecto: { Args: { p: Json }; Returns: Json }
+      vis_crear_lugar: { Args: { p: Json }; Returns: Json }
       vis_es_admin: { Args: never; Returns: boolean }
       vis_es_supervisor: { Args: never; Returns: boolean }
       vis_hoy: { Args: never; Returns: string }
@@ -234,11 +264,17 @@ export type Ruta = T['vis_rutas']['Row']
 export type Parada = T['vis_ruta_paradas']['Row']
 export type Visita = T['vis_visitas']['Row']
 export type Resultado = T['vis_resultados']['Row']
+export type Medico = Database['public']['Views']['vis_medicos_v']['Row']
+export type Producto = T['vis_productos']['Row']
 export type Jornada = T['vis_jornadas']['Row']
 export type PosicionActual = T['vis_posicion_actual']['Row']
 export type Rol = Database['public']['Enums']['vis_rol']
 export type EstadoRuta = Database['public']['Enums']['vis_estado_ruta']
 export type EstadoCliente = 'activo' | 'potencial' | 'inactivo'
+/** 'ventas': vendedor de siempre; 'medica': visitadora médica (médicos en hospitales y consultorios). */
+export type TipoUsuario = 'ventas' | 'medica'
+export type LugarDeMedico = { lugar_id: string; nombre: string; horario: string | null }
+export type ProductoVisita = { producto: string; muestras: number }
 
 export type Duplicado = { id: string; razon_social: string; telefono: string | null; ruc: string | null; ciudad: string | null; motivo: string; distancia_m: number | null }
 
@@ -265,6 +301,7 @@ export type Perfil = {
   tracking_aceptado_el: string | null
   empresa_id: string | null; empresa: string | null; multi_empresa: boolean
   equipo_id?: string | null; equipo?: string | null
+  tipo?: TipoUsuario
 }
 
 export type Empresa = { id: string; nombre: string }
