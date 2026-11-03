@@ -501,6 +501,9 @@ reset role;
 
 -- ── Equipos (0016): Mayorista y Venta externa en Camping 44 ──────────
 -- Supervisora → Mayorista con Antonio y Beto; Ale supervisa Venta externa con Vico.
+-- (Camping 44 ya no tiene Venta externa desde 0023: la prueba crea un segundo equipo para probar la separación.)
+insert into vis_equipos (empresa_id, nombre) select id, 'Venta externa' from vis_empresas where nombre = 'Camping 44'
+  and not exists (select 1 from vis_equipos q join vis_empresas e on e.id = q.empresa_id where e.nombre = 'Camping 44' and q.nombre = 'Venta externa');
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000f4', 'ale@camping44.com.py'),
   ('00000000-0000-0000-0000-0000000000f5', 'vico@camping44.com.py');
@@ -754,6 +757,14 @@ end $$;
 do $$ declare c vis_clientes; begin
   select * into c from vis_clientes where razon_social = 'Pisado por Odoo';
   assert c.lat = -25.2 and c.lng = -57.2 and c.origen_ubicacion = 'gps_visita', format('vuelve a la última ubicación de la calle: %s %s %s', c.lat, c.lng, c.origen_ubicacion);
+end $$;
+
+-- ── Sin Venta externa (0023) ───────────────────────────────────────
+\i supabase/migrations/0023_vis_sin_venta_externa.sql
+do $$ begin
+  assert not exists (select 1 from vis_equipos q join vis_empresas e on e.id = q.empresa_id where e.nombre = 'Camping 44' and q.nombre = 'Venta externa'), 'ya no hay Venta externa';
+  assert (select q.nombre from vis_vendedores v join vis_equipos q on q.id = v.equipo_id where v.nombre = 'Ale') = 'Mayorista', 'su gente pasa a Mayorista';
+  assert (select q.nombre from vis_zonas z join vis_equipos q on q.id = z.equipo_id where z.nombre = 'Zona Externa') = 'Mayorista', 'y sus zonas';
 end $$;
 
 select 'OK: todas las pruebas pasaron' as resultado;

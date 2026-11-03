@@ -13,16 +13,21 @@ import { leerCoordenadas } from '@/lib/geo'
 import { mensajeError } from '@/lib/utils'
 import type { Empresa, Equipo, Perfil, Rol, TipoUsuario, Vendedor } from '@/lib/database.types'
 
-const ROLES: Record<Rol, string> = { vendedor: 'Vendedor', supervisor: 'Supervisor', admin: 'Admin' }
-const TIPOS: Record<TipoUsuario, string> = { ventas: 'App de ventas', medica: 'Visita médica' }
+// Rol y app en un solo selector: la visitadora médica es un vendedor con la app de visita médica.
+type RolApp = Rol | 'medica'
+const ROLES: Record<RolApp, string> = { vendedor: 'Vendedor', medica: 'Visitadora médica', supervisor: 'Supervisor', admin: 'Admin' }
+const rolApp = (v: Pick<Vendedor, 'rol' | 'tipo'>): RolApp => (v.rol === 'vendedor' && v.tipo === 'medica' ? 'medica' : v.rol)
+const desdeRolApp = (x: RolApp): { rol: Rol; tipo: TipoUsuario } => (x === 'medica' ? { rol: 'vendedor', tipo: 'medica' } : { rol: x, tipo: 'ventas' })
 const AMBAS = 'ambas'
+const CHICO = 'min-h-9 px-2 py-1 text-sm' // casilleros de la tabla
+const LISTA = CHICO + ' pr-6' // selectores: lugar para la flechita
 const coordTexto = (lat: number | null, lng: number | null) => (lat != null && lng != null ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : '')
 
 export default function Vendedores() {
   const sb = supabaseNavegador()
   const [lista, setLista] = useState<Vendedor[]>([])
   const [perfil, setPerfil] = useState<Perfil | null>(null)
-  const [nuevo, setNuevo] = useState({ nombre: '', email: '', telefono: '', rol: 'vendedor' as Rol, tipo: 'ventas' as TipoUsuario, empresa: '', equipo: '' })
+  const [nuevo, setNuevo] = useState({ nombre: '', email: '', telefono: '', rol: 'vendedor' as RolApp, empresa: '', equipo: '' })
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [equipos, setEquipos] = useState<Equipo[]>([])
   const [deposito, setDeposito] = useState('')
@@ -55,6 +60,7 @@ export default function Vendedores() {
   const nombreEquipo = (id: string | null) => equipos.find((q) => q.id === id)?.nombre ?? ''
   const puedeEquipo = (v: Vendedor) => esAdmin && !v.multi_empresa && equiposDe(v.empresa_id).length > 0
     && (soyTI || (v.empresa_id === perfil?.empresa_id && !perfil?.equipo_id))
+  const hayEquipos = equipos.length > 0
   const empresaNueva = nuevo.empresa && nuevo.empresa !== AMBAS ? nuevo.empresa : nuevo.empresa === AMBAS ? null : perfil?.empresa_id
 
   async function asignarEquipo(v: Vendedor, equipo: string) {
@@ -87,7 +93,7 @@ export default function Vendedores() {
     if (!nuevo.nombre.trim() || !email.includes('@')) return setError('Completá nombre y email.')
     setError(null); setOk(null)
     const { data, error } = await sb.from('vis_vendedores')
-      .insert({ nombre: nuevo.nombre.trim(), email, rol: nuevo.rol, tipo: nuevo.rol === 'vendedor' ? nuevo.tipo : 'ventas', telefono: nuevo.telefono.trim() || null }).select('*').single()
+      .insert({ nombre: nuevo.nombre.trim(), email, ...desdeRolApp(nuevo.rol), telefono: nuevo.telefono.trim() || null }).select('*').single()
     if (error) return setError(error.code === '23505' ? 'Ese email ya tiene acceso.' : mensajeError(error))
     if (soyTI && nuevo.empresa && (nuevo.empresa === AMBAS || nuevo.empresa !== data.empresa_id)) {
       const ambas = nuevo.empresa === AMBAS
@@ -101,7 +107,7 @@ export default function Vendedores() {
     const r = await enviarInvitacion(data.id)
     if ('ok' in r) setOk(`${data.nombre} ya tiene acceso y le mandamos la invitación a ${data.email}.`)
     else setError(`${data.nombre} ya tiene acceso, pero no se pudo mandar la invitación: ${r.error}`)
-    setNuevo({ nombre: '', email: '', telefono: '', rol: 'vendedor', tipo: 'ventas', empresa: '', equipo: '' })
+    setNuevo({ nombre: '', email: '', telefono: '', rol: 'vendedor', empresa: '', equipo: '' })
     void cargar()
   }
 
@@ -130,18 +136,10 @@ export default function Vendedores() {
               <div><Etiqueta htmlFor="v-tel">Celular (opcional, para WhatsApp)</Etiqueta><Entrada id="v-tel" type="tel" inputMode="tel" placeholder="0981 123 456" value={nuevo.telefono} onChange={(e) => setNuevo({ ...nuevo, telefono: e.target.value })} /></div>
               <div>
                 <Etiqueta htmlFor="v-rol">Rol</Etiqueta>
-                <Selector id="v-rol" value={nuevo.rol} onChange={(e) => setNuevo({ ...nuevo, rol: e.target.value as Rol })}>
+                <Selector id="v-rol" value={nuevo.rol} onChange={(e) => setNuevo({ ...nuevo, rol: e.target.value as RolApp })}>
                   {Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </Selector>
               </div>
-              {nuevo.rol === 'vendedor' && (
-                <div>
-                  <Etiqueta htmlFor="v-tipo">App</Etiqueta>
-                  <Selector id="v-tipo" value={nuevo.tipo} onChange={(e) => setNuevo({ ...nuevo, tipo: e.target.value as TipoUsuario })}>
-                    {Object.entries(TIPOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </Selector>
-                </div>
-              )}
               {soyTI && (
                 <div>
                   <Etiqueta htmlFor="v-empresa">Empresa</Etiqueta>
@@ -175,74 +173,91 @@ export default function Vendedores() {
       )}
 
       <Tarjeta className="overflow-x-auto p-0">
-        <table className="w-full min-w-[1280px] text-sm">
+        <table className="w-full min-w-[980px] text-sm">
           <thead>
-            <tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-tenue">
-              <th className="px-4 py-2 font-medium">Nombre / email</th><th className="px-2 py-2 font-medium">Rol</th><th className="px-2 py-2 font-medium">Empresa</th><th className="px-2 py-2 font-medium">Equipo</th>
-              <th className="px-2 py-2 font-medium">Meta día</th><th className="px-2 py-2 font-medium">Meta semana</th>
-              <th className="px-2 py-2 font-medium">Punto de salida</th><th className="px-2 py-2 font-medium">Estado / invitar</th><th className="px-4 py-2 font-medium">Activo</th>
+            <tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-tenue [&>th]:whitespace-nowrap [&>th]:px-1.5 [&>th]:py-2.5 [&>th]:font-medium [&>th:first-child]:pl-4 [&>th:last-child]:pr-4">
+              <th>Usuario</th><th>Rol</th><th>Empresa</th>{hayEquipos && <th>Equipo</th>}
+              <th>Meta día / sem.</th><th>Punto de salida</th><th>Acceso · activo</th>
             </tr>
           </thead>
           <tbody>
-            {lista.map((v) => (
-              <tr key={v.id} className={`border-b border-borde last:border-0 ${v.activo ? '' : 'opacity-50'}`}>
-                <td className="px-4 py-2">
-                  <p className="font-medium">{v.nombre}</p><p className="text-xs text-tenue">{v.email}</p>
-                  <Entrada disabled={!editable(v)} type="tel" inputMode="tel" defaultValue={v.telefono ?? ''} placeholder="celular" className="mt-1 min-h-8 w-40 py-1 text-xs" aria-label={`Celular de ${v.nombre}`}
-                    onBlur={(e) => { const t = e.target.value.trim() || null; if (t !== v.telefono) void actualizar(v.id, { telefono: t }) }} />
-                </td>
-                <td className="px-2 py-2">
-                  <Selector disabled={!editable(v)} value={v.rol} onChange={(e) => void actualizar(v.id, { rol: e.target.value as Rol })} className="w-36" aria-label="Rol">
-                    {Object.entries(ROLES).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
-                  </Selector>
-                  {v.rol === 'vendedor' && (
-                    <Selector disabled={!editable(v)} value={v.tipo ?? 'ventas'} onChange={(e) => void actualizar(v.id, { tipo: e.target.value as TipoUsuario })} className="mt-1 min-h-8 w-36 py-1 text-xs" aria-label={`App de ${v.nombre}`}>
-                      {Object.entries(TIPOS).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
+            {lista.map((v) => {
+              const ed = editable(v)
+              return (
+                <tr key={v.id} className={`border-b border-borde align-middle last:border-0 [&>td]:px-1.5 [&>td]:py-2.5 [&>td:first-child]:pl-4 [&>td:last-child]:pr-4 ${v.activo ? '' : 'opacity-50'}`}>
+                  <td>
+                    <div className="w-52">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium" title={v.nombre}>{v.nombre}</p>
+                        <p className="truncate text-xs text-tenue" title={v.email}>{v.email}</p>
+                        <input disabled={!ed} type="tel" inputMode="tel" defaultValue={v.telefono ?? ''} placeholder="+ celular" aria-label={`Celular de ${v.nombre}`}
+                          className="-ml-1 mt-0.5 w-36 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-tenue hover:border-borde focus:border-borde focus:bg-superficie focus:outline-none disabled:hover:border-transparent"
+                          onBlur={(e) => { const t = e.target.value.trim() || null; if (t !== v.telefono) void actualizar(v.id, { telefono: t }) }} />
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <Selector disabled={!ed} value={rolApp(v)} onChange={(e) => void actualizar(v.id, desdeRolApp(e.target.value as RolApp))} className={LISTA + ' w-44'} aria-label={`Rol de ${v.nombre}`}>
+                      {Object.entries(ROLES).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
                     </Selector>
+                  </td>
+                  <td>
+                    {soyTI ? (
+                      <Selector value={v.multi_empresa ? AMBAS : v.empresa_id} onChange={(e) => void asignarEmpresa(v, e.target.value)} className={LISTA + ' w-32'} aria-label={`Empresa de ${v.nombre}`}>
+                        {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                        <option value={AMBAS}>Ambas</option>
+                      </Selector>
+                    ) : (
+                      <span className="whitespace-nowrap">{v.multi_empresa ? 'Ambas' : nombreEmpresa(v.empresa_id)}</span>
+                    )}
+                  </td>
+                  {hayEquipos && (
+                    <td>
+                      {puedeEquipo(v) ? (
+                        <Selector value={v.equipo_id ?? ''} onChange={(e) => void asignarEquipo(v, e.target.value)} className={LISTA + ' w-32'} aria-label={`Equipo de ${v.nombre}`}
+                          title={v.rol !== 'admin' && !v.multi_empresa && !v.equipo_id ? 'Sin equipo: no lo ve ningún supervisor de equipo' : undefined}>
+                          <option value="">Sin equipo</option>
+                          {equiposDe(v.empresa_id).map((q) => <option key={q.id} value={q.id}>{q.nombre}</option>)}
+                        </Selector>
+                      ) : (
+                        <span className="whitespace-nowrap text-tenue">{nombreEquipo(v.equipo_id) || '—'}</span>
+                      )}
+                    </td>
                   )}
-                </td>
-                <td className="px-2 py-2">
-                  {soyTI ? (
-                    <Selector value={v.multi_empresa ? AMBAS : v.empresa_id} onChange={(e) => void asignarEmpresa(v, e.target.value)} className="w-40" aria-label={`Empresa de ${v.nombre}`}>
-                      {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-                      <option value={AMBAS}>Ambas</option>
-                    </Selector>
-                  ) : (
-                    <span className="text-xs">{v.multi_empresa ? 'Ambas' : nombreEmpresa(v.empresa_id)}</span>
-                  )}
-                </td>
-                <td className="px-2 py-2">
-                  {puedeEquipo(v) ? (
-                    <Selector value={v.equipo_id ?? ''} onChange={(e) => void asignarEquipo(v, e.target.value)} className="w-40" aria-label={`Equipo de ${v.nombre}`}>
-                      <option value="">Sin equipo</option>
-                      {equiposDe(v.empresa_id).map((q) => <option key={q.id} value={q.id}>{q.nombre}</option>)}
-                    </Selector>
-                  ) : (
-                    <span className="text-xs">{nombreEquipo(v.equipo_id) || '—'}</span>
-                  )}
-                  {v.rol !== 'admin' && !v.multi_empresa && !v.equipo_id && equiposDe(v.empresa_id).length > 0 && (
-                    <p className="mt-1 max-w-40 text-xs text-amber-700 dark:text-amber-300">Sin equipo: no lo ve ningún supervisor de equipo.</p>
-                  )}
-                </td>
-                <td className="px-2 py-2"><Entrada disabled={!editable(v)} type="number" min={1} defaultValue={v.meta_diaria} className="w-20" aria-label="Meta diaria"
-                  onBlur={(e) => { const n = Number(e.target.value); if (n > 0 && n !== v.meta_diaria) void actualizar(v.id, { meta_diaria: n }) }} /></td>
-                <td className="px-2 py-2"><Entrada disabled={!editable(v)} type="number" min={1} defaultValue={v.meta_semanal} className="w-20" aria-label="Meta semanal"
-                  onBlur={(e) => { const n = Number(e.target.value); if (n > 0 && n !== v.meta_semanal) void actualizar(v.id, { meta_semanal: n }) }} /></td>
-                <td className="px-2 py-2"><Entrada disabled={!editable(v)} defaultValue={coordTexto(v.base_lat, v.base_lng)} placeholder="usa el del depósito" className="w-52" aria-label="Punto de salida"
-                  onBlur={(e) => {
-                    const t = e.target.value.trim()
-                    const p = t ? leerCoordenadas(t) : null
-                    if (t && !p) { setError(`Coordenadas inválidas para ${v.nombre}.`); return }
-                    if ((p?.lat ?? null) !== v.base_lat || (p?.lng ?? null) !== v.base_lng) void actualizar(v.id, { base_lat: p?.lat ?? null, base_lng: p?.lng ?? null })
-                  }} /></td>
-                <td className="px-2 py-2 text-xs">
-                  {v.auth_user_id ? <Insignia className="bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-200">ingresó</Insignia> : <Insignia>nunca ingresó</Insignia>}
-                  {v.tracking_aceptado_el && <p className="mt-1 text-tenue">Aviso GPS aceptado {fmtFecha(v.tracking_aceptado_el)}</p>}
-                  {editable(v) && v.activo && <Invitacion id={v.id} v={v} empresa={empresaDe(v)} />}
-                </td>
-                <td className="px-4 py-2"><input type="checkbox" disabled={!editable(v)} checked={v.activo} onChange={(e) => void actualizar(v.id, { activo: e.target.checked })} aria-label="Activo" /></td>
-              </tr>
-            ))}
+                  <td>
+                    <div className="flex items-center gap-1">
+                      <Entrada disabled={!ed} type="number" min={1} defaultValue={v.meta_diaria} className={CHICO + ' w-12 px-1 text-center'} aria-label={`Meta diaria de ${v.nombre}`}
+                        onBlur={(e) => { const n = Number(e.target.value); if (n > 0 && n !== v.meta_diaria) void actualizar(v.id, { meta_diaria: n }) }} />
+                      <span className="text-tenue">/</span>
+                      <Entrada disabled={!ed} type="number" min={1} defaultValue={v.meta_semanal} className={CHICO + ' w-14 px-1 text-center'} aria-label={`Meta semanal de ${v.nombre}`}
+                        onBlur={(e) => { const n = Number(e.target.value); if (n > 0 && n !== v.meta_semanal) void actualizar(v.id, { meta_semanal: n }) }} />
+                    </div>
+                  </td>
+                  <td>
+                    <Entrada disabled={!ed} defaultValue={coordTexto(v.base_lat, v.base_lng)} placeholder="el del depósito" className={CHICO + ' w-32'} aria-label={`Punto de salida de ${v.nombre}`}
+                      onBlur={(e) => {
+                        const t = e.target.value.trim()
+                        const p = t ? leerCoordenadas(t) : null
+                        if (t && !p) { setError(`Coordenadas inválidas para ${v.nombre}.`); return }
+                        if ((p?.lat ?? null) !== v.base_lat || (p?.lng ?? null) !== v.base_lng) void actualizar(v.id, { base_lat: p?.lat ?? null, base_lng: p?.lng ?? null })
+                      }} />
+                  </td>
+                  <td>
+                    <div className="flex items-center gap-2">
+                      {v.auth_user_id
+                        ? <Insignia className="bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-200" >ingresó</Insignia>
+                        : <Insignia>nunca ingresó</Insignia>}
+                      {v.tracking_aceptado_el && <span className="whitespace-nowrap text-xs text-tenue" title={`Aceptó el aviso de ubicación el ${fmtFecha(v.tracking_aceptado_el)}`}>GPS ✓</span>}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2">
+                      {ed && v.activo && <Invitacion compacto id={v.id} v={v} empresa={empresaDe(v)} />}
+                      <input type="checkbox" className="ml-auto size-4 accent-[var(--c-marca)]" disabled={!ed} checked={v.activo} title={v.activo ? 'Activo (destildá para quitarle el acceso)' : 'Inactivo'}
+                        onChange={(e) => void actualizar(v.id, { activo: e.target.checked })} aria-label={`Activo: ${v.nombre}`} />
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </Tarjeta>
