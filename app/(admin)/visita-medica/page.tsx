@@ -2,7 +2,7 @@
 // Visita médica (Vitalica): los médicos que cargan las visitadoras, cuándo se los visitó y a cuáles
 // les toca visita; las muestras entregadas por producto; y la lista de productos (la carga un admin).
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Aviso, Boton, Entrada, Selector, Tarjeta, Vacio } from '@/components/ui'
+import { AreaTexto, Aviso, Boton, Entrada, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { descargarCsv } from '@/lib/csv'
 import { fmtFecha, hoyIso, sumarDias } from '@/lib/fechas'
@@ -12,6 +12,29 @@ import type { Medico, Producto, ProductoVisita } from '@/lib/database.types'
 
 const PERIODOS = [{ dias: 30, texto: 'Últimos 30 días' }, { dias: 60, texto: 'Últimos 60 días' }, { dias: 90, texto: 'Últimos 90 días' }]
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+
+// Tipo de lugar por el nombre ("Sanat. Americano" → Sanatorio). Si no se reconoce, queda sin tipo.
+function tipoPorNombre(n: string): string | null {
+  const t = normal(n)
+  if (/\bsanat/.test(t)) return 'Sanatorio'
+  if (/\bhosp|\bips\b|ineran|cruz roja|emergencias/.test(t)) return 'Hospital'
+  if (/clinica/.test(t)) return 'Clínica'
+  if (/consultorio/.test(t)) return 'Consultorio'
+  if (/farmacia/.test(t)) return 'Farmacia'
+  if (/centro de salud|\busf\b/.test(t)) return 'Centro de salud'
+  return null
+}
+// Un lugar por renglón; la dirección, opcional, después de " - ". Sin repetir.
+function leerLugares(texto: string) {
+  const vistos = new Set<string>()
+  return texto.split('\n').map((l) => l.replace(/^\s*\d+[.)-]?\s+/, '').trim()).filter(Boolean).flatMap((l) => {
+    const [nombre, ...resto] = l.split(/\s+-\s+/)
+    const n = (nombre ?? '').replace(/^Sanat\.\s*/i, 'Sanatorio ').replace(/^Hosp\.\s*/i, 'Hospital ').trim()
+    if (!/[\p{L}\d]/u.test(n) || vistos.has(normal(n))) return [] // renglones vacíos o «—»
+    vistos.add(normal(n))
+    return [{ nombre: n, tipo_lugar: tipoPorNombre(n), direccion: resto.join(' - ').trim() || null }]
+  })
+}
 
 export default function VisitaMedica() {
   const sb = supabaseNavegador()
@@ -25,6 +48,9 @@ export default function VisitaMedica() {
   const [q, setQ] = useState('')
   const [soloToca, setSoloToca] = useState(false)
   const [nuevoProducto, setNuevoProducto] = useState('')
+  const [carga, setCarga] = useState({ visitadora: '', ciudad: 'Asunción', texto: '' })
+  const [cargando, setCargando] = useState(false)
+  const [cargaOk, setCargaOk] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const cargarProductos = useCallback(async () => {
@@ -88,6 +114,22 @@ export default function VisitaMedica() {
     setNuevoProducto('')
     void cargarProductos()
   }
+  const aCargar = useMemo(() => leerLugares(carga.texto), [carga.texto])
+  async function cargarLugares(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null); setCargaOk(null)
+    const visitadoraId = carga.visitadora || visitadoras[0]?.id
+    if (!visitadoraId) return setError('No hay visitadoras: dale acceso en Usuarios con el rol «Visitadora médica».')
+    if (!aCargar.length) return setError('Pegá al menos un lugar (uno por renglón).')
+    setCargando(true)
+    const { data, error } = await sb.rpc('vis_cargar_lugares', { p: { visitadora_id: visitadoraId, ciudad: carga.ciudad, lugares: aCargar } })
+    setCargando(false)
+    if (error) return setError(mensajeError(error))
+    const r = data as { cargados: number; ya_estaban: number }
+    setCargaOk(`Se cargaron ${r.cargados} lugares${r.ya_estaban ? ` (${r.ya_estaban} ya estaban)` : ''}. Ahora armá la ruta en Rutas, eligiendo «Cartera de ${nombreVisitadora(visitadoraId)}».`)
+    setCarga((c) => ({ ...c, texto: '' }))
+  }
+
   async function cambiarProducto(p: Producto, cambios: Partial<Producto>) {
     const { error } = await sb.from('vis_productos').update(cambios).eq('id', p.id)
     if (error) setError(mensajeError(error))
@@ -154,6 +196,29 @@ export default function VisitaMedica() {
             </tbody>
           </table>
         )}
+      </Tarjeta>
+
+      <Tarjeta className="flex flex-col gap-3">
+        <div>
+          <h2 className="font-semibold">Cargar lugares</h2>
+          <p className="text-sm text-tenue">Para armar la ruta antes de que la visitadora pase: pegá los hospitales, sanatorios o consultorios, uno por renglón (si querés, la dirección después de un guion: «Sanatorio Italiano - Av. Mcal. López 1234»). Quedan sin ubicación: la app se la pide en la primera visita, y mientras tanto «Cómo llegar» los busca por el nombre.</p>
+        </div>
+        <form onSubmit={cargarLugares} className="grid gap-3 lg:grid-cols-[1fr_280px]">
+          <AreaTexto aria-label="Lugares, uno por renglón" className="min-h-40" placeholder={'Centro Médico Bautista\nSanatorio Italiano\nIPS Central'} value={carga.texto} onChange={(e) => setCarga({ ...carga, texto: e.target.value })} />
+          <div className="flex flex-col gap-2">
+            <Selector aria-label="Visitadora" value={carga.visitadora || visitadoras[0]?.id || ''} onChange={(e) => setCarga({ ...carga, visitadora: e.target.value })}>
+              {visitadoras.map((v) => <option key={v.id} value={v.id}>{v.nombre}</option>)}
+            </Selector>
+            <Entrada aria-label="Ciudad" placeholder="Ciudad" value={carga.ciudad} onChange={(e) => setCarga({ ...carga, ciudad: e.target.value })} />
+            {aCargar.length > 0 && (
+              <ul className="max-h-40 overflow-auto rounded-lg border border-borde p-2 text-xs">
+                {aCargar.map((l) => <li key={l.nombre}>{l.nombre}<span className="text-tenue">{l.tipo_lugar ? ` · ${l.tipo_lugar}` : ''}{l.direccion ? ` · ${l.direccion}` : ''}</span></li>)}
+              </ul>
+            )}
+            <Boton type="submit" disabled={cargando || !aCargar.length}>{cargando ? 'Cargando…' : `Cargar ${aCargar.length || ''} lugares`}</Boton>
+          </div>
+        </form>
+        {cargaOk && <Aviso tipo="ok">{cargaOk}</Aviso>}
       </Tarjeta>
 
       <div className="grid gap-4 lg:grid-cols-2">
