@@ -852,4 +852,60 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── Ruteo de visita médica (0027) ──────────────────────────────────
+select pg_temp.como('sergio@camping44.com.py') \gset
+set role authenticated;
+do $$ declare r jsonb; f jsonb; v_vale uuid := (select id from vis_vendedores where nombre = 'Vale'); begin
+  f := jsonb_build_array(
+    jsonb_build_object('dia', vis_hoy(), 'lugar', 'hospital central', 'especialidad', 'Traumatología', 'medico', 'Dr. Nuevo'),
+    jsonb_build_object('dia', vis_hoy(), 'lugar', 'Hospital Central', 'especialidad', 'pediatría'),
+    jsonb_build_object('dia', vis_hoy(), 'lugar', 'Clínica Nueva', 'medico', 'Dra. Gómez', 'direccion', 'Calle 1', 'lat', -25.3, 'lng', -57.6));
+  r := vis_cargar_ruteo(jsonb_build_object('visitadora_id', v_vale, 'semana', vis_hoy(), 'filas', f));
+  assert (r ->> 'paradas')::int = 2 and (r ->> 'objetivos')::int = 3 and (r ->> 'lugares_nuevos')::int = 1 and (r ->> 'medicos_nuevos')::int = 1,
+    format('carga del ruteo: %s', r);
+  assert (r ->> 'ruta_id')::uuid = (select id from vis_rutas where nombre = 'Ruta Vale'), 'usa la ruta de esa semana';
+  assert exists (select 1 from vis_medico_lugares ml join vis_medicos m on m.id = ml.medico_id join vis_clientes c on c.id = ml.lugar_id
+                 where m.nombre = 'Dra. Gómez' and c.razon_social = 'Clínica Nueva'), 'el médico se suma al lugar nuevo';
+  assert (select lat from vis_clientes where razon_social = 'Clínica Nueva') = -25.3, 'el lugar nuevo toma la ubicación de la planilla';
+  assert (select lat from vis_clientes where razon_social = 'Hospital Central') = -25.29, 'pero no pisa la del GPS';
+  r := vis_cargar_ruteo(jsonb_build_object('visitadora_id', v_vale, 'semana', vis_hoy(), 'filas', f));
+  assert (r ->> 'objetivos')::int = 0 and (r ->> 'paradas')::int = 0, format('cargarla dos veces no repite: %s', r);
+  r := vis_cargar_ruteo(jsonb_build_object('visitadora_id', v_vale, 'semana', vis_hoy(), 'reemplazar', true, 'filas', f));
+  assert (r ->> 'objetivos')::int = 3, format('reemplazar vuelve a armar los objetivos de esos días: %s', r);
+  assert (select count(*) from vis_ruteo_semana(v_vale, vis_hoy()) where dia = vis_hoy()) = 3, 'la semana: una fila por objetivo';
+  assert (select resultado from vis_ruteo_semana(v_vale, vis_hoy()) where lower(especialidad) = 'pediatría' and medico_id is null) = 'Dejó muestras',
+    'el objetivo por especialidad toma la visita a un médico de esa especialidad en ese lugar';
+  assert (select resultado from vis_ruteo_semana(v_vale, vis_hoy()) where medico = 'Dr. Nuevo') is null, 'Dr. Nuevo: pendiente';
+  begin
+    perform vis_cargar_ruteo(jsonb_build_object('visitadora_id', v_vale, 'semana', vis_hoy(),
+      'filas', jsonb_build_array(jsonb_build_object('dia', vis_hoy() + 9, 'lugar', 'X'))));
+    assert false, 'días fuera de la semana';
+  exception when raise_exception then null;
+  end;
+  assert exists (select 1 from vis_resultados where nombre = 'Sin acceso' and tipo = 'medica'), 'resultado Sin acceso';
+end $$;
+reset role;
+select pg_temp.como('vale@vitalica.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert (select count(*) from vis_parada_objetivos) = 3, 'la visitadora ve los objetivos de su ruta publicada';
+  begin
+    insert into vis_parada_objetivos (parada_id, especialidad) select id, 'X' from vis_ruta_paradas limit 1;
+    assert false, 'pero no los cambia';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+select pg_temp.como('hugo@vitalica.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert not exists (select 1 from vis_parada_objetivos), 'otro vendedor no los ve';
+  begin
+    perform vis_cargar_ruteo(jsonb_build_object('visitadora_id', (select id from vis_vendedores where nombre = 'Vale'), 'semana', vis_hoy(), 'filas', '[]'::jsonb));
+    assert false, 'un vendedor no carga ruteo';
+  exception when raise_exception then null;
+  end;
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;

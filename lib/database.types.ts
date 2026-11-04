@@ -148,6 +148,15 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['vis_medico_lugares']['Insert']>
         Relationships: []
       }
+      vis_parada_objetivos: {
+        Row: { id: string; parada_id: string; medico_id: string | null; especialidad: string | null; orden: number }
+        Insert: { id?: string; parada_id: string; medico_id?: string | null; especialidad?: string | null; orden?: number }
+        Update: Partial<Database['public']['Tables']['vis_parada_objetivos']['Insert']>
+        Relationships: [
+          { foreignKeyName: 'vis_parada_objetivos_medico_id_fkey'; columns: ['medico_id']; isOneToOne: false; referencedRelation: 'vis_medicos'; referencedColumns: ['id'] },
+          { foreignKeyName: 'vis_parada_objetivos_parada_id_fkey'; columns: ['parada_id']; isOneToOne: false; referencedRelation: 'vis_ruta_paradas'; referencedColumns: ['id'] },
+        ]
+      }
       vis_productos: {
         Row: { activo: boolean; codigo: string | null; empresa_id: string; id: string; nombre: string; odoo_product_id: number | null; orden: number }
         Insert: { activo?: boolean; codigo?: string | null; empresa_id: string; id?: string; nombre: string; odoo_product_id?: number | null; orden?: number }
@@ -210,6 +219,8 @@ export type Database = {
       }
       vis_km_jornada: { Args: { p_jornada: string }; Returns: number }
       vis_quitar_lugar: { Args: { p_lugar: string }; Returns: Json }
+      vis_cargar_ruteo: { Args: { p: Json }; Returns: Json }
+      vis_ruteo_semana: { Args: { p_vendedor: string; p_semana: string }; Returns: FilaRuteoSemana[] }
       vis_mi_id: { Args: never; Returns: string }
       vis_mi_rol: { Args: never; Returns: Database['public']['Enums']['vis_rol'] }
       vis_mis_zonas: { Args: never; Returns: string[] }
@@ -279,6 +290,12 @@ export type EstadoRuta = Database['public']['Enums']['vis_estado_ruta']
 export type EstadoCliente = 'activo' | 'potencial' | 'inactivo'
 /** 'ventas': vendedor de siempre; 'medica': visitadora médica (médicos en hospitales y consultorios). */
 export type TipoUsuario = 'ventas' | 'medica'
+export type FilaRuteoSemana = {
+  dia: string; orden: number; parada_id: string; lugar_id: string; lugar: string; tipo_lugar: string | null; direccion: string | null; notas: string | null
+  lat: number | null; lng: number | null; objetivo_id: string | null; medico_id: string | null; medico: string | null; especialidad: string | null
+  visita_id: string | null; fecha_hora: string | null; resultado: string | null; medico_visitado: string | null; observaciones: string | null
+  proxima_visita: string | null; productos: ProductoVisita[] | null
+}
 export type LugarDeMedico = { lugar_id: string; nombre: string; horario: string | null }
 export type ProductoVisita = { producto: string; muestras: number }
 

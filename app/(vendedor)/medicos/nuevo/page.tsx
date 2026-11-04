@@ -22,7 +22,7 @@ export default function EditarMedico() {
   const router = useRouter()
   const { perfil, soloLectura } = useVendedor()
   const [lugares, setLugares] = useState<LugarOpcion[]>([])
-  const [f, setF] = useState({ nombre: '', especialidad: '', telefono: '', email: '', notas: '', frecuencia_dias: 30 })
+  const [f, setF] = useState({ nombre: '', especialidad: busqueda.get('especialidad') ?? '', telefono: '', email: '', notas: '', frecuencia_dias: 30 })
   const [elegidos, setElegidos] = useState<Record<string, string>>(lugarInicial ? { [lugarInicial]: '' } : {}) // lugar → horario
   const [cargando, setCargando] = useState(!!id)
   const [enviando, setEnviando] = useState(false)

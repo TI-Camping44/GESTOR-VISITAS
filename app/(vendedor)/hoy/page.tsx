@@ -2,7 +2,7 @@
 // Hoy: la ruta del día con contador, mapa y acciones por parada (BRIEF §6 vendedor 1).
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Phone, MessageCircle, Navigation, CheckCircle2, SkipForward, Undo2 } from 'lucide-react'
+import { Phone, MessageCircle, Navigation, CheckCircle2, SkipForward, Undo2, Stethoscope, Clock } from 'lucide-react'
 import { useVendedor } from '@/components/vendedor/Proveedor'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, Boton, PuntoEstado, Tarjeta, Vacio } from '@/components/ui'
@@ -10,16 +10,19 @@ import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
 import { fmtFecha, hace, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
+import { fmtMin, horasEstimadas } from '@/lib/ruteo'
 import { urlParaVisitar } from '@/lib/rutas'
 import { BuscarCliente } from '@/components/vendedor/BuscarCliente'
 import { COLOR_ESTADO } from '@/lib/config'
 import { linkComoLlegar, linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
 import type { FilaTablero, ParadaDia, ProximaVisita } from '@/lib/database.types'
 
-type Datos = { paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[] }
+// Visita médica: a qué médico ir o qué especialidad buscar en cada parada (lo arma Sergio en el panel).
+type Objetivo = { parada_id: string; especialidad: string | null; orden: number; medico: { id: string; nombre: string; especialidad: string | null } | null }
+type Datos = { paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[]; objetivos?: Objetivo[]; base?: { lat: number | null; lng: number | null } | null }
 
 export default function Hoy() {
-  const { perfil, pendientes, esMedica } = useVendedor()
+  const { perfil, pendientes, esMedica, jornada } = useVendedor()
   const [datos, setDatos] = useState<Datos | null>(null)
   const [guardadoEl, setGuardadoEl] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -43,8 +46,23 @@ export default function Hoy() {
         return
       }
       const filas = (t.data ?? []) as FilaTablero[]
+      const paradas = (p.data ?? []) as ParadaDia[]
+      let objetivos: Objetivo[] = []
+      let base: Datos['base'] = null
+      if (esMedica) {
+        const [o, b, c] = await Promise.all([
+          paradas.length ? sb.from('vis_parada_objetivos').select('parada_id, especialidad, orden, medico:vis_medicos(id, nombre, especialidad)').in('parada_id', paradas.map((x) => x.parada_id)) : Promise.resolve({ data: [] }),
+          sb.from('vis_vendedores').select('base_lat, base_lng').eq('id', perfil.id).maybeSingle(),
+          sb.from('vis_config').select('base_lat, base_lng').maybeSingle(),
+        ])
+        if (!vivo) return
+        objetivos = ((o.data ?? []) as Objetivo[]).sort((a, z) => a.orden - z.orden)
+        base = b.data?.base_lat != null ? { lat: b.data.base_lat, lng: b.data.base_lng } : c.data ? { lat: c.data.base_lat, lng: c.data.base_lng } : null
+      }
       const nuevo: Datos = {
-        paradas: (p.data ?? []) as ParadaDia[],
+        paradas,
+        objetivos,
+        base,
         hoy: filas.find((f) => f.dia === hoy)?.realizadas ?? 0,
         semana: filas.reduce((s, f) => s + Number(f.realizadas), 0),
         // Los de otros vendedores no: solo los míos (o los que dejé yo en la última visita).
@@ -56,7 +74,7 @@ export default function Hoy() {
       await guardarCache(clave, nuevo).catch(() => {})
     })()
     return () => { vivo = false }
-  }, [clave, hoy, perfil.id, perfil.rol])
+  }, [clave, hoy, perfil.id, perfil.rol, esMedica])
 
   // Paradas que el vendedor decide saltar hoy: salen del recorrido de Google Maps y del mapa.
   // Quedan en el celular solo por el día (el tablero igual muestra planificadas vs. hechas).
@@ -86,6 +104,16 @@ export default function Hoy() {
 
   const pendientesHoy = useMemo(() => (datos?.paradas ?? []).filter((p) => !p.visitada && !saltadas.has(p.parada_id) && p.lat != null && p.lng != null), [datos, saltadas])
   const links = useMemo(() => linksGoogleMaps(null, pendientesHoy.map((p) => ({ lat: p.lat!, lng: p.lng! }))), [pendientesHoy])
+
+  // Hora aproximada de llegada (visita médica): desde que inició la jornada, o desde las 8:00.
+  const horas = useMemo(() => {
+    if (!esMedica || !datos) return new Map<string, string>()
+    const enOrden = datos.paradas.filter((p) => !saltadas.has(p.parada_id))
+    const ini = jornada ? (() => { const d = new Date(jornada.inicio); return Math.max(d.getHours() * 60 + d.getMinutes(), 0) })() : 8 * 60
+    const h = horasEstimadas(datos.base ?? null, enOrden, { inicioMin: ini })
+    return new Map(enOrden.map((p, i) => [p.parada_id, fmtMin(h[i]!.llegada)]))
+  }, [esMedica, datos, saltadas, jornada])
+  const objetivosDe = (id: string) => (datos?.objetivos ?? []).filter((o) => o.parada_id === id)
 
   const extra = pendientes.visitas
   const enRuta = new Set((datos?.paradas ?? []).map((p) => p.cliente_id))
@@ -161,6 +189,20 @@ export default function Hoy() {
                         {p.ultimo_resultado && <strong>{p.ultimo_resultado}. </strong>}
                         {p.ultima_observacion}
                       </p>
+                    )}
+                    {esMedica && objetivosDe(p.parada_id).length > 0 && (
+                      <ul className="mt-2 flex flex-col gap-1 rounded-lg bg-fondo px-2.5 py-2 text-sm">
+                        {objetivosDe(p.parada_id).map((o, k) => (
+                          <li key={k} className="flex items-start gap-1.5">
+                            <Stethoscope className="mt-0.5 size-3.5 shrink-0 text-marca" aria-hidden />
+                            {o.medico ? <span><b>{o.medico.nombre}</b>{(o.especialidad ?? o.medico.especialidad) && <span className="text-tenue"> · {o.especialidad ?? o.medico.especialidad}</span>}</span>
+                              : <span>Buscar médico de <b>{o.especialidad}</b></span>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {esMedica && !p.visitada && horas.get(p.parada_id) && (
+                      <p className="mt-1 flex items-center gap-1 text-xs text-tenue"><Clock className="size-3.5" aria-hidden /> Llegada aprox. {horas.get(p.parada_id)}</p>
                     )}
                     {p.lat == null && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Sin ubicación cargada: al registrar la visita se puede guardar.</p>}
                     {salteada && <p className="mt-1 text-xs font-medium text-tenue">Salteada hoy: no está en el recorrido.</p>}
