@@ -794,4 +794,40 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── Quitar un lugar (0025) ─────────────────────────────────────────
+insert into vis_rutas (nombre, vendedor_id, semana_inicio, estado)
+values ('Ruta Vale', (select id from vis_vendedores where nombre = 'Vale'), date_trunc('week', vis_hoy())::date, 'publicada');
+insert into vis_ruta_paradas (ruta_id, cliente_id, dia)
+values ((select id from vis_rutas where nombre = 'Ruta Vale'), (select id from vis_clientes where razon_social = 'Hospital Central'), vis_hoy());
+select set_config('test.lugar', (select id::text from vis_clientes where razon_social = 'Hospital Central'), false) \gset
+select pg_temp.como('hugo@vitalica.com.py') \gset
+set role authenticated;
+do $$ begin
+  begin
+    perform vis_quitar_lugar(current_setting('test.lugar')::uuid);
+    assert false, 'un vendedor no quita lugares de la visitadora';
+  exception when raise_exception then null;
+  end;
+end $$;
+reset role;
+select pg_temp.como('vale@vitalica.com.py') \gset
+set role authenticated;
+do $$ declare r jsonb; begin
+  r := vis_quitar_lugar(current_setting('test.lugar')::uuid);
+  assert (r ->> 'paradas_quitadas')::int = 1, format('sale de la ruta de hoy: %s', r);
+  assert not exists (select 1 from vis_clientes_v where id = current_setting('test.lugar')::uuid), 'ya no está en su lista';
+  assert (select jsonb_array_length(lugares) from vis_medicos_v where nombre = 'Dra. Gómez') = 0, 'ni en los lugares del médico';
+  assert exists (select 1 from vis_visitas where cliente_id = current_setting('test.lugar')::uuid), 'las visitas quedan';
+end $$;
+reset role;
+select pg_temp.como('sergio@camping44.com.py') \gset
+set role authenticated;
+do $$ declare r jsonb; begin
+  r := vis_cargar_lugares(jsonb_build_object('visitadora_id', (select id from vis_vendedores where nombre = 'Vale'),
+    'lugares', jsonb_build_array(jsonb_build_object('nombre', 'Hospital Central'))));
+  assert (r ->> 'cargados')::int = 1, format('cargarlo de nuevo lo vuelve a la lista: %s', r);
+  assert (select count(*) from vis_clientes where razon_social = 'Hospital Central' and activo) = 1, 'sin duplicarlo';
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;
