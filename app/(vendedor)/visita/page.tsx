@@ -4,7 +4,7 @@
 // Una sola dirección para todos los clientes (/visita?c=<id>): así una copia guardada
 // en el celular sirve sin señal para cualquier cliente (ver public/sw.js).
 // Visita médica: /visita?c=<lugar>&m=<médico> (productos presentados y muestras, sin pedido ni cobranza).
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Camera } from 'lucide-react'
@@ -49,6 +49,7 @@ export default function RegistrarVisita() {
   const [medico, setMedico] = useState<Medico | null>(null)
   const [productos, setProductos] = useState<Producto[]>([])
   const [muestras, setMuestras] = useState<Record<string, number | null>>({}) // producto → muestras (null = presentado sin muestras)
+  const [buscarProd, setBuscarProd] = useState('')
   const [errorCarga, setErrorCarga] = useState<string | null>(null)
 
   const [resultadoId, setResultadoId] = useState('')
@@ -122,6 +123,13 @@ export default function RegistrarVisita() {
   }, [medicoId, perfil.id])
 
   const tipoResultado = medicoId || esMedica ? 'medica' : 'ventas'
+  const productosVisibles = useMemo(() => {
+    const sin = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    const q = sin(buscarProd.trim())
+    const marcados = productos.filter((p) => p.nombre in muestras)
+    const resto = productos.filter((p) => !(p.nombre in muestras))
+    return [...marcados, ...(q ? resto.filter((p) => q.split(/\s+/).every((w) => sin(p.nombre).includes(w))) : resto.slice(0, Math.max(0, 6 - marcados.length)))]
+  }, [productos, muestras, buscarProd])
   const opciones = resultados.filter((r) => (r.tipo ?? 'ventas') === tipoResultado)
   const volver = esMedica ? urlLugar(clienteId, { parada: paradaId }) : '/hoy'
 
@@ -251,7 +259,11 @@ export default function RegistrarVisita() {
       {tipoResultado === 'medica' && productos.length > 0 && (
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 text-sm font-medium">Productos presentados y muestras</legend>
-          {productos.map((pr) => {
+          {/* La lista viene de Odoo y es larga: buscador, primero lo marcado, y los primeros si no se busca. */}
+          {productos.length > 6 && (
+            <Entrada aria-label="Buscar producto" placeholder={`Buscar entre ${productos.length} productos`} value={buscarProd} onChange={(e) => setBuscarProd(e.target.value)} />
+          )}
+          {productosVisibles.map((pr) => {
             const marcado = pr.nombre in muestras
             return (
               <div key={pr.id} className="flex items-center gap-3">
@@ -267,6 +279,10 @@ export default function RegistrarVisita() {
               </div>
             )
           })}
+          {!buscarProd && productos.length > productosVisibles.length && (
+            <p className="text-xs text-tenue">Buscá por nombre para ver los otros {productos.length - productosVisibles.length}.</p>
+          )}
+          {buscarProd && productosVisibles.length === 0 && <p className="text-sm text-tenue">Ningún producto con «{buscarProd}».</p>}
         </fieldset>
       )}
 
