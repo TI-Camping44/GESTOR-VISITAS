@@ -25,6 +25,14 @@ export function mensajeError(e: unknown): string {
 export const linkWhatsApp = (telNorm: string | null | undefined) => (telNorm ? `https://wa.me/${telNorm}` : null)
 export const linkTel = (tel: string | null | undefined) => (tel ? `tel:${tel.replace(/[^\d+]/g, '')}` : null)
 
+/** Google Maps hasta el lugar: por coordenadas; si todavía no tiene ubicación, buscando por nombre, dirección y ciudad
+ *  (sirve para hospitales y lugares conocidos que se cargaron sin pasar por ahí). */
+export function linkComoLlegar(c: { lat?: number | null; lng?: number | null; razon_social?: string | null; direccion?: string | null; ciudad?: string | null }) {
+  if (c.lat != null && c.lng != null) return `https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}`
+  const q = [c.razon_social, c.direccion, c.ciudad].filter((x) => x && x.trim()).join(', ')
+  return q ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${q}, Paraguay`)}` : null
+}
+
 /** Tema de colores según la empresa ("Camping 44" → "camping44"); ver globals.css. */
 export function temaEmpresa(nombre: string | null | undefined): string | undefined {
   const t = (nombre ?? '').normalize('NFD').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()

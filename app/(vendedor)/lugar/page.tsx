@@ -11,7 +11,7 @@ import { Aviso, Boton, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
 import { hace } from '@/lib/fechas'
-import { linkTel, linkWhatsApp } from '@/lib/utils'
+import { linkComoLlegar, linkTel, linkWhatsApp } from '@/lib/utils'
 import { urlVisitaMedico } from '@/lib/rutas'
 import { tocaVisitar } from '@/lib/medicos'
 import type { Medico } from '@/lib/database.types'
@@ -61,7 +61,7 @@ export default function PaginaLugar() {
 
   if (error) return <Aviso tipo="error">{error} <Link href="/hoy" className="underline">Volver</Link></Aviso>
   if (!lugar) return <div className="h-40 animate-pulse rounded-xl bg-borde/40" />
-  const comoLlegar = lugar.lat != null && lugar.lng != null ? `https://www.google.com/maps/dir/?api=1&destination=${lugar.lat},${lugar.lng}` : null
+  const comoLlegar = linkComoLlegar(lugar)
 
   return (
     <div className="flex flex-col gap-4">

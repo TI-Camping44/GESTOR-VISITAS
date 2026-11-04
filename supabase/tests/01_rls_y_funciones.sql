@@ -767,4 +767,31 @@ do $$ begin
   assert (select q.nombre from vis_zonas z join vis_equipos q on q.id = z.equipo_id where z.nombre = 'Zona Externa') = 'Mayorista', 'y sus zonas';
 end $$;
 
+-- ── Cargar lugares desde el panel (0024) ───────────────────────────
+select pg_temp.como('sergio@camping44.com.py') \gset
+set role authenticated;
+do $$ declare r jsonb; begin
+  r := vis_cargar_lugares(jsonb_build_object('visitadora_id', (select id from vis_vendedores where nombre = 'Vale'), 'ciudad', 'Asunción',
+    'lugares', jsonb_build_array(jsonb_build_object('nombre', 'Sanatorio Italiano', 'tipo_lugar', 'Sanatorio'),
+                                 jsonb_build_object('nombre', 'hospital central'), jsonb_build_object('nombre', ' '))));
+  assert (r ->> 'cargados')::int = 1 and (r ->> 'ya_estaban')::int = 1, format('carga ("hospital central" ya estaba, sin importar mayúsculas; el vacío no cuenta): %s', r);
+  assert (select count(*) from vis_clientes where categoria = 'lugar' and razon_social = 'Sanatorio Italiano') = 1, 'el lugar queda de la visitadora';
+  begin
+    perform vis_cargar_lugares(jsonb_build_object('visitadora_id', (select id from vis_vendedores where nombre = 'Hugo'), 'lugares', '[{"nombre":"X"}]'::jsonb));
+    assert false, 'solo a visitadoras médicas';
+  exception when raise_exception then null;
+  end;
+end $$;
+reset role;
+select pg_temp.como('hugo@vitalica.com.py') \gset
+set role authenticated;
+do $$ begin
+  begin
+    perform vis_cargar_lugares(jsonb_build_object('visitadora_id', (select id from vis_vendedores where nombre = 'Vale'), 'lugares', '[{"nombre":"X"}]'::jsonb));
+    assert false, 'un vendedor no carga lugares';
+  exception when raise_exception then null;
+  end;
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;

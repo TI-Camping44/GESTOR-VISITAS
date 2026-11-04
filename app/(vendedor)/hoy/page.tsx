@@ -13,7 +13,7 @@ import { linksGoogleMaps } from '@/lib/geo'
 import { urlParaVisitar } from '@/lib/rutas'
 import { BuscarCliente } from '@/components/vendedor/BuscarCliente'
 import { COLOR_ESTADO } from '@/lib/config'
-import { linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
+import { linkComoLlegar, linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
 import type { FilaTablero, ParadaDia, ProximaVisita } from '@/lib/database.types'
 
 type Datos = { paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[] }
@@ -141,7 +141,7 @@ export default function Hoy() {
           const tel = linkTel(p.telefono)
           const wa = linkWhatsApp(p.telefono_norm)
           const salteada = !p.visitada && saltadas.has(p.parada_id)
-          const comoLlegar = p.lat != null && p.lng != null ? `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}` : null
+          const comoLlegar = linkComoLlegar(p)
           return (
             <li key={p.parada_id}>
               <Tarjeta className={p.visitada || salteada ? 'opacity-70' : undefined}>

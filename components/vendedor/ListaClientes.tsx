@@ -10,7 +10,7 @@ import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
 import { fmtFecha, fmtGuaranies, hace } from '@/lib/fechas'
 import { ETIQUETA_ESTADO, COLOR_ESTADO } from '@/lib/config'
-import { cn, linkTel, linkWhatsApp } from '@/lib/utils'
+import { cn, linkComoLlegar, linkTel, linkWhatsApp } from '@/lib/utils'
 import { urlParaVisitar } from '@/lib/rutas'
 import type { EstadoCliente } from '@/lib/database.types'
 
@@ -97,7 +97,7 @@ export function ListaClientes() {
         {lista.slice(0, mostrar).map((c) => {
           const tel = linkTel(c.telefono)
           const wa = linkWhatsApp(c.telefono_norm)
-          const mapa = c.lat != null && c.lng != null ? `https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}` : null
+          const mapa = linkComoLlegar(c)
           return (
             <li key={c.id}>
               <Tarjeta className="p-3">

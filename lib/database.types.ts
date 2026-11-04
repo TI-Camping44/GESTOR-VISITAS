@@ -200,6 +200,7 @@ export type Database = {
       }
       vis_crear_prospecto: { Args: { p: Json }; Returns: Json }
       vis_crear_lugar: { Args: { p: Json }; Returns: Json }
+      vis_cargar_lugares: { Args: { p: Json }; Returns: Json }
       vis_es_admin: { Args: never; Returns: boolean }
       vis_es_supervisor: { Args: never; Returns: boolean }
       vis_hoy: { Args: never; Returns: string }
