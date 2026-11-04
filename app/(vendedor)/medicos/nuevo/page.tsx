@@ -102,7 +102,7 @@ export default function EditarMedico() {
   }
 
   async function darDeBaja() {
-    if (!id || !confirm(`¿Dejar de visitar a ${f.nombre}? Sale de tu lista (sus visitas quedan en el historial).`)) return
+    if (!id || !confirm(`¿Borrar a ${f.nombre}? Sale de tu lista y de sus lugares (las visitas que ya le hiciste quedan en el historial).`)) return
     setEnviando(true)
     const { error } = await supabaseNavegador().from('vis_medicos').update({ activo: false }).eq('id', id)
     setEnviando(false)
@@ -166,7 +166,7 @@ export default function EditarMedico() {
       <Boton type="submit" grande disabled={enviando}>{enviando ? 'Guardando…' : 'Guardar médico'}</Boton>
       <div className="flex justify-between">
         <button type="button" className="text-sm text-tenue underline" onClick={salir}>Cancelar</button>
-        {id && <button type="button" className="text-sm text-red-700 underline dark:text-red-300" onClick={() => void darDeBaja()}>Ya no lo visito</button>}
+        {id && <button type="button" className="text-sm text-red-700 underline dark:text-red-300" onClick={() => void darDeBaja()}>Borrar médico</button>}
       </div>
     </form>
   )

@@ -209,6 +209,7 @@ export type Database = {
         Returns: Database['public']['Tables']['vis_jornadas']['Row']
       }
       vis_km_jornada: { Args: { p_jornada: string }; Returns: number }
+      vis_quitar_lugar: { Args: { p_lugar: string }; Returns: Json }
       vis_mi_id: { Args: never; Returns: string }
       vis_mi_rol: { Args: never; Returns: Database['public']['Enums']['vis_rol'] }
       vis_mis_zonas: { Args: never; Returns: string[] }

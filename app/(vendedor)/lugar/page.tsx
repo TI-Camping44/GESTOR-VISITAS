@@ -4,14 +4,14 @@
 // una copia guardada sirve sin señal para cualquier lugar (ver public/sw.js).
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
-import { CheckCircle2, MessageCircle, Navigation, Pencil, Phone, Plus } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { CheckCircle2, MessageCircle, Navigation, Pencil, Phone, Plus, Trash2 } from 'lucide-react'
 import { useVendedor } from '@/components/vendedor/Proveedor'
 import { Aviso, Boton, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
 import { hace } from '@/lib/fechas'
-import { linkComoLlegar, linkTel, linkWhatsApp } from '@/lib/utils'
+import { linkComoLlegar, linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
 import { urlVisitaMedico } from '@/lib/rutas'
 import { tocaVisitar } from '@/lib/medicos'
 import type { Medico } from '@/lib/database.types'
@@ -27,6 +27,9 @@ export default function PaginaLugar() {
   const [medicos, setMedicos] = useState<Medico[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hoyVisitados, setHoyVisitados] = useState<Set<string>>(new Set())
+  const [quitando, setQuitando] = useState(false)
+  const [errorQuitar, setErrorQuitar] = useState<string | null>(null)
+  const router = useRouter()
 
   useEffect(() => {
     let vivo = true
@@ -58,6 +61,20 @@ export default function PaginaLugar() {
 
   const deAca = useMemo(() => (medicos ?? []).filter((m) => m.lugares.some((l) => l.lugar_id === lugarId))
     .sort((a, b) => Number(tocaVisitar(b)) - Number(tocaVisitar(a)) || a.nombre.localeCompare(b.nombre, 'es')), [medicos, lugarId])
+
+  // Lugar cargado de más o mal: sale de la lista y de las rutas de hoy en adelante (las visitas quedan).
+  async function quitarLugar() {
+    if (!lugar) return
+    if (!navigator.onLine) return setErrorQuitar('Necesitás señal para quitar un lugar.')
+    if (!confirm(`¿Quitar «${lugar.razon_social}» de tus lugares? Sale de la lista, de tus rutas y de los médicos que atienden ahí. Las visitas que ya hiciste quedan en el historial.`)) return
+    setQuitando(true); setErrorQuitar(null)
+    const { error: e } = await supabaseNavegador().rpc('vis_quitar_lugar', { p_lugar: lugar.id })
+    if (e) { setQuitando(false); return setErrorQuitar(mensajeError(e)) }
+    const cartera = await leerCache<Lugar[]>(`cartera:${perfil.id}`).catch(() => null)
+    if (cartera) await guardarCache(`cartera:${perfil.id}`, cartera.datos.filter((c) => c.id !== lugar.id)).catch(() => {})
+    router.push('/mapa')
+    router.refresh()
+  }
 
   if (error) return <Aviso tipo="error">{error} <Link href="/hoy" className="underline">Volver</Link></Aviso>
   if (!lugar) return <div className="h-40 animate-pulse rounded-xl bg-borde/40" />
@@ -112,6 +129,12 @@ export default function PaginaLugar() {
           )
         })}
       </ul>
+
+      {errorQuitar && <Aviso tipo="error">{errorQuitar}</Aviso>}
+      <button type="button" disabled={quitando} onClick={() => void quitarLugar()}
+        className="mt-4 inline-flex items-center gap-1.5 self-start text-sm text-red-700 underline disabled:opacity-50 dark:text-red-300">
+        <Trash2 className="size-4" aria-hidden /> {quitando ? 'Quitando…' : 'Quitar este lugar'}
+      </button>
     </div>
   )
 }
