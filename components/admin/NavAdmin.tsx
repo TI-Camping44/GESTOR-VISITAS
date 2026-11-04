@@ -18,7 +18,7 @@ export function NavAdmin({ rol, altas = 0, medica = false }: { rol: Rol; altas?:
     { href: '/zonas', texto: 'Zonas', Icono: MapPinned },
     { href: '/vendedores', texto: 'Usuarios', Icono: UserCog },
     ...(rol === 'admin' ? [{ href: '/sync', texto: 'Sync Odoo', Icono: RefreshCw }] : []),
-    { href: '/hoy', texto: 'App del vendedor', Icono: Smartphone },
+    { href: '/ver-como', texto: 'Ver la app como…', Icono: Smartphone },
   ]
   return (
     <nav aria-label="Panel" className="flex gap-1 overflow-x-auto lg:flex-col">

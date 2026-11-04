@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { CheckCircle2, MessageCircle, Navigation, Pencil, Phone, Plus, Trash2 } from 'lucide-react'
-import { useVendedor } from '@/components/vendedor/Proveedor'
+import { AVISO_SOLO_LECTURA, useVendedor } from '@/components/vendedor/Proveedor'
 import { Aviso, Boton, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
@@ -22,7 +22,7 @@ export default function PaginaLugar() {
   const busqueda = useSearchParams()
   const lugarId = busqueda.get('c') ?? ''
   const parada = busqueda.get('parada')
-  const { perfil } = useVendedor()
+  const { perfil, soloLectura } = useVendedor()
   const [lugar, setLugar] = useState<Lugar | null>(null)
   const [medicos, setMedicos] = useState<Medico[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -65,6 +65,7 @@ export default function PaginaLugar() {
   // Lugar cargado de más o mal: sale de la lista y de las rutas de hoy en adelante (las visitas quedan).
   async function quitarLugar() {
     if (!lugar) return
+    if (soloLectura) return setErrorQuitar(AVISO_SOLO_LECTURA)
     if (!navigator.onLine) return setErrorQuitar('Necesitás señal para quitar un lugar.')
     if (!confirm(`¿Quitar «${lugar.razon_social}» de tus lugares? Sale de la lista, de tus rutas y de los médicos que atienden ahí. Las visitas que ya hiciste quedan en el historial.`)) return
     setQuitando(true); setErrorQuitar(null)

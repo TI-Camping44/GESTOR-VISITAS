@@ -197,7 +197,8 @@ export default function Vendedores() {
                     </div>
                   </td>
                   <td>
-                    <Selector disabled={!ed} value={rolApp(v)} onChange={(e) => void actualizar(v.id, desdeRolApp(e.target.value as RolApp))} className={LISTA + ' w-44'} aria-label={`Rol de ${v.nombre}`}>
+                    <Selector disabled={!ed || v.id === perfil?.id} value={rolApp(v)} onChange={(e) => void actualizar(v.id, desdeRolApp(e.target.value as RolApp))} className={LISTA + ' w-44'} aria-label={`Rol de ${v.nombre}`}
+                      title={v.id === perfil?.id ? 'Tu propio rol lo cambia otro admin. Para ver la app de un vendedor: «Ver la app como…».' : undefined}>
                       {Object.entries(ROLES).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
                     </Selector>
                   </td>
@@ -251,7 +252,7 @@ export default function Vendedores() {
                     </div>
                     <div className="mt-1 flex items-center gap-2">
                       {ed && v.activo && <Invitacion compacto id={v.id} v={v} empresa={empresaDe(v)} />}
-                      <input type="checkbox" className="ml-auto size-4 accent-[var(--c-marca)]" disabled={!ed} checked={v.activo} title={v.activo ? 'Activo (destildá para quitarle el acceso)' : 'Inactivo'}
+                      <input type="checkbox" className="ml-auto size-4 accent-[var(--c-marca)]" disabled={!ed || v.id === perfil?.id} checked={v.activo} title={v.activo ? 'Activo (destildá para quitarle el acceso)' : 'Inactivo'}
                         onChange={(e) => void actualizar(v.id, { activo: e.target.checked })} aria-label={`Activo: ${v.nombre}`} />
                     </div>
                   </td>

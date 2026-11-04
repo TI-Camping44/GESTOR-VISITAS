@@ -7,7 +7,7 @@ import { Aviso, Boton } from '@/components/ui'
 import { fmtSoloHora } from '@/lib/fechas'
 
 export function BarraJornada() {
-  const { perfil, jornada, cargandoJornada, pendientes, enLinea, erroresSubida, iniciarJornada, terminarJornada, aceptarAviso } = useVendedor()
+  const { perfil, jornada, cargandoJornada, pendientes, enLinea, erroresSubida, iniciarJornada, terminarJornada, aceptarAviso, soloLectura } = useVendedor()
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mostrarAviso, setMostrarAviso] = useState(false)
@@ -34,7 +34,9 @@ export function BarraJornada() {
             <WifiOff className="size-4" aria-hidden /> Sin señal: lo que cargues se guarda y se sube solo.
           </p>
         )}
-        {cargandoJornada ? (
+        {soloLectura ? (
+          <p className="text-sm text-tenue">La jornada la inicia {perfil.nombre} desde su celular. En esta vista no se inicia ni se comparte ubicación.</p>
+        ) : cargandoJornada ? (
           <div className="h-14 animate-pulse rounded-lg bg-borde/50" />
         ) : jornada ? (
           <div className="flex flex-col gap-2">

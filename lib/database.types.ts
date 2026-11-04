@@ -237,7 +237,11 @@ export type Database = {
       vis_reporte_zonas: { Args: { p_desde: string; p_hasta: string }; Returns: Record<string, unknown>[] }
       vis_clientes_sin_visita: { Args: { p_dias?: number; p_zona?: string }; Returns: Record<string, unknown>[] }
       vis_proximas_visitas: { Args: { p_hasta?: string }; Returns: ProximaVisita[] }
-      vis_mis_visitas: { Args: { p_desde: string; p_hasta: string }; Returns: MiVisita[] }
+      vis_mis_visitas: { Args: { p_desde: string; p_hasta: string; p_vendedor?: string }; Returns: MiVisita[] }
+      vis_para_ver_como: {
+        Args: never
+        Returns: { id: string; nombre: string; tipo: TipoUsuario; empresa_id: string; empresa: string; equipo: string | null }[]
+      }
       vis_vecinos_de_otros: { Args: { p_lat: number; p_lng: number; p_radio_m?: number }; Returns: { razon_social: string; vendedor: string; distancia_m: number }[] }
       vis_sugerir_paradas: { Args: { p_ruta: string }; Returns: Sugerida[] }
       vis_asignar_zonas_por_ciudad: { Args: never; Returns: number }

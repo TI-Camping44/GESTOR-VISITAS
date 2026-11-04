@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useVendedor } from '@/components/vendedor/Proveedor'
+import { AVISO_SOLO_LECTURA, useVendedor } from '@/components/vendedor/Proveedor'
 import { AreaTexto, Aviso, Boton, Entrada, Etiqueta, Selector, Tarjeta } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
@@ -20,7 +20,7 @@ export default function EditarMedico() {
   const id = busqueda.get('id')
   const lugarInicial = busqueda.get('lugar')
   const router = useRouter()
-  const { perfil } = useVendedor()
+  const { perfil, soloLectura } = useVendedor()
   const [lugares, setLugares] = useState<LugarOpcion[]>([])
   const [f, setF] = useState({ nombre: '', especialidad: '', telefono: '', email: '', notas: '', frecuencia_dias: 30 })
   const [elegidos, setElegidos] = useState<Record<string, string>>(lugarInicial ? { [lugarInicial]: '' } : {}) // lugar → horario
@@ -65,6 +65,7 @@ export default function EditarMedico() {
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault()
+    if (soloLectura) return setError(AVISO_SOLO_LECTURA)
     setError(null)
     if (!f.nombre.trim()) return setError('Falta el nombre del médico.')
     if (!Object.keys(elegidos).length) return setError('Elegí al menos un lugar donde atiende.')
@@ -102,6 +103,7 @@ export default function EditarMedico() {
   }
 
   async function darDeBaja() {
+    if (soloLectura) return setError(AVISO_SOLO_LECTURA)
     if (!id || !confirm(`¿Borrar a ${f.nombre}? Sale de tu lista y de sus lugares (las visitas que ya le hiciste quedan en el historial).`)) return
     setEnviando(true)
     const { error } = await supabaseNavegador().from('vis_medicos').update({ activo: false }).eq('id', id)

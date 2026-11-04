@@ -830,4 +830,26 @@ do $$ declare r jsonb; begin
 end $$;
 reset role;
 
+-- ── Ver como y no cambiarse el propio rol (0026) ───────────────────
+select pg_temp.como('sergio@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  begin
+    update vis_vendedores set tipo = 'medica' where email = 'sergio@camping44.com.py';
+    assert false, 'nadie se cambia su propio rol';
+  exception when raise_exception then null;
+  end;
+  assert exists (select 1 from vis_para_ver_como() where nombre = 'Vale' and tipo = 'medica'), 'Sergio puede mirar la app de la visitadora';
+  assert not exists (select 1 from vis_para_ver_como() where empresa = 'Camping 44'), 'pero no a la gente de Camping 44';
+  assert (select count(*) from vis_mis_visitas(vis_hoy() - 7, vis_hoy(), (select id from vis_vendedores where nombre = 'Vale'))) >= 1, 'y ve las visitas de ella';
+end $$;
+reset role;
+select pg_temp.como('hugo@vitalica.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert not exists (select 1 from vis_para_ver_como()), 'un vendedor no mira a nadie';
+  assert not exists (select 1 from vis_mis_visitas(vis_hoy() - 7, vis_hoy(), (select id from vis_vendedores where nombre = 'Vale'))), 'ni ve visitas ajenas';
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;

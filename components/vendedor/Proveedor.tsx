@@ -24,7 +24,11 @@ type Ctx = {
   refrescarPendientes: () => Promise<void>
   /** Nombre del vendedor de un cliente (null si no tiene; 'otro vendedor' si no es visible). */
   nombreVendedor: (id: string | null | undefined) => string | null
+  /** Un supervisor mirando la app de otro (Ver la app como…): no se guarda nada. */
+  soloLectura: boolean
 }
+
+export const AVISO_SOLO_LECTURA = 'Estás viendo la app de otra persona (solo lectura): acá no se guarda nada.'
 
 const Contexto = createContext<Ctx | null>(null)
 
@@ -34,7 +38,8 @@ export function useVendedor() {
   return c
 }
 
-export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfil; children: ReactNode }) {
+export function ProveedorVendedor({ perfil: inicial, observador = null, children }: { perfil: Perfil; observador?: string | null; children: ReactNode }) {
+  const soloLectura = !!observador
   const [perfil, setPerfil] = useState(inicial)
   const [jornada, setJornada] = useState<Jornada | null>(null)
   const [cargandoJornada, setCargando] = useState(true)
@@ -57,6 +62,7 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
   useEffect(() => {
     let vivo = true
     const clave = `jornada:${inicial.id}`
+    if (soloLectura) { setJornada(null); setCargando(false); return }
     ;(async () => {
       const cache = await leerCache<Jornada | null>(clave).catch(() => null)
       if (cache && vivo) {
@@ -74,7 +80,7 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
       setCargando(false)
     })()
     return () => { vivo = false }
-  }, [inicial.id])
+  }, [inicial.id, soloLectura])
 
   // Nombres de los vendedores (para avisar cuando un cliente es de otro). Sin señal, los guardados.
   useEffect(() => {
@@ -106,7 +112,7 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
       void sb.from('vis_productos').select('*').eq('activo', true).order('orden').order('nombre')
         .then(({ data }) => { if (data) void guardarCache('productos', data).catch(() => {}) })
     }
-    if (!('serviceWorker' in navigator)) return
+    if (soloLectura || !('serviceWorker' in navigator)) return
     const clave = 'vis-precarga'
     try { if (Date.now() - Number(localStorage.getItem(clave) ?? 0) < 6 * 3600_000) return } catch { /* sin almacenamiento: igual precarga */ }
     void navigator.serviceWorker.ready.then((reg) => {
@@ -114,7 +120,7 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
       reg.active?.postMessage({ tipo: 'precargar', urls })
       try { localStorage.setItem(clave, String(Date.now())) } catch { /* nada */ }
     })
-  }, [inicial.id, inicial.tipo])
+  }, [inicial.id, inicial.tipo, soloLectura])
 
   // Señal, cola y subida periódica (las visitas offline se suben aunque no haya jornada).
   useEffect(() => {
@@ -136,6 +142,7 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
   }, [])
 
   const iniciarJornada = useCallback(async () => {
+    if (soloLectura) throw new Error(AVISO_SOLO_LECTURA)
     if (!navigator.onLine) throw new Error('Necesitás señal para iniciar la jornada.')
     const gps = await leerGps(15000).catch(() => null) // sin GPS igual se abre
     const { data, error } = await supabaseNavegador().rpc('vis_iniciar_jornada', {
@@ -145,7 +152,7 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
     setJornada(data)
     void guardarCache(`jornada:${inicial.id}`, data).catch(() => {})
     tracker.iniciar()
-  }, [inicial.id])
+  }, [inicial.id, soloLectura])
 
   const terminarJornada = useCallback(async () => {
     if (!navigator.onLine) throw new Error('Necesitás señal para terminar la jornada (para subir el recorrido).')
@@ -162,7 +169,7 @@ export function ProveedorVendedor({ perfil: inicial, children }: { perfil: Perfi
   }, [subir, refrescarPendientes, inicial.id])
 
   return (
-    <Contexto.Provider value={{ perfil, esMedica: perfil.tipo === 'medica', jornada, cargandoJornada, pendientes, enLinea, erroresSubida, iniciarJornada, terminarJornada, aceptarAviso, refrescarPendientes, nombreVendedor }}>
+    <Contexto.Provider value={{ perfil, esMedica: perfil.tipo === 'medica', jornada, cargandoJornada, pendientes, enLinea, erroresSubida, iniciarJornada, terminarJornada, aceptarAviso, refrescarPendientes, nombreVendedor, soloLectura }}>
       {children}
     </Contexto.Provider>
   )
