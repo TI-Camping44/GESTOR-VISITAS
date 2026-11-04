@@ -19,6 +19,7 @@ export default function EditarMedico() {
   const busqueda = useSearchParams()
   const id = busqueda.get('id')
   const lugarInicial = busqueda.get('lugar')
+  const parada = busqueda.get('parada')
   const router = useRouter()
   const { perfil, soloLectura } = useVendedor()
   const [lugares, setLugares] = useState<LugarOpcion[]>([])
@@ -56,7 +57,7 @@ export default function EditarMedico() {
   const cambiar = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setF((x) => ({ ...x, [k]: k === 'frecuencia_dias' ? Number(e.target.value) : e.target.value }))
 
-  const salir = () => router.push(lugarInicial ? urlLugar(lugarInicial) : '/medicos')
+  const salir = () => router.push(lugarInicial ? urlLugar(lugarInicial, { parada }) : '/medicos')
 
   async function refrescarCache() {
     const { data } = await supabaseNavegador().from('vis_medicos_v').select('*').order('nombre').limit(3000)

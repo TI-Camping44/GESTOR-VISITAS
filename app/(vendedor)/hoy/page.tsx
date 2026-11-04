@@ -181,7 +181,7 @@ export default function Hoy() {
                     <p className="font-semibold leading-snug">{p.razon_social}</p>
                     <p className="text-sm text-tenue">{[p.direccion, p.ciudad].filter(Boolean).join(' · ') || 'Sin dirección'}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <PuntoEstado estado={p.estado} conTexto />
+                      {!esMedica && <PuntoEstado estado={p.estado} conTexto />}
                       <span className="text-xs text-tenue">Última visita: {hace(p.ultima_visita)}</span>
                     </div>
                     {(p.ultimo_resultado || p.ultima_observacion) && (

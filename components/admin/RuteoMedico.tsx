@@ -155,7 +155,7 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
                         <td className="tabular">{primera ? horas.get(f.parada_id) : ''}</td>
                         <td>{primera && <><p className="font-medium">{f.lugar}</p>{f.direccion && <p className="text-xs text-tenue">{f.direccion}</p>}</>}</td>
                         <td>{f.especialidad ?? <span className="text-tenue">—</span>}</td>
-                        <td>{f.medico ?? (f.medico_visitado ? <span className="text-tenue">visitó a {f.medico_visitado}</span> : <span className="text-tenue">a buscar</span>)}</td>
+                        <td>{f.medico ?? (f.medico_visitado ? <span className="text-tenue">visitó a {f.medico_visitado}</span> : <span className="text-tenue">{f.objetivo_id ? 'a buscar' : '—'}</span>)}</td>
                         <td>{f.resultado ?? ''}{f.observaciones && <p className="text-xs text-tenue">{f.observaciones}</p>}</td>
                         <td className="tabular">{f.proxima_visita ? fmtFecha(f.proxima_visita) : ''}</td>
                         <td><span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', COLOR[e])}>{e}</span></td>
@@ -192,7 +192,7 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-superficie text-left text-xs text-tenue"><tr className="[&>th]:px-2 [&>th]:py-1.5"><th>Día</th><th>Centro médico / Consultorio</th><th>Especialidad</th><th>Dr</th></tr></thead>
               <tbody>{leida.filas.map((f, i) => (
-                <tr key={i} className="border-t border-borde [&>td]:px-2 [&>td]:py-1"><td className="capitalize">{fmtDia(f.dia)} {fmtFecha(f.dia).slice(0, 5)}</td><td>{f.lugar}</td><td>{f.especialidad ?? '—'}</td><td>{f.medico ?? <span className="text-tenue">a buscar</span>}</td></tr>
+                <tr key={i} className="border-t border-borde [&>td]:px-2 [&>td]:py-1"><td className="capitalize">{fmtDia(f.dia)}</td><td>{f.lugar}</td><td>{f.especialidad ?? '—'}</td><td>{f.medico ?? <span className="text-tenue">a buscar</span>}</td></tr>
               ))}</tbody>
             </table>
           </div>

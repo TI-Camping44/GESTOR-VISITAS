@@ -70,7 +70,8 @@ export default function PaginaLugar() {
   const deAca = useMemo(() => (medicos ?? []).filter((m) => m.lugares.some((l) => l.lugar_id === lugarId))
     .sort((a, b) => Number(objetivoIds.has(b.id)) - Number(objetivoIds.has(a.id)) || Number(tocaVisitar(b)) - Number(tocaVisitar(a)) || a.nombre.localeCompare(b.nombre, 'es')), [medicos, lugarId, objetivoIds])
   // Especialidades a buscar: las de la ruta sin médico, salvo que ya haya uno de esa especialidad acá.
-  const aBuscar = objetivos.filter((o) => !o.medico_id && o.especialidad)
+  const esp = (x: string | null | undefined) => (x ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+  const aBuscar = objetivos.filter((o) => !o.medico_id && o.especialidad && !deAca.some((m) => esp(m.especialidad) === esp(o.especialidad)))
 
   // Lugar cargado de más o mal: sale de la lista y de las rutas de hoy en adelante (las visitas quedan).
   async function quitarLugar() {
@@ -99,7 +100,7 @@ export default function PaginaLugar() {
         <p className="text-sm text-tenue">{[lugar.direccion, lugar.ciudad].filter(Boolean).join(' · ') || 'Sin dirección'}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {comoLlegar && <a href={comoLlegar} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-borde px-3 py-1.5 text-sm font-medium"><Navigation className="size-4 text-marca" aria-hidden /> Cómo llegar</a>}
-          <Link href={`/medicos/nuevo?lugar=${lugar.id}`} className="inline-flex items-center gap-1.5 rounded-lg border border-borde px-3 py-1.5 text-sm font-medium"><Plus className="size-4 text-marca" aria-hidden /> Agregar médico acá</Link>
+          <Link href={`/medicos/nuevo?lugar=${lugar.id}${parada ? `&parada=${parada}` : ''}`} className="inline-flex items-center gap-1.5 rounded-lg border border-borde px-3 py-1.5 text-sm font-medium"><Plus className="size-4 text-marca" aria-hidden /> Agregar médico acá</Link>
         </div>
       </div>
 
@@ -110,7 +111,7 @@ export default function PaginaLugar() {
           {aBuscar.map((o) => (
             <div key={o.especialidad} className="flex items-center justify-between gap-2 text-sm">
               <span>Médico de <b>{o.especialidad}</b></span>
-              <Link href={`/medicos/nuevo?lugar=${lugar.id}&especialidad=${encodeURIComponent(o.especialidad ?? '')}`} className="shrink-0 font-medium text-marca underline">Cargar médico</Link>
+              <Link href={`/medicos/nuevo?lugar=${lugar.id}${parada ? `&parada=${parada}` : ''}&especialidad=${encodeURIComponent(o.especialidad ?? '')}`} className="shrink-0 font-medium text-marca underline">Cargar médico</Link>
             </div>
           ))}
           <p className="text-xs text-tenue">Preguntá en recepción quién atiende esa especialidad y sus horarios, y cargalo acá.</p>
