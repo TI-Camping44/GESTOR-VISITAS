@@ -2,7 +2,7 @@
 // y si pasó la velocidad máxima. Sirve igual con posiciones de la app y de Traccar (GPS en segundo plano).
 import { distanciaM } from '@/lib/geo'
 
-export type Pos = { fecha_hora: string; lat: number; lng: number; bateria_pct?: number | null; velocidad_kmh?: number | null; origen?: string | null }
+export type Pos = { fecha_hora: string; lat: number; lng: number; precision_m?: number | null; bateria_pct?: number | null; velocidad_kmh?: number | null; origen?: string | null }
 export type Parada = { inicio: string; fin: string; minutos: number; lat: number; lng: number }
 export type Corte = {
   inicio: string; fin: string; minutos: number; km: number | null
@@ -83,4 +83,32 @@ export function motivoCorte(c: Corte, conSegundoPlano: boolean): string {
   if (c.tipo === 'al_iniciar') return 'Sin GPS desde que inició la jornada'
   if (c.tipo === 'al_final') return conSegundoPlano ? 'Dejó de llegar el GPS (celular apagado, sin señal o GPS en segundo plano detenido)' : 'Sin GPS hasta el cierre (app cerrada o celular bloqueado)'
   return conSegundoPlano ? 'Sin GPS (celular apagado, sin señal o GPS en segundo plano detenido)' : 'Sin GPS (app cerrada o celular bloqueado)'
+}
+
+/**
+ * Saca las lecturas que hacen ir y volver la línea: las imprecisas (más de 60 m) cuando hay otra buena
+ * a menos de 3 minutos, los saltos imposibles (más de 180 km/h) y los picos (va lejos y vuelve enseguida).
+ */
+export function limpiarPosiciones<T extends Pos>(pos: T[], { malaM = 60, maxKmh = 180 }: { malaM?: number; maxKmh?: number } = {}): T[] {
+  const p = [...pos].sort((a, b) => a.fecha_hora.localeCompare(b.fecha_hora))
+  const buena = (x: T) => x.precision_m == null || Number(x.precision_m) <= malaM
+  let r = p.filter((x, i) => buena(x) || !p.some((y, j) => j !== i && buena(y) && Math.abs(min(x.fecha_hora, y.fecha_hora)) <= 3))
+  for (let cambio = true; cambio;) {
+    cambio = false
+    const out: T[] = []
+    for (let i = 0; i < r.length; i++) {
+      const a = out.at(-1), b = r[i]!, c = r[i + 1]
+      if (a) {
+        const ab = distanciaM(a, b), h = min(a.fecha_hora, b.fecha_hora) / 60
+        if (h > 0 && ab / 1000 / h > maxKmh) { cambio = true; continue }
+        if (c && ab > 250) {
+          const bc = distanciaM(b, c), ac = distanciaM(a, c)
+          if (bc > 250 && ac < 0.4 * Math.min(ab, bc) && min(a.fecha_hora, c.fecha_hora) <= 10) { cambio = true; continue }
+        }
+      }
+      out.push(b)
+    }
+    r = out
+  }
+  return r
 }

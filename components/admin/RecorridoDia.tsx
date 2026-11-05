@@ -9,7 +9,8 @@ import { supabaseNavegador } from '@/lib/supabase/client'
 import { descargarCsv } from '@/lib/csv'
 import { fmtFecha, fmtSoloHora, hace, hoyIso } from '@/lib/fechas'
 import { distanciaM, fmtDistancia } from '@/lib/geo'
-import { analizarJornada, motivoCorte, type Corte, type Exceso, type Parada, type Pos } from '@/lib/paradas'
+import { analizarJornada, limpiarPosiciones, motivoCorte, type Corte, type Exceso, type Parada, type Pos } from '@/lib/paradas'
+import { ajustarTramo, caminoProbable } from '@/lib/calles'
 import { cn } from '@/lib/utils'
 import type { ParadaDia, Vendedor } from '@/lib/database.types'
 
@@ -32,6 +33,9 @@ export function RecorridoDia({ vendedores }: { vendedores: Vendedor[] }) {
   const [dia, setDia] = useState(hoyIso())
   const [datos, setDatos] = useState<Datos | null>(null)
   const [cargando, setCargando] = useState(false)
+  const [calles, setCalles] = useState(false)
+  const [ajuste, setAjuste] = useState<{ lineas: LineaMapa[]; incompleto: boolean } | null>(null)
+  const [ajustando, setAjustando] = useState(false)
 
   useEffect(() => {
     if (!vendedorId) { setDatos(null); return }
@@ -41,7 +45,7 @@ export function RecorridoDia({ vendedores }: { vendedores: Vendedor[] }) {
     const hasta = new Date(new Date(desde).getTime() + 86400000).toISOString()
     ;(async () => {
       const [p, v, j, r, c, g] = await Promise.all([
-        sb.from('vis_posiciones').select('fecha_hora, lat, lng, bateria_pct, velocidad_kmh, origen, jornada_id').eq('vendedor_id', vendedorId).gte('fecha_hora', desde).lt('fecha_hora', hasta).order('fecha_hora').limit(5000),
+        sb.from('vis_posiciones').select('fecha_hora, lat, lng, precision_m, bateria_pct, velocidad_kmh, origen, jornada_id').eq('vendedor_id', vendedorId).gte('fecha_hora', desde).lt('fecha_hora', hasta).order('fecha_hora').limit(5000),
         sb.from('vis_visitas').select('id, fecha_hora, lat, lng, hizo_pedido, cliente:vis_clientes!vis_visitas_cliente_id_fkey(razon_social)').eq('vendedor_id', vendedorId).gte('fecha_hora', desde).lt('fecha_hora', hasta).order('fecha_hora'),
         sb.from('vis_jornadas').select('id, inicio, fin, km_actual:vis_km_actual').eq('vendedor_id', vendedorId).gte('inicio', desde).lt('inicio', hasta).order('inicio'),
         sb.rpc('vis_paradas_dia', { p_dia: dia, p_vendedor: vendedorId }),
@@ -49,7 +53,8 @@ export function RecorridoDia({ vendedores }: { vendedores: Vendedor[] }) {
         sb.from('vis_gps_dispositivos').select('ultima_recibida_el').eq('vendedor_id', vendedorId).maybeSingle(),
       ])
       if (!vivo) return
-      const pos = (p.data ?? []) as (Pos & { jornada_id: string })[]
+      // Sin las lecturas imprecisas ni los saltos de GPS (hacían ir y volver la línea).
+      const pos = limpiarPosiciones((p.data ?? []) as (Pos & { jornada_id: string })[])
       const visitas = (v.data ?? []) as unknown as Visita[]
       const jornadas = (j.data ?? []) as unknown as { id: string; inicio: string; fin: string | null; km_actual: number | null }[]
       const ruta = (r.data ?? []) as ParadaDia[]
@@ -90,10 +95,39 @@ export function RecorridoDia({ vendedores }: { vendedores: Vendedor[] }) {
   }, [vendedorId, dia, sb, vendedores])
 
   const conSegundoPlano = !!datos?.pos.some((x) => x.origen === 'traccar')
-  const lineas = useMemo<LineaMapa[]>(() => !datos ? [] : [
+
+  // Ajustar a calles (OSRM): tramos con GPS encajados en las calles y, sin GPS, el camino más corto.
+  useEffect(() => {
+    if (!calles || !datos) { setAjuste(null); return }
+    let vivo = true
+    setAjustando(true)
+    ;(async () => {
+      const lineas: LineaMapa[] = []
+      let incompleto = false, consultas = 0
+      for (const [i, t] of datos.tramos.entries()) {
+        if (++consultas > 30) { incompleto = true; lineas.push({ id: `t${i}`, color: '#2563eb', puntos: t }); continue }
+        const r = await ajustarTramo(t)
+        if (!vivo) return
+        if (!r.ajustado) incompleto = true
+        lineas.push({ id: `t${i}`, color: '#2563eb', puntos: r.puntos })
+      }
+      for (const [i, c] of datos.cortes.entries()) {
+        if (!c.desde || !c.hasta) continue
+        if (++consultas > 30) { incompleto = true; lineas.push({ id: `c${i}`, color: '#6b7280', puntos: [c.desde, c.hasta], punteada: true }); continue }
+        const r = await caminoProbable(c.desde, c.hasta)
+        if (!vivo) return
+        if (!r.ajustado) incompleto = true
+        lineas.push({ id: `c${i}`, color: '#6b7280', puntos: r.puntos, punteada: true })
+      }
+      if (vivo) { setAjuste({ lineas, incompleto }); setAjustando(false) }
+    })()
+    return () => { vivo = false }
+  }, [calles, datos])
+
+  const lineas = useMemo<LineaMapa[]>(() => calles && ajuste ? ajuste.lineas : !datos ? [] : [
     ...datos.tramos.map((t, i) => ({ id: `t${i}`, color: '#2563eb', puntos: t })),
     ...datos.cortes.filter((c) => c.desde && c.hasta).map((c, i) => ({ id: `c${i}`, color: '#6b7280', puntos: [c.desde!, c.hasta!], punteada: true })),
-  ], [datos])
+  ], [datos, calles, ajuste])
   const puntos = useMemo<PuntoMapa[]>(() => !datos ? [] : [
     ...datos.visitas.filter((x) => x.lat != null).map((x, i) => ({
       id: x.id, lat: x.lat!, lng: x.lng!, etiqueta: String(i + 1), color: x.hizo_pedido ? '#16a34a' : '#1f6f4a',
@@ -160,6 +194,12 @@ export function RecorridoDia({ vendedores }: { vendedores: Vendedor[] }) {
           <label htmlFor="rec-d" className="mb-1 block text-xs text-tenue">Día</label>
           <Entrada id="rec-d" type="date" value={dia} max={hoyIso()} onChange={(e) => setDia(e.target.value)} />
         </div>
+        {datos && (
+          <label className="flex min-h-10 items-center gap-2 text-sm" title="Redibuja el trayecto pegado a las calles (OpenStreetMap). En los tramos sin GPS muestra el camino más corto, que es una estimación.">
+            <input type="checkbox" className="size-4 accent-[var(--c-marca)]" checked={calles} onChange={(e) => setCalles(e.target.checked)} />
+            Ajustar a calles (aproximado)
+          </label>
+        )}
         {datos && <Boton variante="secundario" onClick={excel} disabled={!eventos.length}>Excel</Boton>}
       </div>
       {cargando && !datos && <div className="h-96 animate-pulse rounded-xl bg-borde/40" />}
@@ -185,6 +225,9 @@ export function RecorridoDia({ vendedores }: { vendedores: Vendedor[] }) {
             </div>
           )}
           <Mapa puntos={puntos} lineas={lineas} claveEncuadre={`${vendedorId}-${dia}-${puntos.length}-${datos.pos.length}`} className="h-96 w-full overflow-hidden rounded-xl border border-borde" />
+          {calles && (ajustando
+            ? <p className="text-xs text-tenue">Ajustando a calles… (puede tardar unos segundos)</p>
+            : ajuste && <p className="text-xs text-amber-700 dark:text-amber-300">Ajustado a calles con OpenStreetMap: en los tramos sin GPS (punteados) se dibuja el camino más corto, no necesariamente el que hizo.{ajuste.incompleto && ' Algunos tramos no se pudieron ajustar y quedan como líneas rectas.'}</p>)}
           <p className="text-xs text-tenue">Azul: recorrido con GPS · gris punteado: tramo sin GPS (no se sabe por dónde fue) · <b className="text-red-700 dark:text-red-400">!</b> parada fuera de ruta · <b className="text-amber-700 dark:text-amber-400">P</b> en un cliente sin visita registrada · <b className="text-violet-700 dark:text-violet-400">V</b> más de 110 km/h. Parada = 10 minutos o más en el mismo lugar.</p>
           {eventos.length > 0 && (
             <div className="overflow-x-auto">

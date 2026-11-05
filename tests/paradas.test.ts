@@ -41,3 +41,19 @@ test('excesos de velocidad agrupados', () => {
   assert.deepEqual(r.excesos.map((e) => [e.inicio, e.fin, e.maxKmh]), [[t('02:01'), t('02:02'), 145]])
   assert.equal(r.tramos.length, 1)
 })
+
+import { limpiarPosiciones } from '../lib/paradas'
+
+test('limpiar: imprecisas junto a buenas, saltos imposibles y picos', () => {
+  const P = (hhmm: string, lat: number, lng: number, precision_m: number | null = 10) => ({ fecha_hora: t(hhmm), lat, lng, precision_m })
+  const pos = [
+    P('10:00', -25.3, -57.6), P('10:01', -25.3005, -57.6, 140),   // imprecisa al lado de una buena
+    P('10:02', -25.301, -57.6),
+    P('10:03', -25.33, -57.6),                                    // pico: 3 km y vuelve
+    P('10:04', -25.302, -57.6),
+    P('10:05', -25.40, -57.6),                                    // salto imposible (11 km en 1 min)
+    P('10:06', -25.303, -57.6),
+    P('11:00', -25.35, -57.55, 120),                              // imprecisa pero sola: queda
+  ]
+  assert.deepEqual(limpiarPosiciones(pos).map((x) => x.fecha_hora), [t('10:00'), t('10:02'), t('10:04'), t('10:06'), t('11:00')])
+})
