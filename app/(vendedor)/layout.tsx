@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { requerirPerfil } from '@/lib/sesion'
 import { supabaseServidor } from '@/lib/supabase/server'
@@ -37,6 +38,7 @@ export default async function LayoutVendedor({ children }: { children: React.Rea
           {visto && <BannerVerComo nombre={visto.nombre} />}
           <BarraJornada />
           <main className="px-4 py-4"><Suspense fallback={null}><BotonVolver /></Suspense>{children}</main>
+          <div className="mx-4 mb-2 text-center"><Link href="/gps" className="text-sm text-tenue underline">GPS en segundo plano</Link></div>
           <SelectorTema className="mx-4 mb-4" />
         </div>
         <NavInferior />

@@ -8,7 +8,7 @@ import { Aviso, Boton, Entrada, Etiqueta, Insignia, Selector, Tarjeta } from '@/
 import { Invitacion } from '@/components/admin/Invitacion'
 import { enviarInvitacion } from './acciones'
 import { supabaseNavegador } from '@/lib/supabase/client'
-import { fmtFecha } from '@/lib/fechas'
+import { fmtFecha, hace } from '@/lib/fechas'
 import { leerCoordenadas } from '@/lib/geo'
 import { mensajeError } from '@/lib/utils'
 import type { Empresa, Equipo, Perfil, Rol, TipoUsuario, Vendedor } from '@/lib/database.types'
@@ -31,6 +31,8 @@ export default function Vendedores() {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [equipos, setEquipos] = useState<Equipo[]>([])
   const [deposito, setDeposito] = useState('')
+  // GPS en segundo plano (Traccar): último envío de cada uno.
+  const [traccar, setTraccar] = useState<Record<string, string | null>>({})
   const [error, setError] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
 
@@ -45,6 +47,7 @@ export default function Vendedores() {
     sb.rpc('vis_vincular_usuario').then(({ data }) => setPerfil((data as Perfil | null) ?? null))
     sb.from('vis_empresas').select('id, nombre').order('created_at').then(({ data }) => setEmpresas(data ?? []))
     sb.from('vis_equipos').select('id, empresa_id, nombre').order('created_at').then(({ data }) => setEquipos(data ?? []))
+    sb.from('vis_gps_dispositivos').select('vendedor_id, ultima_recibida_el').then(({ data }) => setTraccar(Object.fromEntries((data ?? []).map((d) => [d.vendedor_id, d.ultima_recibida_el]))))
     sb.from('vis_config').select('base_lat, base_lng').maybeSingle().then(({ data }) => setDeposito(coordTexto(data?.base_lat ?? null, data?.base_lng ?? null)))
   }, [sb, cargar])
 
@@ -249,6 +252,7 @@ export default function Vendedores() {
                         ? <Insignia className="bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-200" >ingresó</Insignia>
                         : <Insignia>nunca ingresó</Insignia>}
                       {v.tracking_aceptado_el && <span className="whitespace-nowrap text-xs text-tenue" title={`Aceptó el aviso de ubicación el ${fmtFecha(v.tracking_aceptado_el)}`}>GPS ✓</span>}
+                      {v.id in traccar && <span className="whitespace-nowrap text-xs text-tenue" title="GPS en segundo plano (Traccar Client): último envío">{traccar[v.id] ? `Traccar ${hace(traccar[v.id])}` : 'Traccar sin envíos'}</span>}
                     </div>
                     <div className="mt-1 flex items-center gap-2">
                       {ed && v.activo && <Invitacion compacto id={v.id} v={v} empresa={empresaDe(v)} />}

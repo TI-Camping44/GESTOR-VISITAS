@@ -908,4 +908,50 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── GPS en segundo plano con Traccar (0028) ────────────────────────
+select pg_temp.como('vale@vitalica.com.py') \gset
+set role authenticated;
+do $$ declare a jsonb; b jsonb; c jsonb; begin
+  a := vis_mi_gps();
+  b := vis_mi_gps();
+  assert a ->> 'codigo' = b ->> 'codigo' and length(a ->> 'codigo') >= 10, format('un código fijo por vendedor: %s', a);
+  c := vis_mi_gps(true);
+  assert c ->> 'codigo' <> a ->> 'codigo', 'cambiar el código';
+  perform set_config('test.codigo', c ->> 'codigo', false);
+  begin
+    perform vis_gps_recibir(c ->> 'codigo', '[]'::jsonb);
+    assert false, 'solo el servidor recibe posiciones';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+select set_config('test.codigo', (select codigo from vis_gps_dispositivos d join vis_vendedores v on v.id = d.vendedor_id where v.nombre = 'Vale'), false) \gset
+update vis_jornadas set fin = coalesce(fin, now() - interval '3 hours') where vendedor_id = (select id from vis_vendedores where nombre = 'Vale');
+insert into vis_jornadas (vendedor_id, inicio) values ((select id from vis_vendedores where nombre = 'Vale'), now() - interval '1 hour');
+do $$ declare r jsonb; begin
+  r := vis_gps_recibir(current_setting('test.codigo'), jsonb_build_array(
+    jsonb_build_object('fecha_hora', now() - interval '10 minutes', 'lat', -25.29, 'lng', -57.61, 'precision_m', 12, 'bateria_pct', 80),
+    jsonb_build_object('fecha_hora', now() - interval '9 minutes', 'lat', -25.29, 'lng', -57.61, 'precision_m', 900),
+    jsonb_build_object('fecha_hora', now() - interval '2 hours', 'lat', -25.29, 'lng', -57.61, 'precision_m', 10)));
+  assert (r ->> 'guardadas')::int = 1, format('solo con jornada abierta y buena precisión: %s', r);
+  assert (select origen from vis_posiciones where vendedor_id = (r ->> 'vendedor_id')::uuid order by fecha_hora desc limit 1) = 'traccar', 'marcada como Traccar';
+  assert (select ultima_posicion_el from vis_gps_dispositivos where codigo = current_setting('test.codigo')) is not null, 'queda la última posición';
+  r := vis_gps_recibir(current_setting('test.codigo'), jsonb_build_array(
+    jsonb_build_object('fecha_hora', now() - interval '10 minutes', 'lat', -25.29, 'lng', -57.61)));
+  assert (r ->> 'guardadas')::int = 0, 'repetida no se duplica';
+  assert vis_gps_recibir('c44noexiste000', '[]'::jsonb) is null, 'código desconocido';
+end $$;
+select pg_temp.como('hugo@vitalica.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert not exists (select 1 from vis_gps_dispositivos), 'otro vendedor no ve el código de la visitadora';
+end $$;
+reset role;
+select pg_temp.como('sergio@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert exists (select 1 from vis_gps_dispositivos), 'el supervisor ve el estado del GPS de su gente';
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;

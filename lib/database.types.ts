@@ -148,6 +148,12 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['vis_medico_lugares']['Insert']>
         Relationships: []
       }
+      vis_gps_dispositivos: {
+        Row: { vendedor_id: string; codigo: string; creado_el: string; ultima_recibida_el: string | null; ultima_posicion_el: string | null }
+        Insert: { vendedor_id: string; codigo: string; creado_el?: string; ultima_recibida_el?: string | null; ultima_posicion_el?: string | null }
+        Update: Partial<Database['public']['Tables']['vis_gps_dispositivos']['Insert']>
+        Relationships: []
+      }
       vis_parada_objetivos: {
         Row: { id: string; parada_id: string; medico_id: string | null; especialidad: string | null; orden: number }
         Insert: { id?: string; parada_id: string; medico_id?: string | null; especialidad?: string | null; orden?: number }
@@ -220,6 +226,8 @@ export type Database = {
       vis_km_jornada: { Args: { p_jornada: string }; Returns: number }
       vis_quitar_lugar: { Args: { p_lugar: string }; Returns: Json }
       vis_cargar_ruteo: { Args: { p: Json }; Returns: Json }
+      vis_mi_gps: { Args: { p_nuevo?: boolean }; Returns: Json }
+      vis_gps_recibir: { Args: { p_codigo: string; p: Json }; Returns: Json }
       vis_ruteo_semana: { Args: { p_vendedor: string; p_semana: string }; Returns: FilaRuteoSemana[] }
       vis_mi_id: { Args: never; Returns: string }
       vis_mi_rol: { Args: never; Returns: Database['public']['Enums']['vis_rol'] }

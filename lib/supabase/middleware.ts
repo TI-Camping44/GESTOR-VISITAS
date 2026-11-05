@@ -4,7 +4,7 @@ import type { Database } from '../database.types'
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '../config'
 import { opcionesRealtimeServidor } from './sinRealtime'
 
-const PUBLICAS = ['/login', '/auth', '/sin-acceso', '/offline', '/api/cron'] // /api/cron se protege con CRON_SECRET
+const PUBLICAS = ['/login', '/auth', '/sin-acceso', '/offline', '/api/cron', '/api/gps'] // /api/cron: CRON_SECRET; /api/gps: código de cada vendedor
 
 /** Refresca la sesión en cada request y manda al login a quien no está autenticado. */
 export async function actualizarSesion(request: NextRequest) {

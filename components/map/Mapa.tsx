@@ -23,7 +23,7 @@ export type PuntoMapa = {
   peso?: number
 }
 
-export type LineaMapa = { id: string; color: string; puntos: [number, number][] } // [lng, lat]
+export type LineaMapa = { id: string; color: string; puntos: [number, number][]; punteada?: boolean } // [lng, lat]
 
 type Props = {
   puntos: PuntoMapa[]
@@ -53,7 +53,7 @@ function aLineas(lineas: LineaMapa[]): GeoJSON.FeatureCollection<GeoJSON.LineStr
   return {
     type: 'FeatureCollection',
     features: lineas.filter((l) => l.puntos.length > 1).map((l) => ({
-      type: 'Feature', geometry: { type: 'LineString', coordinates: l.puntos }, properties: { id: l.id, color: l.color },
+      type: 'Feature', geometry: { type: 'LineString', coordinates: l.puntos }, properties: { id: l.id, color: l.color, punteada: !!l.punteada },
     })),
   }
 }
@@ -116,7 +116,9 @@ export function Mapa({ puntos, agrupar = false, lineas = [], yo, claveEncuadre, 
     m.addControl(new ControlVerTodo(() => encuadre(m, coordsActuales.current, true)), 'top-right')
     m.on('load', () => {
       m.addSource('lineas', { type: 'geojson', data: aLineas([]) })
-      m.addLayer({ id: 'lineas', type: 'line', source: 'lineas', paint: { 'line-color': ['get', 'color'], 'line-width': 4, 'line-opacity': 0.8 } })
+      m.addLayer({ id: 'lineas', type: 'line', source: 'lineas', filter: ['!=', ['get', 'punteada'], true], paint: { 'line-color': ['get', 'color'], 'line-width': 4, 'line-opacity': 0.8 } })
+      // Tramos sin GPS (Recorrido del día): punteados, para no confundirlos con un camino.
+      m.addLayer({ id: 'lineas-punteadas', type: 'line', source: 'lineas', filter: ['==', ['get', 'punteada'], true], paint: { 'line-color': ['get', 'color'], 'line-width': 3, 'line-opacity': 0.9, 'line-dasharray': [1.5, 2] } })
 
       m.addSource('puntos', { type: 'geojson', data: aGeoJson([]), cluster: agrupar, clusterRadius: 45, clusterMaxZoom: 14 })
       if (agrupar) {
