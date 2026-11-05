@@ -7,6 +7,7 @@ import { supabaseNavegador } from '@/lib/supabase/client'
 import { descargarCsv } from '@/lib/csv'
 import { fmtFecha, hoyIso, sumarDias } from '@/lib/fechas'
 import { tocaVisitar } from '@/lib/medicos'
+import { RuteoMedico } from '@/components/admin/RuteoMedico'
 import { cn, mensajeError } from '@/lib/utils'
 import type { Medico, Producto, ProductoVisita } from '@/lib/database.types'
 
@@ -140,9 +141,11 @@ export default function VisitaMedica() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold">Visita médica</h1>
-        <p className="text-sm text-tenue">Los médicos los cargan las visitadoras desde la app, con los lugares donde atienden.</p>
+        <p className="text-sm text-tenue">El ruteo de la semana, los médicos que cargan las visitadoras desde la app y las muestras entregadas.</p>
       </div>
       {error && <Aviso tipo="error">{error}</Aviso>}
+
+      {visitadoras.length > 0 && <RuteoMedico visitadoras={visitadoras} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <Selector aria-label="Período" value={dias} onChange={(e) => setDias(Number(e.target.value))} className="w-auto">

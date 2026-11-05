@@ -3,11 +3,11 @@
 // vis_posicion_actual. Color por frescura: verde < 5 min, amarillo 5–15, gris > VIS_SIN_SENAL_MIN.
 // Nunca se muestra un punto viejo como si fuera en vivo. Abajo, el recorrido de un día.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Mapa, type LineaMapa, type PuntoMapa } from '@/components/map/MapaDinamico'
-import { Aviso, Entrada, Selector, Tarjeta } from '@/components/ui'
+import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
+import { RecorridoDia } from '@/components/admin/RecorridoDia'
+import { Aviso, Tarjeta } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { fmtFechaHora, fmtSoloHora, hace, hoyIso, lunesDe } from '@/lib/fechas'
-import { fmtDistancia } from '@/lib/geo'
 import { VIS } from '@/lib/config'
 import { mensajeError } from '@/lib/utils'
 import type { FilaTablero, ParadaDia, PosicionActual, Vendedor } from '@/lib/database.types'
@@ -138,68 +138,7 @@ export default function EnVivo() {
         </Tarjeta>
       </div>
 
-      <Recorrido vendedores={vendedores} />
+      <RecorridoDia vendedores={vendedores} />
     </div>
-  )
-}
-
-// Recorrido de un día: trayecto, visitas numeradas, km y horarios.
-function Recorrido({ vendedores }: { vendedores: Vendedor[] }) {
-  const sb = supabaseNavegador()
-  const [vendedorId, setVendedorId] = useState('')
-  const [dia, setDia] = useState(hoyIso())
-  const [datos, setDatos] = useState<{ linea: LineaMapa | null; visitas: PuntoMapa[]; inicio: string | null; fin: string | null; km: number | null } | null>(null)
-
-  useEffect(() => {
-    if (!vendedorId) { setDatos(null); return }
-    const desde = `${dia}T00:00:00-03:00`
-    const hasta = new Date(new Date(desde).getTime() + 86400000).toISOString()
-    Promise.all([
-      sb.from('vis_posiciones').select('fecha_hora, lat, lng').eq('vendedor_id', vendedorId).gte('fecha_hora', desde).lt('fecha_hora', hasta).order('fecha_hora').limit(5000),
-      sb.from('vis_visitas').select('id, fecha_hora, lat, lng, hizo_pedido, cliente:vis_clientes!vis_visitas_cliente_id_fkey(razon_social)').eq('vendedor_id', vendedorId).gte('fecha_hora', desde).lt('fecha_hora', hasta).order('fecha_hora'),
-      sb.from('vis_jornadas').select('inicio, fin, km_recorridos, km_actual:vis_km_actual').eq('vendedor_id', vendedorId).gte('inicio', desde).lt('inicio', hasta).order('inicio'),
-    ]).then(([p, v, j]) => {
-      const pos = p.data ?? []
-      const jornadas = (j.data ?? []) as unknown as { inicio: string; fin: string | null; km_actual: number | null }[]
-      const visitas = ((v.data ?? []) as unknown as { id: string; fecha_hora: string; lat: number | null; lng: number | null; hizo_pedido: boolean; cliente: { razon_social: string } | null }[])
-      setDatos({
-        linea: pos.length > 1 ? { id: 'recorrido', color: '#2563eb', puntos: pos.map((x) => [x.lng, x.lat]) } : null,
-        visitas: visitas.filter((x) => x.lat != null).map((x, i) => ({
-          id: x.id, lat: x.lat!, lng: x.lng!, etiqueta: String(i + 1), color: x.hizo_pedido ? '#16a34a' : '#1f6f4a',
-          titulo: x.cliente?.razon_social ?? 'Visita', detalle: fmtSoloHora(x.fecha_hora),
-        })),
-        inicio: jornadas[0]?.inicio ?? null,
-        fin: jornadas.at(-1)?.fin ?? null,
-        km: jornadas.reduce((s, x) => s + Number(x.km_actual ?? 0), 0),
-      })
-    })
-  }, [vendedorId, dia, sb])
-
-  return (
-    <Tarjeta className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <h2 className="mr-auto font-semibold">Recorrido del día</h2>
-        <div>
-          <label htmlFor="rec-v" className="mb-1 block text-xs text-tenue">Vendedor</label>
-          <Selector id="rec-v" value={vendedorId} onChange={(e) => setVendedorId(e.target.value)}>
-            <option value="">Elegí…</option>
-            {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nombre}</option>)}
-          </Selector>
-        </div>
-        <div>
-          <label htmlFor="rec-d" className="mb-1 block text-xs text-tenue">Día</label>
-          <Entrada id="rec-d" type="date" value={dia} max={hoyIso()} onChange={(e) => setDia(e.target.value)} />
-        </div>
-      </div>
-      {datos && (
-        <>
-          <p className="text-sm text-tenue tabular">
-            Inicio {datos.inicio ? fmtSoloHora(datos.inicio) : '—'} · fin {datos.fin ? fmtSoloHora(datos.fin) : datos.inicio ? 'en curso' : '—'} ·
-            {' '}{datos.inicio ? `${fmtDistancia((datos.km ?? 0) * 1000)} recorridos${datos.fin ? '' : ' hasta ahora'}` : 'sin jornada'} · {datos.visitas.length} visitas con GPS
-          </p>
-          <Mapa puntos={datos.visitas} lineas={datos.linea ? [datos.linea] : []} claveEncuadre={`${vendedorId}-${dia}-${datos.visitas.length}-${datos.linea?.puntos.length ?? 0}`} className="h-96 w-full overflow-hidden rounded-xl border border-borde" />
-        </>
-      )}
-    </Tarjeta>
   )
 }

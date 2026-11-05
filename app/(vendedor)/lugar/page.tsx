@@ -5,8 +5,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CheckCircle2, MessageCircle, Navigation, Pencil, Phone, Plus, Trash2 } from 'lucide-react'
-import { useVendedor } from '@/components/vendedor/Proveedor'
+import { CheckCircle2, MessageCircle, Navigation, Pencil, Phone, Plus, Search, Stethoscope, Trash2 } from 'lucide-react'
+import { AVISO_SOLO_LECTURA, useVendedor } from '@/components/vendedor/Proveedor'
 import { Aviso, Boton, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
@@ -16,17 +16,19 @@ import { urlVisitaMedico } from '@/lib/rutas'
 import { tocaVisitar } from '@/lib/medicos'
 import type { Medico } from '@/lib/database.types'
 
-type Lugar = { id: string; razon_social: string; ciudad: string | null; direccion: string | null; lat: number | null; lng: number | null; tipo_lugar?: string | null; telefono?: string | null }
+type Lugar = { id: string; razon_social: string; ciudad: string | null; direccion: string | null; lat: number | null; lng: number | null; tipo_lugar?: string | null; telefono?: string | null; notas?: string | null }
+type Objetivo = { medico_id: string | null; especialidad: string | null; orden: number }
 
 export default function PaginaLugar() {
   const busqueda = useSearchParams()
   const lugarId = busqueda.get('c') ?? ''
   const parada = busqueda.get('parada')
-  const { perfil } = useVendedor()
+  const { perfil, soloLectura } = useVendedor()
   const [lugar, setLugar] = useState<Lugar | null>(null)
   const [medicos, setMedicos] = useState<Medico[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hoyVisitados, setHoyVisitados] = useState<Set<string>>(new Set())
+  const [objetivos, setObjetivos] = useState<Objetivo[]>([])
   const [quitando, setQuitando] = useState(false)
   const [errorQuitar, setErrorQuitar] = useState<string | null>(null)
   const router = useRouter()
@@ -46,7 +48,7 @@ export default function PaginaLugar() {
       const sb = supabaseNavegador()
       const desde = new Date(); desde.setHours(0, 0, 0, 0)
       const [rl, rm, rv] = await Promise.all([
-        sb.from('vis_clientes_v').select('id, razon_social, ciudad, direccion, lat, lng, tipo_lugar, telefono').eq('id', lugarId).maybeSingle(),
+        sb.from('vis_clientes_v').select('id, razon_social, ciudad, direccion, lat, lng, tipo_lugar, telefono, notas').eq('id', lugarId).maybeSingle(),
         sb.from('vis_medicos_v').select('*').order('nombre').limit(3000),
         sb.from('vis_visitas').select('medico_id').eq('vendedor_id', perfil.id).eq('cliente_id', lugarId).gte('fecha_hora', desde.toISOString()),
       ])
@@ -54,17 +56,27 @@ export default function PaginaLugar() {
       if (rl.data) setLugar(rl.data as Lugar)
       else if (!guardado) setError(rl.error ? 'Sin señal y este lugar no está guardado en el celular. Abrilo una vez con señal.' : 'No encontramos este lugar.')
       if (rm.data) { setMedicos(rm.data); void guardarCache(`medicos:${perfil.id}`, rm.data) }
+      // A quién ir hoy en esta parada (lo arma Sergio en el panel). Sin señal, lo guardado en Hoy.
+      if (parada) {
+        const ro = await sb.from('vis_parada_objetivos').select('medico_id, especialidad, orden').eq('parada_id', parada).order('orden')
+        if (vivo && ro.data) setObjetivos(ro.data)
+      }
       if (rv.data) setHoyVisitados(new Set(rv.data.map((v) => v.medico_id).filter((x): x is string => !!x)))
     })()
     return () => { vivo = false }
-  }, [lugarId, perfil.id])
+  }, [lugarId, perfil.id, parada])
 
+  const objetivoIds = useMemo(() => new Set(objetivos.map((o) => o.medico_id).filter(Boolean)), [objetivos])
   const deAca = useMemo(() => (medicos ?? []).filter((m) => m.lugares.some((l) => l.lugar_id === lugarId))
-    .sort((a, b) => Number(tocaVisitar(b)) - Number(tocaVisitar(a)) || a.nombre.localeCompare(b.nombre, 'es')), [medicos, lugarId])
+    .sort((a, b) => Number(objetivoIds.has(b.id)) - Number(objetivoIds.has(a.id)) || Number(tocaVisitar(b)) - Number(tocaVisitar(a)) || a.nombre.localeCompare(b.nombre, 'es')), [medicos, lugarId, objetivoIds])
+  // Especialidades a buscar: las de la ruta sin médico, salvo que ya haya uno de esa especialidad acá.
+  const esp = (x: string | null | undefined) => (x ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+  const aBuscar = objetivos.filter((o) => !o.medico_id && o.especialidad && !deAca.some((m) => esp(m.especialidad) === esp(o.especialidad)))
 
   // Lugar cargado de más o mal: sale de la lista y de las rutas de hoy en adelante (las visitas quedan).
   async function quitarLugar() {
     if (!lugar) return
+    if (soloLectura) return setErrorQuitar(AVISO_SOLO_LECTURA)
     if (!navigator.onLine) return setErrorQuitar('Necesitás señal para quitar un lugar.')
     if (!confirm(`¿Quitar «${lugar.razon_social}» de tus lugares? Sale de la lista, de tus rutas y de los médicos que atienden ahí. Las visitas que ya hiciste quedan en el historial.`)) return
     setQuitando(true); setErrorQuitar(null)
@@ -88,9 +100,23 @@ export default function PaginaLugar() {
         <p className="text-sm text-tenue">{[lugar.direccion, lugar.ciudad].filter(Boolean).join(' · ') || 'Sin dirección'}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {comoLlegar && <a href={comoLlegar} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-borde px-3 py-1.5 text-sm font-medium"><Navigation className="size-4 text-marca" aria-hidden /> Cómo llegar</a>}
-          <Link href={`/medicos/nuevo?lugar=${lugar.id}`} className="inline-flex items-center gap-1.5 rounded-lg border border-borde px-3 py-1.5 text-sm font-medium"><Plus className="size-4 text-marca" aria-hidden /> Agregar médico acá</Link>
+          <Link href={`/medicos/nuevo?lugar=${lugar.id}${parada ? `&parada=${parada}` : ''}`} className="inline-flex items-center gap-1.5 rounded-lg border border-borde px-3 py-1.5 text-sm font-medium"><Plus className="size-4 text-marca" aria-hidden /> Agregar médico acá</Link>
         </div>
       </div>
+
+      {lugar.notas && <Aviso tipo="info">{lugar.notas}</Aviso>}
+      {aBuscar.length > 0 && (
+        <Tarjeta className="flex flex-col gap-2 border-amber-300 dark:border-amber-800">
+          <p className="flex items-center gap-1.5 font-semibold"><Search className="size-4 text-marca" aria-hidden /> Para buscar hoy</p>
+          {aBuscar.map((o) => (
+            <div key={o.especialidad} className="flex items-center justify-between gap-2 text-sm">
+              <span>Médico de <b>{o.especialidad}</b></span>
+              <Link href={`/medicos/nuevo?lugar=${lugar.id}${parada ? `&parada=${parada}` : ''}&especialidad=${encodeURIComponent(o.especialidad ?? '')}`} className="shrink-0 font-medium text-marca underline">Cargar médico</Link>
+            </div>
+          ))}
+          <p className="text-xs text-tenue">Preguntá en recepción quién atiende esa especialidad y sus horarios, y cargalo acá.</p>
+        </Tarjeta>
+      )}
 
       <h2 className="text-lg font-semibold">Médicos ({deAca.length})</h2>
       {medicos && deAca.length === 0 && (
@@ -111,7 +137,8 @@ export default function PaginaLugar() {
                     <p className="font-semibold leading-snug">{m.nombre}</p>
                     <p className="text-sm text-tenue">{[m.especialidad, horario].filter(Boolean).join(' · ') || 'Sin especialidad'}</p>
                   </div>
-                  {!visitado && toca && <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">toca visita</span>}
+                  {objetivoIds.has(m.id) && <span className="shrink-0 rounded-full bg-marca px-2 py-0.5 text-xs font-medium text-white"><Stethoscope className="-mt-0.5 mr-0.5 inline size-3" aria-hidden />hoy</span>}
+                  {!visitado && toca && !objetivoIds.has(m.id) && <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">toca visita</span>}
                 </div>
                 <p className="mt-1 text-xs text-tenue">Última visita: {m.ultima_visita ? hace(m.ultima_visita) : 'nunca'} · cada {m.frecuencia_dias} días</p>
                 <div className="mt-3 flex gap-2">

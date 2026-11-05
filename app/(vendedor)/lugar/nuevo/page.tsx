@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CapturaGps, useGps } from '@/components/vendedor/CapturaGps'
 import { AreaTexto, Aviso, Boton, Entrada, Etiqueta, Selector } from '@/components/ui'
-import { useVendedor } from '@/components/vendedor/Proveedor'
+import { AVISO_SOLO_LECTURA, useVendedor } from '@/components/vendedor/Proveedor'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache } from '@/lib/offline/db'
 import { VIS } from '@/lib/config'
@@ -15,7 +15,7 @@ import { TIPOS_LUGAR } from '@/lib/medicos'
 export default function NuevoLugar() {
   const router = useRouter()
   const gps = useGps()
-  const { perfil } = useVendedor()
+  const { perfil, soloLectura } = useVendedor()
   const [ciudades, setCiudades] = useState<string[]>([])
   const [f, setF] = useState({ nombre: '', tipo_lugar: 'Hospital', telefono: '', direccion: '', ciudad: '', notas: '' })
   const [enviando, setEnviando] = useState(false)
@@ -30,6 +30,7 @@ export default function NuevoLugar() {
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault()
+    if (soloLectura) return setError(AVISO_SOLO_LECTURA)
     setError(null)
     if (!f.nombre.trim()) return setError('Falta el nombre del lugar.')
     const l = gps.lectura

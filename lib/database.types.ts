@@ -148,6 +148,21 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['vis_medico_lugares']['Insert']>
         Relationships: []
       }
+      vis_gps_dispositivos: {
+        Row: { vendedor_id: string; codigo: string; creado_el: string; ultima_recibida_el: string | null; ultima_posicion_el: string | null }
+        Insert: { vendedor_id: string; codigo: string; creado_el?: string; ultima_recibida_el?: string | null; ultima_posicion_el?: string | null }
+        Update: Partial<Database['public']['Tables']['vis_gps_dispositivos']['Insert']>
+        Relationships: []
+      }
+      vis_parada_objetivos: {
+        Row: { id: string; parada_id: string; medico_id: string | null; especialidad: string | null; orden: number }
+        Insert: { id?: string; parada_id: string; medico_id?: string | null; especialidad?: string | null; orden?: number }
+        Update: Partial<Database['public']['Tables']['vis_parada_objetivos']['Insert']>
+        Relationships: [
+          { foreignKeyName: 'vis_parada_objetivos_medico_id_fkey'; columns: ['medico_id']; isOneToOne: false; referencedRelation: 'vis_medicos'; referencedColumns: ['id'] },
+          { foreignKeyName: 'vis_parada_objetivos_parada_id_fkey'; columns: ['parada_id']; isOneToOne: false; referencedRelation: 'vis_ruta_paradas'; referencedColumns: ['id'] },
+        ]
+      }
       vis_productos: {
         Row: { activo: boolean; codigo: string | null; empresa_id: string; id: string; nombre: string; odoo_product_id: number | null; orden: number }
         Insert: { activo?: boolean; codigo?: string | null; empresa_id: string; id?: string; nombre: string; odoo_product_id?: number | null; orden?: number }
@@ -210,6 +225,10 @@ export type Database = {
       }
       vis_km_jornada: { Args: { p_jornada: string }; Returns: number }
       vis_quitar_lugar: { Args: { p_lugar: string }; Returns: Json }
+      vis_cargar_ruteo: { Args: { p: Json }; Returns: Json }
+      vis_mi_gps: { Args: { p_nuevo?: boolean }; Returns: Json }
+      vis_gps_recibir: { Args: { p_codigo: string; p: Json }; Returns: Json }
+      vis_ruteo_semana: { Args: { p_vendedor: string; p_semana: string }; Returns: FilaRuteoSemana[] }
       vis_mi_id: { Args: never; Returns: string }
       vis_mi_rol: { Args: never; Returns: Database['public']['Enums']['vis_rol'] }
       vis_mis_zonas: { Args: never; Returns: string[] }
@@ -237,7 +256,11 @@ export type Database = {
       vis_reporte_zonas: { Args: { p_desde: string; p_hasta: string }; Returns: Record<string, unknown>[] }
       vis_clientes_sin_visita: { Args: { p_dias?: number; p_zona?: string }; Returns: Record<string, unknown>[] }
       vis_proximas_visitas: { Args: { p_hasta?: string }; Returns: ProximaVisita[] }
-      vis_mis_visitas: { Args: { p_desde: string; p_hasta: string }; Returns: MiVisita[] }
+      vis_mis_visitas: { Args: { p_desde: string; p_hasta: string; p_vendedor?: string }; Returns: MiVisita[] }
+      vis_para_ver_como: {
+        Args: never
+        Returns: { id: string; nombre: string; tipo: TipoUsuario; empresa_id: string; empresa: string; equipo: string | null }[]
+      }
       vis_vecinos_de_otros: { Args: { p_lat: number; p_lng: number; p_radio_m?: number }; Returns: { razon_social: string; vendedor: string; distancia_m: number }[] }
       vis_sugerir_paradas: { Args: { p_ruta: string }; Returns: Sugerida[] }
       vis_asignar_zonas_por_ciudad: { Args: never; Returns: number }
@@ -275,6 +298,12 @@ export type EstadoRuta = Database['public']['Enums']['vis_estado_ruta']
 export type EstadoCliente = 'activo' | 'potencial' | 'inactivo'
 /** 'ventas': vendedor de siempre; 'medica': visitadora médica (médicos en hospitales y consultorios). */
 export type TipoUsuario = 'ventas' | 'medica'
+export type FilaRuteoSemana = {
+  dia: string; orden: number; parada_id: string; lugar_id: string; lugar: string; tipo_lugar: string | null; direccion: string | null; notas: string | null
+  lat: number | null; lng: number | null; objetivo_id: string | null; medico_id: string | null; medico: string | null; especialidad: string | null
+  visita_id: string | null; fecha_hora: string | null; resultado: string | null; medico_visitado: string | null; observaciones: string | null
+  proxima_visita: string | null; productos: ProductoVisita[] | null
+}
 export type LugarDeMedico = { lugar_id: string; nombre: string; horario: string | null }
 export type ProductoVisita = { producto: string; muestras: number }
 

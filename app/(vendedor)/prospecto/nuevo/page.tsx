@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CapturaGps, useGps } from '@/components/vendedor/CapturaGps'
 import { AreaTexto, Aviso, Boton, Entrada, Etiqueta, Selector, Tarjeta } from '@/components/ui'
-import { useVendedor } from '@/components/vendedor/Proveedor'
+import { AVISO_SOLO_LECTURA, useVendedor } from '@/components/vendedor/Proveedor'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { fmtDistancia } from '@/lib/geo'
 import { VIS } from '@/lib/config'
@@ -22,7 +22,7 @@ const orden = new Intl.Collator('es').compare
 export default function NuevoProspecto() {
   const router = useRouter()
   const gps = useGps()
-  const { perfil, nombreVendedor } = useVendedor()
+  const { perfil, nombreVendedor, soloLectura } = useVendedor()
   const [zonas, setZonas] = useState<Pick<Zona, 'nombre' | 'ciudades' | 'ciudades_alias' | 'vendedor_id'>[]>([])
   const [vecinos, setVecinos] = useState<{ razon_social: string; vendedor: string; distancia_m: number }[]>([])
   const [otraCiudad, setOtraCiudad] = useState(false)
@@ -74,6 +74,7 @@ export default function NuevoProspecto() {
   }
 
   async function guardar(forzar: boolean) {
+    if (soloLectura) return setError(AVISO_SOLO_LECTURA)
     setError(null)
     if (!f.razon_social.trim()) return setError('Falta la razón social.')
     if (f.telefono.replace(/\D/g, '').length < 9) return setError('Falta el teléfono o está incompleto.')

@@ -22,7 +22,7 @@ function tituloDia(iso: string, hoy: string) {
 }
 
 export default function MisVisitas() {
-  const { perfil, pendientes } = useVendedor()
+  const { perfil, pendientes, soloLectura } = useVendedor()
   const hoy = hoyIso()
   const [vista, setVista] = useState<'dia' | 'clientes'>('dia')
   const [periodo, setPeriodo] = useState(30)
@@ -42,7 +42,7 @@ export default function MisVisitas() {
     ;(async () => {
       const cache = await leerCache<MiVisita[]>(clave).catch(() => null)
       if (vivo) { setVisitas(cache?.datos ?? null); setGuardadoEl(cache?.guardado ?? null) }
-      const { data, error } = await supabaseNavegador().rpc('vis_mis_visitas', { p_desde: desde, p_hasta: hasta })
+      const { data, error } = await supabaseNavegador().rpc('vis_mis_visitas', { p_desde: desde, p_hasta: hasta, p_vendedor: perfil.id })
       if (!vivo) return
       if (error) { if (!cache) setError(mensajeError(error)); return }
       setVisitas(data ?? [])
@@ -51,7 +51,7 @@ export default function MisVisitas() {
       await guardarCache(clave, data ?? []).catch(() => {})
     })()
     return () => { vivo = false }
-  }, [clave, desde, hasta])
+  }, [clave, desde, hasta, perfil.id])
 
   // Las que todavía están en el celular esperando señal.
   useEffect(() => {
@@ -107,7 +107,7 @@ export default function MisVisitas() {
       {error && <Aviso tipo="error">{error}</Aviso>}
       {guardadoEl && <Aviso tipo="info">Sin señal: mostrando lo guardado el {fmtFecha(new Date(guardadoEl))} a las {fmtSoloHora(new Date(guardadoEl))}.</Aviso>}
 
-      {sinEnviar.length > 0 && (
+      {!soloLectura && sinEnviar.length > 0 && (
         <Tarjeta className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40">
           <p className="flex items-center gap-2 text-sm font-medium"><CloudOff className="size-4" aria-hidden /> Sin enviar todavía ({sinEnviar.length})</p>
           <ul className="mt-1 text-sm text-tenue">

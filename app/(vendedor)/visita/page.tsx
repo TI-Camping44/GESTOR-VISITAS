@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Camera } from 'lucide-react'
-import { useVendedor } from '@/components/vendedor/Proveedor'
+import { AVISO_SOLO_LECTURA, useVendedor } from '@/components/vendedor/Proveedor'
 import { CapturaGps, useGps } from '@/components/vendedor/CapturaGps'
 import { AreaTexto, Aviso, Boton, Entrada, Etiqueta, PuntoEstado, Selector, Tarjeta } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
@@ -41,7 +41,7 @@ export default function RegistrarVisita() {
   const altaId = busqueda.get('alta') // visita creada con el alta del cliente: se completa, no se duplica
   const medicoId = busqueda.get('m')
   const router = useRouter()
-  const { perfil, refrescarPendientes, nombreVendedor, esMedica } = useVendedor()
+  const { perfil, refrescarPendientes, nombreVendedor, esMedica, soloLectura } = useVendedor()
   const gps = useGps()
 
   const [cliente, setCliente] = useState<ClienteVisita | null>(null)
@@ -138,6 +138,7 @@ export default function RegistrarVisita() {
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault()
+    if (soloLectura) return setError(AVISO_SOLO_LECTURA)
     if (!cliente) return
     if (!resultadoId) { setError('Elegí el resultado de la visita.'); return }
     if (cobranza && !(Number(monto) > 0)) { setError('Indicá el monto cobrado.'); return }
@@ -183,6 +184,7 @@ export default function RegistrarVisita() {
   }
 
   async function corregirUbicacion() {
+    if (soloLectura) return setError(AVISO_SOLO_LECTURA)
     const l = gps.lectura
     if (!cliente || !l) return
     setEnviando(true)

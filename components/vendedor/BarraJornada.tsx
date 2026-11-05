@@ -1,17 +1,30 @@
 'use client'
 // Botón grande de jornada arriba de todo (BRIEF §6 pantalla 0) y el aviso de ubicación del primer uso.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { supabaseNavegador } from '@/lib/supabase/client'
 import { MapPin, WifiOff, CloudUpload } from 'lucide-react'
 import { useVendedor } from './Proveedor'
 import { Aviso, Boton } from '@/components/ui'
 import { fmtSoloHora } from '@/lib/fechas'
 
 export function BarraJornada() {
-  const { perfil, jornada, cargandoJornada, pendientes, enLinea, erroresSubida, iniciarJornada, terminarJornada, aceptarAviso } = useVendedor()
+  const { perfil, jornada, cargandoJornada, pendientes, enLinea, erroresSubida, iniciarJornada, terminarJornada, aceptarAviso, soloLectura } = useVendedor()
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mostrarAviso, setMostrarAviso] = useState(false)
   const [confirmarFin, setConfirmarFin] = useState(false)
+  // GPS en segundo plano (Traccar): con la jornada abierta, avisa si no está mandando.
+  const [segundoPlano, setSegundoPlano] = useState<'ok' | 'falta' | null>(null)
+  useEffect(() => {
+    if (!jornada || soloLectura) { setSegundoPlano(null); return }
+    let vivo = true
+    const revisar = () => void supabaseNavegador().from('vis_gps_dispositivos').select('ultima_recibida_el').eq('vendedor_id', perfil.id).maybeSingle()
+      .then(({ data, error: e }) => { if (vivo && !e) setSegundoPlano(data?.ultima_recibida_el && Date.now() - Date.parse(data.ultima_recibida_el) < 15 * 60000 ? 'ok' : 'falta') })
+    revisar()
+    const t = setInterval(revisar, 5 * 60000)
+    return () => { vivo = false; clearInterval(t) }
+  }, [jornada, soloLectura, perfil.id])
 
   const correr = async (fn: () => Promise<void>) => {
     setOcupado(true)
@@ -34,13 +47,17 @@ export function BarraJornada() {
             <WifiOff className="size-4" aria-hidden /> Sin señal: lo que cargues se guarda y se sube solo.
           </p>
         )}
-        {cargandoJornada ? (
+        {soloLectura ? (
+          <p className="text-sm text-tenue">La jornada la inicia {perfil.nombre} desde su celular. En esta vista no se inicia ni se comparte ubicación.</p>
+        ) : cargandoJornada ? (
           <div className="h-14 animate-pulse rounded-lg bg-borde/50" />
         ) : jornada ? (
           <div className="flex flex-col gap-2">
             <p className="flex items-center gap-1.5 text-sm font-medium text-marca">
               <MapPin className="size-4" aria-hidden /> Ubicación compartida con tu supervisor · desde las {fmtSoloHora(jornada.inicio)}
             </p>
+            {segundoPlano === 'falta' && <Link href="/gps" className="text-sm font-medium text-amber-700 underline dark:text-amber-300">Activá el GPS en segundo plano (Traccar) →</Link>}
+            {segundoPlano === 'ok' && <p className="text-xs text-tenue">GPS en segundo plano: activo</p>}
             {confirmarFin ? (
               <div className="flex gap-2">
                 <Boton variante="peligro" grande className="flex-1" disabled={ocupado} onClick={() => void correr(async () => { await terminarJornada(); setConfirmarFin(false) })}>
