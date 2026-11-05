@@ -73,7 +73,8 @@ export default function PaginaGps() {
             <div className="flex flex-col gap-1"><p className="text-sm">URL del servidor:</p><Copiar texto={servidor} etiqueta="dirección del servidor" /></div>
             <ul className="list-disc pl-5 text-sm">
               <li>Precisión: <b>alta</b>.</li>
-              <li>Frecuencia (intervalo): <b>60</b> segundos.</li>
+              <li>Frecuencia (intervalo): <b>30</b> segundos.</li>
+              <li>Distancia: <b>50</b> metros (manda más seguido mientras te movés y casi nada si estás quieto).</li>
             </ul>
           </Tarjeta>
           <Tarjeta className="flex flex-col gap-2">
