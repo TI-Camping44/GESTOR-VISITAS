@@ -83,7 +83,7 @@ export default function PaginaGps() {
               <li>Batería: elegí <b>Sin restricciones</b> (o «No optimizar») para Traccar, así Android no la cierra.</li>
               <li>Prendé el <b>servicio</b> (el interruptor de arriba en Traccar) y dejalo prendido.</li>
             </ul>
-            <p className="text-sm text-tenue">Listo: volvé acá con la jornada iniciada y en un par de minutos tiene que decir «Último envío: hace un momento».</p>
+            <p className="text-sm text-tenue">Listo: volvé acá con la jornada iniciada y en un par de minutos tiene que decir «Último envío de Traccar: recién».</p>
           </Tarjeta>
           <button type="button" className="self-start text-sm text-tenue underline" onClick={() => { if (confirm('¿Cambiar el código? El anterior deja de funcionar y hay que cargar el nuevo en Traccar.')) void cargar(true) }}>Cambiar el código</button>
         </>
