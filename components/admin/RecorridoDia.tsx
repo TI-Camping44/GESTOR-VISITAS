@@ -23,8 +23,15 @@ type Datos = {
   paradas: (Parada & { donde: Donde })[]; cortes: Corte[]; excesos: Exceso[]; tramos: [number, number][][]
   cubiertoPct: number | null; maxKmh: number | null; gps: { ultima_recibida_el: string | null } | null
 }
-const COLOR_DONDE: Record<Donde['tipo'], string> = { visita: '#16a34a', sin_visita: '#d97706', base: '#6b7280', fuera: '#dc2626' }
+const COLOR_DONDE: Record<Donde['tipo'], string> = { visita: '#16a34a', sin_visita: '#ea580c', base: '#6b7280', fuera: '#dc2626' }
 const dur = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`)
+const AZUL = '#2563eb', ROJO = '#dc2626', VERDE = '#16a34a', VIOLETA = '#7c3aed'
+const lineaTramo = (i: number, puntos: [number, number][]): LineaMapa => ({ id: `t${i}`, color: AZUL, puntos, titulo: 'Recorrido con GPS', detalle: 'Por acá pasó: hay posiciones de GPS.' })
+const lineaCorte = (i: number, c: Corte, puntos: [number, number][], conSegundoPlano: boolean): LineaMapa => ({
+  id: `c${i}`, color: ROJO, puntos, punteada: true,
+  titulo: `Sin GPS de ${fmtSoloHora(c.inicio)} a ${fmtSoloHora(c.fin)} (${dur(c.minutos)})`,
+  detalle: `${motivoCorte(c, conSegundoPlano)}${c.bateriaAntes != null ? ` · batería ${c.bateriaAntes} % al cortarse` : ''}. La línea solo une dónde se cortó y dónde volvió: no se sabe por dónde fue.`,
+})
 const linkMapa = (lat: number, lng: number) => `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
 
 export function RecorridoDia({ vendedores }: { vendedores: Vendedor[] }) {
@@ -105,39 +112,40 @@ export function RecorridoDia({ vendedores }: { vendedores: Vendedor[] }) {
       const lineas: LineaMapa[] = []
       let incompleto = false, consultas = 0
       for (const [i, t] of datos.tramos.entries()) {
-        if (++consultas > 30) { incompleto = true; lineas.push({ id: `t${i}`, color: '#2563eb', puntos: t }); continue }
+        if (++consultas > 30) { incompleto = true; lineas.push(lineaTramo(i, t)); continue }
         const r = await ajustarTramo(t)
         if (!vivo) return
         if (!r.ajustado) incompleto = true
-        lineas.push({ id: `t${i}`, color: '#2563eb', puntos: r.puntos })
+        lineas.push(lineaTramo(i, r.puntos))
       }
       for (const [i, c] of datos.cortes.entries()) {
         if (!c.desde || !c.hasta) continue
-        if (++consultas > 30) { incompleto = true; lineas.push({ id: `c${i}`, color: '#6b7280', puntos: [c.desde, c.hasta], punteada: true }); continue }
+        if (++consultas > 30) { incompleto = true; lineas.push(lineaCorte(i, c, [c.desde, c.hasta], conSegundoPlano)); continue }
         const r = await caminoProbable(c.desde, c.hasta)
         if (!vivo) return
         if (!r.ajustado) incompleto = true
-        lineas.push({ id: `c${i}`, color: '#6b7280', puntos: r.puntos, punteada: true })
+        lineas.push(lineaCorte(i, c, r.puntos, conSegundoPlano))
       }
       if (vivo) { setAjuste({ lineas, incompleto }); setAjustando(false) }
     })()
     return () => { vivo = false }
-  }, [calles, datos])
+  }, [calles, datos, conSegundoPlano])
 
   const lineas = useMemo<LineaMapa[]>(() => calles && ajuste ? ajuste.lineas : !datos ? [] : [
-    ...datos.tramos.map((t, i) => ({ id: `t${i}`, color: '#2563eb', puntos: t })),
-    ...datos.cortes.filter((c) => c.desde && c.hasta).map((c, i) => ({ id: `c${i}`, color: '#6b7280', puntos: [c.desde!, c.hasta!], punteada: true })),
-  ], [datos, calles, ajuste])
+    ...datos.tramos.map((t, i) => lineaTramo(i, t)),
+    ...datos.cortes.map((c, i) => (c.desde && c.hasta ? lineaCorte(i, c, [c.desde, c.hasta], conSegundoPlano) : null)).filter((x): x is LineaMapa => !!x),
+  ], [datos, calles, ajuste, conSegundoPlano])
   const puntos = useMemo<PuntoMapa[]>(() => !datos ? [] : [
     ...datos.visitas.filter((x) => x.lat != null).map((x, i) => ({
-      id: x.id, lat: x.lat!, lng: x.lng!, etiqueta: String(i + 1), color: x.hizo_pedido ? '#16a34a' : '#1f6f4a',
-      titulo: x.cliente?.razon_social ?? 'Visita', detalle: fmtSoloHora(x.fecha_hora),
+      id: x.id, lat: x.lat!, lng: x.lng!, etiqueta: String(i + 1), color: VERDE,
+      titulo: `Visita ${i + 1}: ${x.cliente?.razon_social ?? 'cliente'}`, detalle: `Registrada a las ${fmtSoloHora(x.fecha_hora)}${x.hizo_pedido ? ' · con pedido' : ''}`,
     })),
     ...datos.paradas.filter((pa) => pa.donde.tipo === 'fuera' || pa.donde.tipo === 'sin_visita').map((pa, i) => ({
       id: `p${i}`, lat: pa.lat, lng: pa.lng, etiqueta: pa.donde.tipo === 'fuera' ? '!' : 'P', color: COLOR_DONDE[pa.donde.tipo],
-      titulo: pa.donde.texto, detalle: `${fmtSoloHora(pa.inicio)} a ${fmtSoloHora(pa.fin)} · ${dur(pa.minutos)}`,
+      titulo: pa.donde.tipo === 'fuera' ? 'Parada fuera de ruta' : 'Parada en un cliente, sin visita registrada',
+      detalle: `${pa.donde.tipo === 'fuera' ? 'No es cliente ni base.' : pa.donde.texto + '.'} Estuvo ${dur(pa.minutos)}: de ${fmtSoloHora(pa.inicio)} a ${fmtSoloHora(pa.fin)}.`,
     })),
-    ...datos.excesos.map((e, i) => ({ id: `e${i}`, lat: e.lat, lng: e.lng, etiqueta: 'V', color: '#7c3aed', titulo: `${e.maxKmh} km/h`, detalle: fmtSoloHora(e.inicio) })),
+    ...datos.excesos.map((e, i) => ({ id: `e${i}`, lat: e.lat, lng: e.lng, etiqueta: 'V', color: VIOLETA, titulo: `Exceso de velocidad: ${e.maxKmh} km/h`, detalle: `A las ${fmtSoloHora(e.inicio)} (límite: 110 km/h)` })),
   ], [datos])
 
   // Todo lo del día en orden: jornada, visitas, paradas, cortes y velocidad.
@@ -224,11 +232,14 @@ export function RecorridoDia({ vendedores }: { vendedores: Vendedor[] }) {
               </span>
             </div>
           )}
-          <Mapa puntos={puntos} lineas={lineas} claveEncuadre={`${vendedorId}-${dia}-${puntos.length}-${datos.pos.length}`} className="h-96 w-full overflow-hidden rounded-xl border border-borde" />
+          <div className="relative">
+            <Mapa puntos={puntos} lineas={lineas} claveEncuadre={`${vendedorId}-${dia}-${puntos.length}-${datos.pos.length}`} className="h-[28rem] w-full overflow-hidden rounded-xl border border-borde" />
+            <Leyenda />
+          </div>
           {calles && (ajustando
             ? <p className="text-xs text-tenue">Ajustando a calles… (puede tardar unos segundos)</p>
             : ajuste && <p className="text-xs text-amber-700 dark:text-amber-300">Ajustado a calles con OpenStreetMap: en los tramos sin GPS (punteados) se dibuja el camino más corto, no necesariamente el que hizo.{ajuste.incompleto && ' Algunos tramos no se pudieron ajustar y quedan como líneas rectas.'}</p>)}
-          <p className="text-xs text-tenue">Azul: recorrido con GPS · gris punteado: tramo sin GPS (no se sabe por dónde fue) · <b className="text-red-700 dark:text-red-400">!</b> parada fuera de ruta · <b className="text-amber-700 dark:text-amber-400">P</b> en un cliente sin visita registrada · <b className="text-violet-700 dark:text-violet-400">V</b> más de 110 km/h. Parada = 10 minutos o más en el mismo lugar.</p>
+          <p className="text-xs text-tenue">Parada = 10 minutos o más en el mismo lugar. Tocá una línea o un punto del mapa para ver qué es.</p>
           {eventos.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-sm">
@@ -250,5 +261,36 @@ export function RecorridoDia({ vendedores }: { vendedores: Vendedor[] }) {
         </>
       )}
     </Tarjeta>
+  )
+}
+
+// Qué es cada cosa del mapa, dibujada igual que en el mapa.
+function Leyenda() {
+  const [abierta, setAbierta] = useState(true)
+  const Punto = ({ color, letra }: { color: string; letra: string }) => (
+    <span className="grid size-5 shrink-0 place-items-center rounded-full border-2 border-white text-[10px] font-bold text-white shadow" style={{ background: color }}>{letra}</span>
+  )
+  const Linea = ({ color, punteada }: { color: string; punteada?: boolean }) => (
+    <svg width="28" height="10" className="shrink-0" aria-hidden><line x1="1" y1="5" x2="27" y2="5" stroke={color} strokeWidth="4" strokeDasharray={punteada ? '4 4' : undefined} strokeLinecap="round" /></svg>
+  )
+  const filas: [React.ReactNode, string][] = [
+    [<Linea key="a" color={AZUL} />, 'Recorrido con GPS'],
+    [<Linea key="r" color={ROJO} punteada />, 'Sin GPS: no se sabe por dónde fue'],
+    [<Punto key="v" color={VERDE} letra="1" />, 'Visita registrada (en orden)'],
+    [<Punto key="f" color={ROJO} letra="!" />, 'Parada fuera de ruta'],
+    [<Punto key="p" color="#ea580c" letra="P" />, 'Parada en un cliente sin visita'],
+    [<Punto key="x" color={VIOLETA} letra="V" />, 'Más de 110 km/h'],
+  ]
+  return (
+    <div className="absolute left-2 top-2 z-10 max-w-[15rem] rounded-lg border border-borde bg-superficie/95 px-3 py-2 text-xs shadow-md">
+      <button type="button" onClick={() => setAbierta(!abierta)} className="flex w-full items-center justify-between gap-2 font-semibold" aria-expanded={abierta}>
+        Qué es cada cosa <span className="text-tenue">{abierta ? '▲' : '▼'}</span>
+      </button>
+      {abierta && (
+        <ul className="mt-1.5 flex flex-col gap-1.5">
+          {filas.map(([icono, texto]) => <li key={texto} className="flex items-center gap-2">{icono}<span>{texto}</span></li>)}
+        </ul>
+      )}
+    </div>
   )
 }
