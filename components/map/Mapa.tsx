@@ -23,7 +23,7 @@ export type PuntoMapa = {
   peso?: number
 }
 
-export type LineaMapa = { id: string; color: string; puntos: [number, number][]; punteada?: boolean } // [lng, lat]
+export type LineaMapa = { id: string; color: string; puntos: [number, number][]; punteada?: boolean; titulo?: string; detalle?: string } // [lng, lat]
 
 type Props = {
   puntos: PuntoMapa[]
@@ -53,7 +53,7 @@ function aLineas(lineas: LineaMapa[]): GeoJSON.FeatureCollection<GeoJSON.LineStr
   return {
     type: 'FeatureCollection',
     features: lineas.filter((l) => l.puntos.length > 1).map((l) => ({
-      type: 'Feature', geometry: { type: 'LineString', coordinates: l.puntos }, properties: { id: l.id, color: l.color, punteada: !!l.punteada },
+      type: 'Feature', geometry: { type: 'LineString', coordinates: l.puntos }, properties: { id: l.id, color: l.color, punteada: !!l.punteada, titulo: l.titulo ?? '', detalle: l.detalle ?? '' },
     })),
   }
 }
@@ -118,7 +118,16 @@ export function Mapa({ puntos, agrupar = false, lineas = [], yo, claveEncuadre, 
       m.addSource('lineas', { type: 'geojson', data: aLineas([]) })
       m.addLayer({ id: 'lineas', type: 'line', source: 'lineas', filter: ['!=', ['get', 'punteada'], true], paint: { 'line-color': ['get', 'color'], 'line-width': 4, 'line-opacity': 0.8 } })
       // Tramos sin GPS (Recorrido del día): punteados, para no confundirlos con un camino.
-      m.addLayer({ id: 'lineas-punteadas', type: 'line', source: 'lineas', filter: ['==', ['get', 'punteada'], true], paint: { 'line-color': ['get', 'color'], 'line-width': 3, 'line-opacity': 0.9, 'line-dasharray': [1.5, 2] } })
+      m.addLayer({ id: 'lineas-punteadas', type: 'line', source: 'lineas', filter: ['==', ['get', 'punteada'], true], paint: { 'line-color': ['get', 'color'], 'line-width': 3.5, 'line-opacity': 0.95, 'line-dasharray': [1.2, 1.4] } })
+      // Franja invisible más ancha para poder tocar las líneas que tienen explicación.
+      m.addLayer({ id: 'lineas-clic', type: 'line', source: 'lineas', filter: ['!=', ['get', 'titulo'], ''], paint: { 'line-color': '#000', 'line-width': 16, 'line-opacity': 0 } })
+      m.on('click', 'lineas-clic', (e: MapLayerMouseEvent) => {
+        if (m.queryRenderedFeatures(e.point, { layers: ['punto'] }).length) return // el punto tiene prioridad
+        const p = (e.features?.[0]?.properties ?? {}) as Record<string, string>
+        if (!p.titulo) return
+        new Popup({ offset: 6, maxWidth: '280px' }).setLngLat(e.lngLat)
+          .setHTML(`<strong>${esc(p.titulo)}</strong>${p.detalle ? `<div style="margin-top:2px;font-size:12px;opacity:.8">${esc(p.detalle)}</div>` : ''}`).addTo(m)
+      })
 
       m.addSource('puntos', { type: 'geojson', data: aGeoJson([]), cluster: agrupar, clusterRadius: 45, clusterMaxZoom: 14 })
       if (agrupar) {
@@ -161,7 +170,7 @@ export function Mapa({ puntos, agrupar = false, lineas = [], yo, claveEncuadre, 
           p.href ? `<a href="${esc(p.href)}" style="display:inline-block;margin-top:6px;font-weight:600">${esc(p.textoLink ?? 'Abrir')} →</a>` : ''}`
         new Popup({ offset: 10, maxWidth: '260px' }).setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number]).setHTML(html).addTo(m)
       })
-      for (const capa of ['punto', 'grupos']) {
+      for (const capa of ['punto', 'grupos', 'lineas-clic']) {
         m.on('mouseenter', capa, () => { m.getCanvas().style.cursor = 'pointer' })
         m.on('mouseleave', capa, () => { m.getCanvas().style.cursor = '' })
       }
