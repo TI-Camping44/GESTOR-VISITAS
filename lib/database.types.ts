@@ -226,6 +226,7 @@ export type Database = {
       vis_km_jornada: { Args: { p_jornada: string }; Returns: number }
       vis_quitar_lugar: { Args: { p_lugar: string }; Returns: Json }
       vis_cargar_ruteo: { Args: { p: Json }; Returns: Json }
+      vis_tablero_detalle: { Args: { p_vendedor: string; p_desde: string; p_hasta: string }; Returns: FilaTableroDetalle[] }
       vis_mi_gps: { Args: { p_nuevo?: boolean }; Returns: Json }
       vis_gps_recibir: { Args: { p_codigo: string; p: Json }; Returns: Json }
       vis_ruteo_semana: { Args: { p_vendedor: string; p_semana: string }; Returns: FilaRuteoSemana[] }
@@ -295,9 +296,14 @@ export type Jornada = T['vis_jornadas']['Row']
 export type PosicionActual = T['vis_posicion_actual']['Row']
 export type Rol = Database['public']['Enums']['vis_rol']
 export type EstadoRuta = Database['public']['Enums']['vis_estado_ruta']
-export type EstadoCliente = 'activo' | 'potencial' | 'inactivo'
+export type EstadoCliente = 'activo' | 'potencial' | 'inactivo' | 'no_interesado'
 /** 'ventas': vendedor de siempre; 'medica': visitadora médica (médicos en hospitales y consultorios). */
 export type TipoUsuario = 'ventas' | 'medica'
+export type FilaTableroDetalle = {
+  tipo: 'visita' | 'ruta' | 'zona'; dia: string | null; fecha_hora: string | null; cliente_id: string; razon_social: string; ciudad: string | null
+  estado: EstadoCliente; resultado: string | null; observaciones: string | null; motivo_no_interesa: string | null; en_ruta: boolean
+  ultima_anterior: string | null; zona: string | null
+}
 export type FilaRuteoSemana = {
   dia: string; orden: number; parada_id: string; lugar_id: string; lugar: string; tipo_lugar: string | null; direccion: string | null; notas: string | null
   lat: number | null; lng: number | null; objetivo_id: string | null; medico_id: string | null; medico: string | null; especialidad: string | null

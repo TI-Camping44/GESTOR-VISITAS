@@ -18,7 +18,7 @@ import { ListaClientes } from '@/components/vendedor/ListaClientes'
 import type { EstadoCliente } from '@/lib/database.types'
 
 type C = { id: string; razon_social: string; ciudad: string | null; lat: number; lng: number; estado: EstadoCliente; ultima_visita: string | null; vendedor_id?: string | null; distancia_m?: number }
-const ESTADOS: EstadoCliente[] = ['activo', 'potencial', 'inactivo']
+const ESTADOS: EstadoCliente[] = ['activo', 'potencial', 'inactivo', 'no_interesado']
 
 export default function MapaVendedor() {
   const { perfil, nombreVendedor, esMedica } = useVendedor()

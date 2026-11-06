@@ -20,7 +20,7 @@ export type ClienteCartera = {
   ultima_visita?: string | null; ultima_factura_fecha?: string | null; ventas_6m_gs?: number | null
 }
 type Orden = 'visita' | 'compras' | 'nombre'
-const ESTADOS: EstadoCliente[] = ['activo', 'potencial', 'inactivo']
+const ESTADOS: EstadoCliente[] = ['activo', 'potencial', 'inactivo', 'no_interesado']
 const CAMPOS = 'id, razon_social, ciudad, direccion, lat, lng, estado, telefono, telefono_norm, ruc, ultima_visita, ultima_factura_fecha, ventas_6m_gs'
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 const POR_PAGINA = 60
