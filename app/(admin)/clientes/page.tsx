@@ -72,7 +72,7 @@ export default function Clientes() {
       <div className="grid gap-2 md:grid-cols-[2fr_1fr_1fr_1fr]">
         <Entrada placeholder="Buscar por nombre, RUC o ciudad" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar" />
         <Selector value={estado} onChange={(e) => setEstado(e.target.value as '' | EstadoCliente)} aria-label="Estado">
-          <option value="">Todos los estados</option><option value="activo">Activo</option><option value="potencial">Potencial</option><option value="inactivo">Sin movimiento</option>
+          <option value="">Todos los estados</option><option value="activo">Activo</option><option value="potencial">Potencial</option><option value="inactivo">Sin movimiento</option><option value="no_interesado">No le interesa</option>
         </Selector>
         <Selector value={zonaF} onChange={(e) => setZonaF(e.target.value)} aria-label="Zona">
           <option value="">Todas las zonas</option><option value="sin">Sin zona</option>

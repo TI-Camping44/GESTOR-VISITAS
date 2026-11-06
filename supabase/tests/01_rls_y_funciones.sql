@@ -954,4 +954,34 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── No le interesa y detalle del tablero (0029) ────────────────────
+select pg_temp.como('hugo@vitalica.com.py') \gset
+set role authenticated;
+do $$ declare v_cli uuid := (select id from vis_clientes where razon_social = 'Cliente de Hugo'); begin
+  perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_cli, 'fecha_hora', now() - interval '2 minutes',
+    'resultado_id', (select id from vis_resultados where nombre = 'No le interesa'), 'observaciones', 'Compra a otro proveedor'));
+  assert (select estado from vis_clientes_v where id = v_cli) = 'no_interesado', 'queda «no le interesa»';
+  assert (select motivo from vis_cliente_no_interesa where cliente_id = v_cli) = 'Compra a otro proveedor', 'con el motivo';
+  perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_cli, 'fecha_hora', now() - interval '2 days',
+    'resultado_id', (select id from vis_resultados where nombre = 'Tiene stock')));
+  assert (select estado from vis_clientes_v where id = v_cli) = 'no_interesado', 'una visita vieja que se sube tarde no lo desmarca';
+end $$;
+reset role;
+select pg_temp.como('sergio@camping44.com.py') \gset
+set role authenticated;
+do $$ declare v_hugo uuid := (select id from vis_vendedores where nombre = 'Hugo'); begin
+  assert (select count(*) from vis_tablero_detalle(v_hugo, vis_hoy(), vis_hoy()) where tipo = 'visita') >= 1, 'detalle del tablero: visitas de hoy';
+  assert (select resultado from vis_tablero_detalle(v_hugo, vis_hoy(), vis_hoy()) where tipo = 'visita' and resultado = 'No le interesa' limit 1) is not null, 'con el motivo';
+  assert (select estado from vis_tablero_detalle(v_hugo, vis_hoy(), vis_hoy()) where resultado = 'No le interesa' limit 1) = 'no_interesado', 'y el estado';
+end $$;
+reset role;
+select pg_temp.como('hugo@vitalica.com.py') \gset
+set role authenticated;
+do $$ declare v_cli uuid := (select id from vis_clientes where razon_social = 'Cliente de Hugo'); begin
+  perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_cli,
+    'resultado_id', (select id from vis_resultados where nombre = 'Hizo pedido')));
+  assert (select estado from vis_clientes_v where id = v_cli) <> 'no_interesado', 'una visita nueva con otro resultado lo desmarca';
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;

@@ -135,6 +135,8 @@ export default function RegistrarVisita() {
 
   const destino = cliente?.lat != null && cliente.lng != null ? { lat: cliente.lat, lng: cliente.lng } : null
   const resultadoElegido = resultados.find((r) => String(r.id) === resultadoId)
+  // «No le interesa»: el cliente queda en naranja; el motivo es obligatorio (lo ve el supervisor).
+  const noLeInteresa = resultadoElegido?.nombre === 'No le interesa'
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault()
@@ -142,6 +144,7 @@ export default function RegistrarVisita() {
     if (!cliente) return
     if (!resultadoId) { setError('Elegí el resultado de la visita.'); return }
     if (cobranza && !(Number(monto) > 0)) { setError('Indicá el monto cobrado.'); return }
+    if (noLeInteresa && !obs.trim()) { setError('Escribí en Observaciones por qué no le interesa.'); return }
     setEnviando(true)
     setError(null)
     const client_uuid = crypto.randomUUID()
@@ -306,8 +309,9 @@ export default function RegistrarVisita() {
       </div>}
 
       <div>
-        <Etiqueta htmlFor="obs">Observaciones</Etiqueta>
-        <AreaTexto id="obs" value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Qué pasó, qué necesita, a quién ver la próxima vez…" />
+        <Etiqueta htmlFor="obs">{noLeInteresa ? 'Observaciones: ¿por qué no le interesa? *' : 'Observaciones'}</Etiqueta>
+        <AreaTexto id="obs" value={obs} onChange={(e) => setObs(e.target.value)} placeholder={noLeInteresa ? 'Ej.: compra a otro proveedor, cerró el rubro, precios…' : 'Qué pasó, qué necesita, a quién ver la próxima vez…'} />
+        {noLeInteresa && <p className="mt-1 text-xs text-tenue">El cliente queda en naranja («No le interesa») hasta que una próxima visita tenga otro resultado o vuelva a comprar.</p>}
       </div>
 
       <div>

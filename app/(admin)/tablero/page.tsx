@@ -3,6 +3,7 @@
 // cumplimiento contra la meta, agrupado por zona/ciudad y en el mapa con clustering.
 import { useEffect, useMemo, useState } from 'react'
 import { SelectorSemana } from '@/components/admin/SelectorSemana'
+import { DetalleTablero, type Seleccion } from '@/components/admin/DetalleTablero'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
@@ -30,6 +31,7 @@ export default function Tablero() {
   const [visitas, setVisitas] = useState<VisitaSemana[]>([])
   const [kmHoras, setKmHoras] = useState<Map<string, { km: number; horas: number }>>(new Map())
   const [error, setError] = useState<string | null>(null)
+  const [sel, setSel] = useState<Seleccion | null>(null)
 
   useEffect(() => {
     let vivo = true
@@ -50,6 +52,7 @@ export default function Tablero() {
     })
     return () => { vivo = false }
   }, [semana])
+  useEffect(() => { setSel(null) }, [semana])
 
   const dias = useMemo(() => Array.from({ length: 6 }, (_, i) => sumarDias(semana, i)), [semana])
   const porVendedor = useMemo(() => {
@@ -118,15 +121,21 @@ export default function Tablero() {
                   <td className="px-4 py-3 font-medium">{v.nombre}</td>
                   {lista.map((f, i) => (
                     <td key={dias[i]} className="px-1 py-2 text-center">
-                      <span className={cn('inline-block min-w-16 rounded-md px-2 py-1', colorCumplimiento(Number(f?.realizadas ?? 0), v.metaD))}
-                        title={`${f?.realizadas ?? 0} realizadas de ${f?.planificadas ?? 0} planificadas · meta ${v.metaD}`}>
+                      <button type="button" onClick={() => setSel({ vendedorId: id, nombre: v.nombre, desde: dias[i]!, hasta: dias[i]! })}
+                        className={cn('inline-block min-w-16 rounded-md px-2 py-1 hover:ring-2 hover:ring-marca/40', colorCumplimiento(Number(f?.realizadas ?? 0), v.metaD),
+                          sel?.vendedorId === id && sel.desde === dias[i] && sel.hasta === dias[i] && 'ring-2 ring-marca')}
+                        title={`${f?.realizadas ?? 0} realizadas de ${f?.planificadas ?? 0} planificadas · meta ${v.metaD}. Tocá para ver los clientes.`}>
                         <strong>{f?.realizadas ?? 0}</strong><span className="text-tenue"> / {v.metaD}</span>
                         <span className="block text-[11px] text-tenue">plan {f?.planificadas ?? 0}</span>
-                      </span>
+                      </button>
                     </td>
                   ))}
                   <td className="px-3 py-2 text-center">
-                    <strong>{total}</strong><span className="text-tenue"> / {v.metaS}</span>
+                    <button type="button" onClick={() => setSel({ vendedorId: id, nombre: v.nombre, desde: dias[0]!, hasta: dias.at(-1)! })}
+                      className={cn('rounded-md px-2 py-0.5 hover:ring-2 hover:ring-marca/40', sel?.vendedorId === id && sel.desde !== sel.hasta && 'ring-2 ring-marca')}
+                      title="Tocá para ver los clientes de la semana">
+                      <strong>{total}</strong><span className="text-tenue"> / {v.metaS}</span>
+                    </button>
                     <div className="mx-auto mt-1 h-1.5 w-20 overflow-hidden rounded-full bg-fondo" aria-label={`${pct}% de la meta`}>
                       <div className="h-full rounded-full bg-marca" style={{ width: `${Math.min(100, pct)}%` }} />
                     </div>
@@ -142,6 +151,9 @@ export default function Tablero() {
           </tbody>
         </table>
       </Tarjeta>
+      <p className="-mt-3 text-xs text-tenue">Tocá el número de un día (o el total de la semana) para ver los clientes visitados y los que no visitó.</p>
+
+      {sel && <DetalleTablero sel={sel} alCerrar={() => setSel(null)} />}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_1.4fr]">
         <Tarjeta className="overflow-x-auto p-0">

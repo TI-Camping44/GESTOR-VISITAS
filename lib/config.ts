@@ -29,10 +29,12 @@ export const COLOR_ESTADO = {
   activo: '#16a34a',
   potencial: '#2563eb',
   inactivo: '#dc2626',
+  no_interesado: '#ea580c',
 } as const
 
 export const ETIQUETA_ESTADO = {
   activo: 'Activo',
   potencial: 'Potencial',
   inactivo: 'Sin movimiento',
+  no_interesado: 'No le interesa',
 } as const
