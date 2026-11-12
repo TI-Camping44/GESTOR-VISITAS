@@ -2,7 +2,7 @@
 // Vendedores en vivo (BRIEF §4b): marcador por vendedor en jornada, actualizado por Realtime sobre
 // vis_posicion_actual. Color por frescura: verde < 5 min, amarillo 5–15, gris > VIS_SIN_SENAL_MIN.
 // Nunca se muestra un punto viejo como si fuera en vivo. Abajo, el recorrido de un día.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { RecorridoDia } from '@/components/admin/RecorridoDia'
 import { Aviso, Tarjeta } from '@/components/ui'
@@ -25,21 +25,30 @@ export default function EnVivo() {
   const sb = supabaseNavegador()
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
   const [posiciones, setPosiciones] = useState<Map<string, PosicionActual>>(new Map())
-  const [hoyPorVendedor, setHoyPorVendedor] = useState<Map<string, { hechas: number; meta: number; proxima: string | null }>>(new Map())
+  const [hoyPorVendedor, setHoyPorVendedor] = useState<Map<string, { hechas: number; meta: number; proxima: string | null; llegada: { lugar: string; hora: string } | null }>>(new Map())
   const [ahora, setAhora] = useState(() => Date.now())
   const [conectado, setConectado] = useState(false)
+  const [pedirResumen, setPedirResumen] = useState(0)
+  const refresco = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const cargarResumen = useCallback(async (lista: Vendedor[]) => {
     const hoy = hoyIso()
     const { data } = await sb.rpc('vis_tablero', { p_semana: lunesDe(hoy) })
     const filas = ((data ?? []) as FilaTablero[]).filter((f) => f.dia === hoy)
-    const m = new Map<string, { hechas: number; meta: number; proxima: string | null }>()
+    const m = new Map<string, { hechas: number; meta: number; proxima: string | null; llegada: { lugar: string; hora: string } | null }>()
+    // Última llegada de hoy (visitadora: «Llegué acá» o alta de un lugar).
+    const { data: ll } = await sb.from('vis_llegadas').select('vendedor_id, fecha_hora, lugar:vis_clientes!vis_llegadas_lugar_id_fkey(razon_social)')
+      .gte('fecha_hora', new Date(`${hoy}T00:00:00-03:00`).toISOString()).order('fecha_hora', { ascending: false })
+    const ultimaLlegada = new Map<string, { lugar: string; hora: string }>()
+    for (const x of (ll ?? []) as unknown as { vendedor_id: string; fecha_hora: string; lugar: { razon_social: string } | null }[]) {
+      if (!ultimaLlegada.has(x.vendedor_id)) ultimaLlegada.set(x.vendedor_id, { lugar: x.lugar?.razon_social ?? 'un lugar', hora: x.fecha_hora })
+    }
     await Promise.all(lista.map(async (v) => {
       const { data: p } = await sb.rpc('vis_paradas_dia', { p_dia: hoy, p_vendedor: v.id })
       const prox = ((p ?? []) as ParadaDia[]).find((x) => !x.visitada)
       const f = filas.find((x) => x.vendedor_id === v.id)
-      m.set(v.id, { hechas: Number(f?.realizadas ?? 0), meta: v.meta_diaria, proxima: prox?.razon_social ?? null })
+      m.set(v.id, { hechas: Number(f?.realizadas ?? 0), meta: v.meta_diaria, proxima: prox?.razon_social ?? null, llegada: ultimaLlegada.get(v.id) ?? null })
     }))
     setHoyPorVendedor(m)
   }, [sb])
@@ -59,6 +68,9 @@ export default function EnVivo() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vis_posicion_actual' }, (cambio) => {
         const fila = cambio.new as PosicionActual
         if (fila?.vendedor_id) setPosiciones((m) => new Map(m).set(fila.vendedor_id, fila))
+        // Una llegada o una visita mueven el punto: se actualiza el resumen (sin pedirlo más de una vez cada 5 s).
+        if (refresco.current) clearTimeout(refresco.current)
+        refresco.current = setTimeout(() => setPedirResumen((n) => n + 1), 5000)
       })
       .subscribe((estado) => setConectado(estado === 'SUBSCRIBED'))
     const reloj = setInterval(() => setAhora(Date.now()), 30_000)
@@ -71,6 +83,8 @@ export default function EnVivo() {
     return () => clearInterval(t)
   }, [vendedores, cargarResumen])
 
+  useEffect(() => { if (pedirResumen && vendedores.length) void cargarResumen(vendedores) }, [pedirResumen, vendedores, cargarResumen])
+
   const enJornada = vendedores.filter((v) => posiciones.get(v.id)?.en_jornada)
   const fuera = vendedores.filter((v) => !posiciones.get(v.id)?.en_jornada)
 
@@ -81,7 +95,7 @@ export default function EnVivo() {
     return {
       id: v.id, lat: p.lat, lng: p.lng, color: f.color, etiqueta: iniciales(v.nombre), titulo: v.nombre,
       detalle: [`${fmtSoloHora(p.fecha_hora)} · ${f.texto}`, p.bateria_pct != null ? `batería ${p.bateria_pct}%` : null,
-        r ? `visitas hoy ${r.hechas} / ${r.meta}` : null, r?.proxima ? `próxima: ${r.proxima}` : null].filter(Boolean).join(' · '),
+        r ? `visitas hoy ${r.hechas} / ${r.meta}` : null, r?.llegada ? `en ${r.llegada.lugar} desde ${fmtSoloHora(r.llegada.hora)}` : null, r?.proxima ? `próxima: ${r.proxima}` : null].filter(Boolean).join(' · '),
     }
   }), [enJornada, posiciones, ahora, hoyPorVendedor])
 
@@ -121,6 +135,7 @@ export default function EnVivo() {
                       <p className="text-xs text-tenue">{f.texto}{p.bateria_pct != null && ` · ${p.bateria_pct}%`}{r && ` · ${r.hechas}/${r.meta} hoy`}</p>
                     </div>
                   </div>
+                  {r?.llegada && <p className="mt-1 truncate text-xs font-medium text-green-700 dark:text-green-400" title={`Marcó «Llegué acá» a las ${fmtSoloHora(r.llegada.hora)}`}>En {r.llegada.lugar} desde {fmtSoloHora(r.llegada.hora)}</p>}
                   {r?.proxima && <p className="mt-1 truncate text-xs text-tenue">Próxima: {r.proxima}</p>}
                 </li>
               )

@@ -154,6 +154,14 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['vis_gps_dispositivos']['Insert']>
         Relationships: []
       }
+      vis_llegadas: {
+        Row: { id: string; client_uuid: string | null; vendedor_id: string; lugar_id: string; parada_id: string | null; fecha_hora: string; lat: number | null; lng: number | null; precision_m: number | null; created_at: string }
+        Insert: { id?: string; client_uuid?: string | null; vendedor_id: string; lugar_id: string; parada_id?: string | null; fecha_hora?: string; lat?: number | null; lng?: number | null; precision_m?: number | null }
+        Update: Partial<Database['public']['Tables']['vis_llegadas']['Insert']>
+        Relationships: [
+          { foreignKeyName: 'vis_llegadas_lugar_id_fkey'; columns: ['lugar_id']; isOneToOne: false; referencedRelation: 'vis_clientes'; referencedColumns: ['id'] },
+        ]
+      }
       vis_parada_objetivos: {
         Row: { id: string; parada_id: string; medico_id: string | null; especialidad: string | null; orden: number }
         Insert: { id?: string; parada_id: string; medico_id?: string | null; especialidad?: string | null; orden?: number }
@@ -226,6 +234,7 @@ export type Database = {
       vis_km_jornada: { Args: { p_jornada: string }; Returns: number }
       vis_quitar_lugar: { Args: { p_lugar: string }; Returns: Json }
       vis_cargar_ruteo: { Args: { p: Json }; Returns: Json }
+      vis_marcar_llegada: { Args: { p: Json }; Returns: Json }
       vis_tablero_detalle: { Args: { p_vendedor: string; p_desde: string; p_hasta: string }; Returns: FilaTableroDetalle[] }
       vis_mi_gps: { Args: { p_nuevo?: boolean }; Returns: Json }
       vis_gps_recibir: { Args: { p_codigo: string; p: Json }; Returns: Json }
@@ -308,7 +317,7 @@ export type FilaRuteoSemana = {
   dia: string; orden: number; parada_id: string; lugar_id: string; lugar: string; tipo_lugar: string | null; direccion: string | null; notas: string | null
   lat: number | null; lng: number | null; objetivo_id: string | null; medico_id: string | null; medico: string | null; especialidad: string | null
   visita_id: string | null; fecha_hora: string | null; resultado: string | null; medico_visitado: string | null; observaciones: string | null
-  proxima_visita: string | null; productos: ProductoVisita[] | null
+  proxima_visita: string | null; productos: ProductoVisita[] | null; llegada: string | null
 }
 export type LugarDeMedico = { lugar_id: string; nombre: string; horario: string | null }
 export type ProductoVisita = { producto: string; muestras: number }
