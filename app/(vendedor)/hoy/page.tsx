@@ -149,8 +149,8 @@ export default function Hoy() {
       {error && <Aviso tipo="error">{error}</Aviso>}
 
       {datos && datos.paradas.length === 0 && (
-        <Vacio titulo="No tenés paradas para hoy">
-          {esMedica ? <>Buscá el lugar arriba o en <Link href="/mapa" className="font-medium text-marca underline">Lugares</Link>, o cargalo en <Link href="/lugar/nuevo" className="font-medium text-marca underline">Nuevo lugar</Link>.</> : <>
+        <Vacio titulo={esMedica ? 'Todavía no llegaste a ningún lugar hoy' : 'No tenés paradas para hoy'}>
+          {esMedica ? <>Cuando llegues a un lugar, buscalo arriba (o en <Link href="/mapa" className="font-medium text-marca underline">Lugares</Link>), abrilo y tocá <b>«Llegué acá»</b>: se suma solo a tu ruta de hoy. Si es nuevo, cargalo parada ahí en <Link href="/lugar/nuevo" className="font-medium text-marca underline">Nuevo lugar</Link>.</> : <>
           Si visitás a alguien igual, buscalo arriba o en <Link href="/mapa" className="font-medium text-marca underline">Mapa</Link>, o
           dalo de alta en <Link href="/prospecto/nuevo" className="font-medium text-marca underline">Nuevo cliente</Link>.</>}
         </Vacio>
