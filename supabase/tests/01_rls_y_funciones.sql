@@ -1033,4 +1033,49 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── Quitar una llegada marcada por error (0031) ────────────────────
+insert into vis_clientes (razon_social, categoria, ciudad, empresa_id, vendedor_id)
+select 'Consultorio Por Error', 'lugar', 'Asunción', v.empresa_id, v.id from vis_vendedores v where v.nombre = 'Vale';
+select pg_temp.como('vale@vitalica.com.py') \gset
+set role authenticated;
+do $$ declare r jsonb; q jsonb; v_l uuid := (select id from vis_clientes where razon_social = 'Consultorio Por Error'); begin
+  r := vis_marcar_llegada(jsonb_build_object('lugar_id', v_l, 'lat', -25.4, 'lng', -57.5, 'precision_m', 8));
+  assert (select lat from vis_clientes where id = v_l) = -25.4, 'la llegada le puso ubicación';
+  perform set_config('test.llegada', r ->> 'id', false);
+  q := vis_quitar_llegada((r ->> 'id')::uuid);
+  assert (q ->> 'parada_quitada')::boolean and (q ->> 'ubicacion_quitada')::boolean, format('quitar: %s', q);
+  assert not exists (select 1 from vis_llegadas where id = (r ->> 'id')::uuid), 'la llegada se fue';
+  assert (select lat from vis_clientes where id = v_l) is null, 'y la ubicación que había puesto';
+  assert not exists (select 1 from vis_paradas_dia(vis_hoy(), vis_mi_id()) where razon_social = 'Consultorio Por Error'), 'y sale de Hoy';
+  -- Con visitas en el lugar, no.
+  r := vis_marcar_llegada(jsonb_build_object('lugar_id', (select id from vis_clientes where razon_social = 'Consultorio Sin Ruta')));
+  begin
+    perform vis_quitar_llegada((select id from vis_llegadas where lugar_id = (select id from vis_clientes where razon_social = 'Lugar Visita Suelta') limit 1));
+    assert false, 'no hay llegada ahí: error';
+  exception when raise_exception then null;
+  end;
+end $$;
+reset role;
+insert into vis_llegadas (vendedor_id, lugar_id) select vendedor_id, id from vis_clientes where razon_social = 'Lugar Visita Suelta';
+select pg_temp.como('vale@vitalica.com.py') \gset
+set role authenticated;
+do $$ begin
+  begin
+    perform vis_quitar_llegada((select id from vis_llegadas where lugar_id = (select id from vis_clientes where razon_social = 'Lugar Visita Suelta') limit 1));
+    assert false, 'con visitas registradas ese día no se quita';
+  exception when raise_exception then null;
+  end;
+end $$;
+reset role;
+select pg_temp.como('hugo@vitalica.com.py') \gset
+set role authenticated;
+do $$ begin
+  begin
+    perform vis_quitar_llegada((select id from vis_llegadas limit 1));
+    assert false, 'nadie quita llegadas ajenas';
+  exception when raise_exception then null;
+  end;
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;

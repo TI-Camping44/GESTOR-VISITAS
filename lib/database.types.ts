@@ -235,6 +235,7 @@ export type Database = {
       vis_quitar_lugar: { Args: { p_lugar: string }; Returns: Json }
       vis_cargar_ruteo: { Args: { p: Json }; Returns: Json }
       vis_marcar_llegada: { Args: { p: Json }; Returns: Json }
+      vis_quitar_llegada: { Args: { p_llegada: string }; Returns: Json }
       vis_tablero_detalle: { Args: { p_vendedor: string; p_desde: string; p_hasta: string }; Returns: FilaTableroDetalle[] }
       vis_mi_gps: { Args: { p_nuevo?: boolean }; Returns: Json }
       vis_gps_recibir: { Args: { p_codigo: string; p: Json }; Returns: Json }

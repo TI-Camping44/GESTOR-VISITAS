@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { CheckCircle2, MapPin, MessageCircle, Navigation, Pencil, Phone, Plus, Search, Stethoscope, Trash2 } from 'lucide-react'
 import { leerGps } from '@/lib/gps'
+import { distanciaM, fmtDistancia } from '@/lib/geo'
 import { fmtSoloHora } from '@/lib/fechas'
 import { AVISO_SOLO_LECTURA, useVendedor } from '@/components/vendedor/Proveedor'
 import { Aviso, Boton, Entrada, Selector, Tarjeta, Vacio } from '@/components/ui'
@@ -32,7 +33,8 @@ export default function PaginaLugar() {
   const [hoyVisitados, setHoyVisitados] = useState<Set<string>>(new Set())
   const [objetivos, setObjetivos] = useState<Objetivo[]>([])
   // «Llegué acá»: hora y GPS de la llegada; el lugar se suma a la ruta de hoy y Sergio lo ve en el momento.
-  const [llegada, setLlegada] = useState<string | null>(null)
+  const [llegada, setLlegada] = useState<{ id: string; hora: string; creada: string } | null>(null)
+  const [quitandoLl, setQuitandoLl] = useState(false)
   const [llegando, setLlegando] = useState(false)
   const [errorLlegada, setErrorLlegada] = useState<string | null>(null)
   // Sumar acá un médico que ya cargó en otro lugar (el mismo médico, no se carga dos veces).
@@ -64,8 +66,8 @@ export default function PaginaLugar() {
         sb.from('vis_medicos_v').select('*').order('nombre').limit(3000),
         sb.from('vis_visitas').select('medico_id').eq('vendedor_id', perfil.id).eq('cliente_id', lugarId).gte('fecha_hora', desde.toISOString()),
       ])
-      void sb.from('vis_llegadas').select('fecha_hora').eq('vendedor_id', perfil.id).eq('lugar_id', lugarId).gte('fecha_hora', desde.toISOString())
-        .order('fecha_hora').limit(1).then(({ data }) => { if (vivo && data?.[0]) setLlegada(data[0].fecha_hora) })
+      void sb.from('vis_llegadas').select('id, fecha_hora, created_at').eq('vendedor_id', perfil.id).eq('lugar_id', lugarId).gte('fecha_hora', desde.toISOString())
+        .order('fecha_hora').limit(1).then(({ data }) => { if (vivo && data?.[0]) setLlegada({ id: data[0].id, hora: data[0].fecha_hora, creada: data[0].created_at }) })
       if (!vivo) return
       if (rl.data) setLugar(rl.data as Lugar)
       else if (!guardado) setError(rl.error ? 'Sin señal y este lugar no está guardado en el celular. Abrilo una vez con señal.' : 'No encontramos este lugar.')
@@ -94,12 +96,30 @@ export default function PaginaLugar() {
     if (!navigator.onLine) return setErrorLlegada('Sin señal no se puede marcar la llegada. Registrá la visita al médico igual: se guarda en el celular.')
     setLlegando(true); setErrorLlegada(null)
     const gps = await leerGps(15000).catch(() => null) // sin GPS igual se marca la hora
-    const { error: e } = await supabaseNavegador().rpc('vis_marcar_llegada', { p: {
+    // ¿Está lejos del lugar? Puede haber tocado otro sin querer.
+    if (gps && lugar.lat != null && lugar.lng != null) {
+      const d = distanciaM(gps, { lat: lugar.lat, lng: lugar.lng })
+      if (d > 500 && !confirm(`Estás a ${fmtDistancia(d)} de ${lugar.razon_social}. ¿Seguro que llegaste acá?`)) { setLlegando(false); return }
+    }
+    const { data: res, error: e } = await supabaseNavegador().rpc('vis_marcar_llegada', { p: {
       client_uuid: crypto.randomUUID(), lugar_id: lugar.id, lat: gps?.lat ?? null, lng: gps?.lng ?? null, precision_m: gps ? Math.round(gps.precision) : null,
     } })
     setLlegando(false)
     if (e) return setErrorLlegada(mensajeError(e))
-    setLlegada(new Date().toISOString())
+    const ahora = new Date().toISOString()
+    setLlegada({ id: (res as { id: string }).id, hora: ahora, creada: ahora })
+  }
+
+  // «Me equivoqué, quitar»: dentro de los 30 minutos y sin visitas registradas acá hoy.
+  async function quitarLlegada() {
+    if (!llegada) return
+    if (soloLectura) return setErrorLlegada(AVISO_SOLO_LECTURA)
+    if (!confirm('¿Quitar esta llegada? El lugar sale de tu ruta de hoy.')) return
+    setQuitandoLl(true); setErrorLlegada(null)
+    const { error: e } = await supabaseNavegador().rpc('vis_quitar_llegada', { p_llegada: llegada.id })
+    setQuitandoLl(false)
+    if (e) return setErrorLlegada(mensajeError(e))
+    setLlegada(null)
   }
 
   async function sumarMedico() {
@@ -149,7 +169,15 @@ export default function PaginaLugar() {
       </div>
 
       {esMedica && (llegada ? (
-        <Aviso tipo="ok"><CheckCircle2 className="-mt-0.5 mr-1 inline size-4" aria-hidden />Llegaste a las <b>{fmtSoloHora(llegada)}</b>. Está en tu ruta de hoy y tu supervisor ya lo ve.</Aviso>
+        <div className="flex flex-col gap-1.5">
+          <Aviso tipo="ok"><CheckCircle2 className="-mt-0.5 mr-1 inline size-4" aria-hidden />Llegaste a las <b>{fmtSoloHora(llegada.hora)}</b>. Está en tu ruta de hoy y tu supervisor ya lo ve.</Aviso>
+          {hoyVisitados.size === 0 && Date.now() - Date.parse(llegada.creada) < 30 * 60000 && (
+            <button type="button" onClick={() => void quitarLlegada()} disabled={quitandoLl} className="self-start text-sm text-red-700 underline disabled:opacity-50 dark:text-red-300">
+              {quitandoLl ? 'Quitando…' : 'Me equivoqué de lugar, quitar'}
+            </button>
+          )}
+          {errorLlegada && <Aviso tipo="error">{errorLlegada}</Aviso>}
+        </div>
       ) : (
         <div className="flex flex-col gap-2">
           <Boton grande onClick={() => void marcarLlegada()} disabled={llegando}>
