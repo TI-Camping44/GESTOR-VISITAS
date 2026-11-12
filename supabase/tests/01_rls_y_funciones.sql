@@ -795,10 +795,16 @@ end $$;
 reset role;
 
 -- ── Quitar un lugar (0025) ─────────────────────────────────────────
+-- La visita de prueba de 0021 ya le creó la ruta de la semana (0030: una visita a un lugar fuera de ruta lo suma).
+update vis_rutas set nombre = 'Ruta Vale' where vendedor_id = (select id from vis_vendedores where nombre = 'Vale') and semana_inicio = date_trunc('week', vis_hoy())::date;
 insert into vis_rutas (nombre, vendedor_id, semana_inicio, estado)
-values ('Ruta Vale', (select id from vis_vendedores where nombre = 'Vale'), date_trunc('week', vis_hoy())::date, 'publicada');
+select 'Ruta Vale', (select id from vis_vendedores where nombre = 'Vale'), date_trunc('week', vis_hoy())::date, 'publicada'
+where not exists (select 1 from vis_rutas where nombre = 'Ruta Vale');
 insert into vis_ruta_paradas (ruta_id, cliente_id, dia)
-values ((select id from vis_rutas where nombre = 'Ruta Vale'), (select id from vis_clientes where razon_social = 'Hospital Central'), vis_hoy());
+values ((select id from vis_rutas where nombre = 'Ruta Vale'), (select id from vis_clientes where razon_social = 'Hospital Central'), vis_hoy())
+on conflict do nothing;
+select set_config('test.sin_visita', (select count(*)::text from vis_ruta_paradas pa where pa.cliente_id = (select id from vis_clientes where razon_social = 'Hospital Central')
+  and pa.dia >= vis_hoy() and not exists (select 1 from vis_visitas v where v.ruta_parada_id = pa.id)), false) \gset
 select set_config('test.lugar', (select id::text from vis_clientes where razon_social = 'Hospital Central'), false) \gset
 select pg_temp.como('hugo@vitalica.com.py') \gset
 set role authenticated;
@@ -814,7 +820,9 @@ select pg_temp.como('vale@vitalica.com.py') \gset
 set role authenticated;
 do $$ declare r jsonb; begin
   r := vis_quitar_lugar(current_setting('test.lugar')::uuid);
-  assert (r ->> 'paradas_quitadas')::int = 1, format('sale de la ruta de hoy: %s', r);
+  assert (r ->> 'paradas_quitadas')::int = current_setting('test.sin_visita')::int, format('sale de las paradas sin visita de hoy en adelante: %s', r);
+  assert not exists (select 1 from vis_ruta_paradas pa where pa.cliente_id = current_setting('test.lugar')::uuid and pa.dia >= vis_hoy()
+                     and not exists (select 1 from vis_visitas v where v.ruta_parada_id = pa.id)), 'no quedan paradas sin visita';
   assert not exists (select 1 from vis_clientes_v where id = current_setting('test.lugar')::uuid), 'ya no está en su lista';
   assert (select jsonb_array_length(lugares) from vis_medicos_v where nombre = 'Dra. Gómez') = 0, 'ni en los lugares del médico';
   assert exists (select 1 from vis_visitas where cliente_id = current_setting('test.lugar')::uuid), 'las visitas quedan';
@@ -861,7 +869,8 @@ do $$ declare r jsonb; f jsonb; v_vale uuid := (select id from vis_vendedores wh
     jsonb_build_object('dia', vis_hoy(), 'lugar', 'Hospital Central', 'especialidad', 'pediatría'),
     jsonb_build_object('dia', vis_hoy(), 'lugar', 'Clínica Nueva', 'medico', 'Dra. Gómez', 'direccion', 'Calle 1', 'lat', -25.3, 'lng', -57.6));
   r := vis_cargar_ruteo(jsonb_build_object('visitadora_id', v_vale, 'semana', vis_hoy(), 'filas', f));
-  assert (r ->> 'paradas')::int = 2 and (r ->> 'objetivos')::int = 3 and (r ->> 'lugares_nuevos')::int = 1 and (r ->> 'medicos_nuevos')::int = 1,
+  -- Hospital Central ya tiene parada hoy (con la visita de prueba); se agrega la de Clínica Nueva.
+  assert (r ->> 'paradas')::int = 1 and (r ->> 'objetivos')::int = 3 and (r ->> 'lugares_nuevos')::int = 1 and (r ->> 'medicos_nuevos')::int = 1,
     format('carga del ruteo: %s', r);
   assert (r ->> 'ruta_id')::uuid = (select id from vis_rutas where nombre = 'Ruta Vale'), 'usa la ruta de esa semana';
   assert exists (select 1 from vis_medico_lugares ml join vis_medicos m on m.id = ml.medico_id join vis_clientes c on c.id = ml.lugar_id
@@ -981,6 +990,46 @@ do $$ declare v_cli uuid := (select id from vis_clientes where razon_social = 'C
   perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_cli,
     'resultado_id', (select id from vis_resultados where nombre = 'Hizo pedido')));
   assert (select estado from vis_clientes_v where id = v_cli) <> 'no_interesado', 'una visita nueva con otro resultado lo desmarca';
+end $$;
+reset role;
+
+-- ── Llegadas de la visitadora (0030) ───────────────────────────────
+insert into vis_clientes (razon_social, categoria, ciudad, empresa_id, vendedor_id)
+select x, 'lugar', 'Asunción', v.empresa_id, v.id from vis_vendedores v, unnest(array['Consultorio Sin Ruta', 'Lugar Visita Suelta']) x where v.nombre = 'Vale';
+select pg_temp.como('vale@vitalica.com.py') \gset
+set role authenticated;
+do $$ declare r jsonb; r2 jsonb; u uuid := gen_random_uuid(); v_l uuid := (select id from vis_clientes where razon_social = 'Consultorio Sin Ruta'); begin
+  r := vis_crear_lugar(jsonb_build_object('nombre', 'Consultorio Nuevo', 'lat', -25.3, 'lng', -57.6, 'precision_m', 10));
+  assert (r ->> 'parada_id') is not null, 'el alta del lugar lo suma a la ruta de hoy';
+  assert exists (select 1 from vis_paradas_dia(vis_hoy(), vis_mi_id()) where razon_social = 'Consultorio Nuevo'), 'y aparece en Hoy';
+  assert exists (select 1 from vis_llegadas where lugar_id = (r ->> 'id')::uuid), 'y cuenta como llegada';
+  r := vis_marcar_llegada(jsonb_build_object('client_uuid', u, 'lugar_id', v_l, 'lat', -25.31, 'lng', -57.61, 'precision_m', 12));
+  assert (r ->> 'ubicacion_guardada')::boolean, 'el lugar sin ubicación toma la de la llegada';
+  assert exists (select 1 from vis_paradas_dia(vis_hoy(), vis_mi_id()) where razon_social = 'Consultorio Sin Ruta'), 'llegar lo suma a la ruta de hoy';
+  r2 := vis_marcar_llegada(jsonb_build_object('client_uuid', u, 'lugar_id', v_l));
+  assert (r2 ->> 'duplicada')::boolean and r2 ->> 'id' = r ->> 'id', 'reintento no duplica';
+  r := vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', (select id from vis_clientes where razon_social = 'Lugar Visita Suelta'),
+    'resultado_id', (select id from vis_resultados where nombre = 'Presentó productos')));
+  assert (select ruta_parada_id from vis_visitas where id = (r ->> 'id')::uuid) is not null, 'una visita a un lugar fuera de la ruta lo suma solo';
+end $$;
+reset role;
+select pg_temp.como('hugo@vitalica.com.py') \gset
+set role authenticated;
+do $$ begin
+  begin
+    perform vis_marcar_llegada(jsonb_build_object('lugar_id', (select id from vis_clientes where razon_social = 'Consultorio Sin Ruta')));
+    assert false, 'no se marca llegada en un lugar ajeno';
+  exception when raise_exception then null;
+  end;
+  assert not exists (select 1 from vis_llegadas), 'ni se ven las llegadas de otro';
+end $$;
+reset role;
+select pg_temp.como('sergio@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert (select count(*) from vis_llegadas) >= 2, 'el supervisor ve las llegadas';
+  assert (select llegada from vis_ruteo_semana((select id from vis_vendedores where nombre = 'Vale'), vis_hoy()) where lugar = 'Consultorio Sin Ruta' limit 1) is not null,
+    'y la hora de llegada en el ruteo';
 end $$;
 reset role;
 

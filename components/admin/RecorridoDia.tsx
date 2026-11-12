@@ -22,7 +22,9 @@ type Datos = {
   pos: Pos[]; visitas: Visita[]; jornadas: { inicio: string; fin: string | null; km_actual: number | null }[]
   paradas: (Parada & { donde: Donde })[]; cortes: Corte[]; excesos: Exceso[]; tramos: [number, number][][]
   cubiertoPct: number | null; maxKmh: number | null; gps: { ultima_recibida_el: string | null } | null
+  llegadas: Llegada[]
 }
+type Llegada = { fecha_hora: string; lat: number | null; lng: number | null; lugar: { razon_social: string } | null }
 const COLOR_DONDE: Record<Donde['tipo'], string> = { visita: '#16a34a', sin_visita: '#ea580c', base: '#6b7280', fuera: '#dc2626' }
 const dur = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`)
 const AZUL = '#2563eb', ROJO = '#dc2626', VERDE = '#16a34a', VIOLETA = '#7c3aed'
@@ -51,13 +53,14 @@ export function RecorridoDia({ vendedores }: { vendedores: Vendedor[] }) {
     const desde = `${dia}T00:00:00-03:00`
     const hasta = new Date(new Date(desde).getTime() + 86400000).toISOString()
     ;(async () => {
-      const [p, v, j, r, c, g] = await Promise.all([
+      const [p, v, j, r, c, g, ll] = await Promise.all([
         sb.from('vis_posiciones').select('fecha_hora, lat, lng, precision_m, bateria_pct, velocidad_kmh, origen, jornada_id').eq('vendedor_id', vendedorId).gte('fecha_hora', desde).lt('fecha_hora', hasta).order('fecha_hora').limit(5000),
         sb.from('vis_visitas').select('id, fecha_hora, lat, lng, hizo_pedido, cliente:vis_clientes!vis_visitas_cliente_id_fkey(razon_social)').eq('vendedor_id', vendedorId).gte('fecha_hora', desde).lt('fecha_hora', hasta).order('fecha_hora'),
         sb.from('vis_jornadas').select('id, inicio, fin, km_actual:vis_km_actual').eq('vendedor_id', vendedorId).gte('inicio', desde).lt('inicio', hasta).order('inicio'),
         sb.rpc('vis_paradas_dia', { p_dia: dia, p_vendedor: vendedorId }),
         sb.from('vis_config').select('base_lat, base_lng').maybeSingle(),
         sb.from('vis_gps_dispositivos').select('ultima_recibida_el').eq('vendedor_id', vendedorId).maybeSingle(),
+        sb.from('vis_llegadas').select('fecha_hora, lat, lng, lugar:vis_clientes!vis_llegadas_lugar_id_fkey(razon_social)').eq('vendedor_id', vendedorId).gte('fecha_hora', desde).lt('fecha_hora', hasta).order('fecha_hora'),
       ])
       if (!vivo) return
       // Sin las lecturas imprecisas ni los saltos de GPS (hacían ir y volver la línea).
@@ -95,6 +98,7 @@ export function RecorridoDia({ vendedores }: { vendedores: Vendedor[] }) {
         cubiertoPct: total > 0 ? Math.round((100 * cubierto) / total) : null,
         maxKmh: res.reduce<number | null>((m, { a }) => (a.maxKmh == null ? m : Math.max(m ?? 0, a.maxKmh)), null),
         gps: g.data ?? null,
+        llegadas: (ll.data ?? []) as unknown as Llegada[],
       })
       setCargando(false)
     })()
@@ -156,6 +160,7 @@ export function RecorridoDia({ vendedores }: { vendedores: Vendedor[] }) {
       ev.push({ inicio: jo.inicio, fin: null, tipo: 'Inicio de jornada', detalle: '', minutos: null, lat: null, lng: null, alerta: false })
       if (jo.fin) ev.push({ inicio: jo.fin, fin: null, tipo: 'Fin de jornada', detalle: '', minutos: null, lat: null, lng: null, alerta: false })
     }
+    for (const x of datos.llegadas) ev.push({ inicio: x.fecha_hora, fin: null, tipo: 'Llegada', detalle: `Marcó «Llegué acá» en ${x.lugar?.razon_social ?? 'un lugar'}`, minutos: null, lat: x.lat, lng: x.lng, alerta: false })
     for (const x of datos.visitas) ev.push({ inicio: x.fecha_hora, fin: null, tipo: 'Visita', detalle: x.cliente?.razon_social ?? '', minutos: null, lat: x.lat, lng: x.lng, alerta: false })
     for (const pa of datos.paradas) {
       if (pa.donde.tipo === 'visita') continue

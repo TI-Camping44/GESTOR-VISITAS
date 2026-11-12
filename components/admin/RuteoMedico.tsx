@@ -6,19 +6,19 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { AreaTexto, Aviso, Boton, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { descargarCsv } from '@/lib/csv'
-import { fmtDia, fmtFecha, hoyIso, lunesDe, semanaIso, sumarDias } from '@/lib/fechas'
+import { fmtDia, fmtFecha, fmtSoloHora, hoyIso, lunesDe, semanaIso, sumarDias } from '@/lib/fechas'
 import { fmtMin, horasEstimadas, leerPlanilla, minDeHora } from '@/lib/ruteo'
 import { cn, mensajeError } from '@/lib/utils'
 import type { FilaRuteoSemana } from '@/lib/database.types'
 
-type Estado = 'Pendiente' | 'Visitado' | 'Reprogramado' | 'Sin acceso' | 'No atendió' | 'No visitado'
+type Estado = 'Pendiente' | 'Llegó' | 'Visitado' | 'Reprogramado' | 'Sin acceso' | 'No atendió' | 'No visitado'
 const COLOR: Record<Estado, string> = {
-  Pendiente: 'bg-fondo text-tenue', 'No visitado': 'bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200',
+  Pendiente: 'bg-fondo text-tenue', 'Llegó': 'bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200', 'No visitado': 'bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200',
   Visitado: 'bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-200', Reprogramado: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
   'Sin acceso': 'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200', 'No atendió': 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
 }
 function estado(f: FilaRuteoSemana, hoy: string): Estado {
-  if (!f.visita_id) return f.dia < hoy ? 'No visitado' : 'Pendiente'
+  if (!f.visita_id) return f.llegada ? 'Llegó' : f.dia < hoy ? 'No visitado' : 'Pendiente'
   if (f.resultado === 'Pidió volver otro día') return 'Reprogramado'
   if (f.resultado === 'Sin acceso') return 'Sin acceso'
   if (f.resultado === 'No estaba / no atendió') return 'No atendió'
@@ -70,6 +70,7 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
       { titulo: 'Fecha', valor: (f: FilaRuteoSemana) => fmtFecha(f.dia) },
       { titulo: 'Orden', valor: (f: FilaRuteoSemana) => f.orden },
       { titulo: 'Llegada est.', valor: (f: FilaRuteoSemana) => horas.get(f.parada_id) ?? '' },
+      { titulo: 'Llegó (real)', valor: (f: FilaRuteoSemana) => (f.llegada ? fmtSoloHora(f.llegada) : '') },
       { titulo: 'Centro médico / Consultorio', valor: (f: FilaRuteoSemana) => f.lugar },
       { titulo: 'Dirección', valor: (f: FilaRuteoSemana) => f.direccion ?? '' },
       { titulo: 'Especialidad', valor: (f: FilaRuteoSemana) => f.especialidad ?? '' },
@@ -115,7 +116,7 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 className="font-semibold">Ruteo de la semana</h2>
-            <p className="text-sm text-tenue">Centro médico / Consultorio · Especialidad · Dr · Día de visita, con lo que pasó en cada visita. La hora es aproximada, desde la oficina.</p>
+            <p className="text-sm text-tenue">Centro médico / Consultorio · Especialidad · Dr · Día de visita, con lo que pasó en cada visita. Llegada: en verde la hora real en que marcó «Llegué acá»; con ≈, la aproximada desde la oficina.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {visitadoras.length > 1 && (
@@ -152,7 +153,9 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
                     return (
                       <tr key={`${f.parada_id}-${f.objetivo_id ?? i}`} className={cn('align-top [&>td]:px-2 [&>td]:py-1.5', primera && 'border-t border-borde')}>
                         <td className="tabular text-tenue">{primera ? f.orden : ''}</td>
-                        <td className="tabular">{primera ? horas.get(f.parada_id) : ''}</td>
+                        <td className="tabular">{primera && (f.llegada
+                          ? <span title="Hora real en que marcó «Llegué acá»" className="font-semibold text-green-700 dark:text-green-400">{fmtSoloHora(f.llegada)}</span>
+                          : <span title="Hora aproximada" className="text-tenue">≈ {horas.get(f.parada_id)}</span>)}</td>
                         <td>{primera && <><p className="font-medium">{f.lugar}</p>{f.direccion && <p className="text-xs text-tenue">{f.direccion}</p>}</>}</td>
                         <td>{f.especialidad ?? <span className="text-tenue">—</span>}</td>
                         <td>{f.medico ?? (f.medico_visitado ? <span className="text-tenue">visitó a {f.medico_visitado}</span> : <span className="text-tenue">{f.objetivo_id ? 'a buscar' : '—'}</span>)}</td>

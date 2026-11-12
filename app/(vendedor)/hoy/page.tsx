@@ -8,7 +8,7 @@ import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, Boton, PuntoEstado, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
-import { fmtFecha, hace, hoyIso, lunesDe } from '@/lib/fechas'
+import { fmtFecha, fmtSoloHora, hace, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
 import { fmtMin, horasEstimadas } from '@/lib/ruteo'
 import { urlParaVisitar } from '@/lib/rutas'
@@ -19,7 +19,7 @@ import type { FilaTablero, ParadaDia, ProximaVisita } from '@/lib/database.types
 
 // Visita médica: a qué médico ir o qué especialidad buscar en cada parada (lo arma Sergio en el panel).
 type Objetivo = { parada_id: string; especialidad: string | null; orden: number; medico: { id: string; nombre: string; especialidad: string | null } | null }
-type Datos = { paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[]; objetivos?: Objetivo[]; base?: { lat: number | null; lng: number | null } | null }
+type Datos = { paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[]; objetivos?: Objetivo[]; llegadas?: Record<string, string>; base?: { lat: number | null; lng: number | null } | null }
 
 export default function Hoy() {
   const { perfil, pendientes, esMedica, jornada } = useVendedor()
@@ -49,12 +49,16 @@ export default function Hoy() {
       const paradas = (p.data ?? []) as ParadaDia[]
       let objetivos: Objetivo[] = []
       let base: Datos['base'] = null
+      const llegadas: Record<string, string> = {}
       if (esMedica) {
-        const [o, b, c] = await Promise.all([
+        const desdeHoy = new Date(`${hoy}T00:00:00-03:00`).toISOString()
+        const [o, b, c, ll] = await Promise.all([
           paradas.length ? sb.from('vis_parada_objetivos').select('parada_id, especialidad, orden, medico:vis_medicos(id, nombre, especialidad)').in('parada_id', paradas.map((x) => x.parada_id)) : Promise.resolve({ data: [] }),
           sb.from('vis_vendedores').select('base_lat, base_lng').eq('id', perfil.id).maybeSingle(),
           sb.from('vis_config').select('base_lat, base_lng').maybeSingle(),
+          sb.from('vis_llegadas').select('lugar_id, fecha_hora').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
         ])
+        for (const x of ll.data ?? []) if (!llegadas[x.lugar_id]) llegadas[x.lugar_id] = x.fecha_hora
         if (!vivo) return
         objetivos = ((o.data ?? []) as Objetivo[]).sort((a, z) => a.orden - z.orden)
         base = b.data?.base_lat != null ? { lat: b.data.base_lat, lng: b.data.base_lng } : c.data ? { lat: c.data.base_lat, lng: c.data.base_lng } : null
@@ -62,6 +66,7 @@ export default function Hoy() {
       const nuevo: Datos = {
         paradas,
         objetivos,
+        llegadas,
         base,
         hoy: filas.find((f) => f.dia === hoy)?.realizadas ?? 0,
         semana: filas.reduce((s, f) => s + Number(f.realizadas), 0),
@@ -201,7 +206,10 @@ export default function Hoy() {
                         ))}
                       </ul>
                     )}
-                    {esMedica && !p.visitada && horas.get(p.parada_id) && (
+                    {esMedica && datos?.llegadas?.[p.cliente_id] && (
+                      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400"><CheckCircle2 className="size-3.5" aria-hidden /> Llegaste a las {fmtSoloHora(datos.llegadas[p.cliente_id]!)}</p>
+                    )}
+                    {esMedica && !p.visitada && !datos?.llegadas?.[p.cliente_id] && horas.get(p.parada_id) && (
                       <p className="mt-1 flex items-center gap-1 text-xs text-tenue"><Clock className="size-3.5" aria-hidden /> Llegada aprox. {horas.get(p.parada_id)}</p>
                     )}
                     {p.lat == null && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Sin ubicación cargada: al registrar la visita se puede guardar.</p>}

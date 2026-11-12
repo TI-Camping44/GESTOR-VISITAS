@@ -5,9 +5,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CheckCircle2, MessageCircle, Navigation, Pencil, Phone, Plus, Search, Stethoscope, Trash2 } from 'lucide-react'
+import { CheckCircle2, MapPin, MessageCircle, Navigation, Pencil, Phone, Plus, Search, Stethoscope, Trash2 } from 'lucide-react'
+import { leerGps } from '@/lib/gps'
+import { fmtSoloHora } from '@/lib/fechas'
 import { AVISO_SOLO_LECTURA, useVendedor } from '@/components/vendedor/Proveedor'
-import { Aviso, Boton, Tarjeta, Vacio } from '@/components/ui'
+import { Aviso, Boton, Entrada, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
 import { hace } from '@/lib/fechas'
@@ -23,12 +25,22 @@ export default function PaginaLugar() {
   const busqueda = useSearchParams()
   const lugarId = busqueda.get('c') ?? ''
   const parada = busqueda.get('parada')
-  const { perfil, soloLectura } = useVendedor()
+  const { perfil, soloLectura, esMedica } = useVendedor()
   const [lugar, setLugar] = useState<Lugar | null>(null)
   const [medicos, setMedicos] = useState<Medico[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hoyVisitados, setHoyVisitados] = useState<Set<string>>(new Set())
   const [objetivos, setObjetivos] = useState<Objetivo[]>([])
+  // «Llegué acá»: hora y GPS de la llegada; el lugar se suma a la ruta de hoy y Sergio lo ve en el momento.
+  const [llegada, setLlegada] = useState<string | null>(null)
+  const [llegando, setLlegando] = useState(false)
+  const [errorLlegada, setErrorLlegada] = useState<string | null>(null)
+  // Sumar acá un médico que ya cargó en otro lugar (el mismo médico, no se carga dos veces).
+  const [sumar, setSumar] = useState(false)
+  const [sumarId, setSumarId] = useState('')
+  const [sumarHorario, setSumarHorario] = useState('')
+  const [sumando, setSumando] = useState(false)
+  const [errorSumar, setErrorSumar] = useState<string | null>(null)
   const [quitando, setQuitando] = useState(false)
   const [errorQuitar, setErrorQuitar] = useState<string | null>(null)
   const router = useRouter()
@@ -52,6 +64,8 @@ export default function PaginaLugar() {
         sb.from('vis_medicos_v').select('*').order('nombre').limit(3000),
         sb.from('vis_visitas').select('medico_id').eq('vendedor_id', perfil.id).eq('cliente_id', lugarId).gte('fecha_hora', desde.toISOString()),
       ])
+      void sb.from('vis_llegadas').select('fecha_hora').eq('vendedor_id', perfil.id).eq('lugar_id', lugarId).gte('fecha_hora', desde.toISOString())
+        .order('fecha_hora').limit(1).then(({ data }) => { if (vivo && data?.[0]) setLlegada(data[0].fecha_hora) })
       if (!vivo) return
       if (rl.data) setLugar(rl.data as Lugar)
       else if (!guardado) setError(rl.error ? 'Sin señal y este lugar no está guardado en el celular. Abrilo una vez con señal.' : 'No encontramos este lugar.')
@@ -66,12 +80,41 @@ export default function PaginaLugar() {
     return () => { vivo = false }
   }, [lugarId, perfil.id, parada])
 
+  const otros = useMemo(() => (medicos ?? []).filter((m) => !m.lugares.some((l) => l.lugar_id === lugarId)).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')), [medicos, lugarId])
   const objetivoIds = useMemo(() => new Set(objetivos.map((o) => o.medico_id).filter(Boolean)), [objetivos])
   const deAca = useMemo(() => (medicos ?? []).filter((m) => m.lugares.some((l) => l.lugar_id === lugarId))
     .sort((a, b) => Number(objetivoIds.has(b.id)) - Number(objetivoIds.has(a.id)) || Number(tocaVisitar(b)) - Number(tocaVisitar(a)) || a.nombre.localeCompare(b.nombre, 'es')), [medicos, lugarId, objetivoIds])
   // Especialidades a buscar: las de la ruta sin médico, salvo que ya haya uno de esa especialidad acá.
   const esp = (x: string | null | undefined) => (x ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
   const aBuscar = objetivos.filter((o) => !o.medico_id && o.especialidad && !deAca.some((m) => esp(m.especialidad) === esp(o.especialidad)))
+
+  async function marcarLlegada() {
+    if (!lugar) return
+    if (soloLectura) return setErrorLlegada(AVISO_SOLO_LECTURA)
+    if (!navigator.onLine) return setErrorLlegada('Sin señal no se puede marcar la llegada. Registrá la visita al médico igual: se guarda en el celular.')
+    setLlegando(true); setErrorLlegada(null)
+    const gps = await leerGps(15000).catch(() => null) // sin GPS igual se marca la hora
+    const { error: e } = await supabaseNavegador().rpc('vis_marcar_llegada', { p: {
+      client_uuid: crypto.randomUUID(), lugar_id: lugar.id, lat: gps?.lat ?? null, lng: gps?.lng ?? null, precision_m: gps ? Math.round(gps.precision) : null,
+    } })
+    setLlegando(false)
+    if (e) return setErrorLlegada(mensajeError(e))
+    setLlegada(new Date().toISOString())
+  }
+
+  async function sumarMedico() {
+    if (!lugar || !sumarId) return
+    if (soloLectura) return setErrorSumar(AVISO_SOLO_LECTURA)
+    if (!navigator.onLine) return setErrorSumar('Necesitás señal para sumar el médico a este lugar.')
+    setSumando(true); setErrorSumar(null)
+    const { error: e } = await supabaseNavegador().from('vis_medico_lugares').insert({ medico_id: sumarId, lugar_id: lugar.id, horario: sumarHorario.trim() || null })
+    setSumando(false)
+    if (e) return setErrorSumar(mensajeError(e))
+    const nuevos = (medicos ?? []).map((m) => (m.id === sumarId ? { ...m, lugares: [...m.lugares, { lugar_id: lugar.id, nombre: lugar.razon_social, horario: sumarHorario.trim() || null }] } : m))
+    setMedicos(nuevos)
+    void guardarCache(`medicos:${perfil.id}`, nuevos).catch(() => {})
+    setSumar(false); setSumarId(''); setSumarHorario('')
+  }
 
   // Lugar cargado de más o mal: sale de la lista y de las rutas de hoy en adelante (las visitas quedan).
   async function quitarLugar() {
@@ -101,9 +144,34 @@ export default function PaginaLugar() {
         <div className="mt-2 flex flex-wrap gap-2">
           {comoLlegar && <a href={comoLlegar} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-borde px-3 py-1.5 text-sm font-medium"><Navigation className="size-4 text-marca" aria-hidden /> Cómo llegar</a>}
           <Link href={`/medicos/nuevo?lugar=${lugar.id}${parada ? `&parada=${parada}` : ''}`} className="inline-flex items-center gap-1.5 rounded-lg border border-borde px-3 py-1.5 text-sm font-medium"><Plus className="size-4 text-marca" aria-hidden /> Agregar médico acá</Link>
+          {otros.length > 0 && <button type="button" onClick={() => setSumar(!sumar)} className="inline-flex items-center gap-1.5 rounded-lg border border-borde px-3 py-1.5 text-sm font-medium"><Stethoscope className="size-4 text-marca" aria-hidden /> Ya lo tengo cargado</button>}
         </div>
       </div>
 
+      {esMedica && (llegada ? (
+        <Aviso tipo="ok"><CheckCircle2 className="-mt-0.5 mr-1 inline size-4" aria-hidden />Llegaste a las <b>{fmtSoloHora(llegada)}</b>. Está en tu ruta de hoy y tu supervisor ya lo ve.</Aviso>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <Boton grande onClick={() => void marcarLlegada()} disabled={llegando}>
+            <MapPin className="size-5" aria-hidden /> {llegando ? 'Marcando…' : 'Llegué acá'}
+          </Boton>
+          <p className="text-xs text-tenue">Marca la hora y tu ubicación de llegada. Si no estaba en tu ruta de hoy, se suma sola.</p>
+          {errorLlegada && <Aviso tipo="error">{errorLlegada}</Aviso>}
+        </div>
+      ))}
+      {sumar && (
+        <Tarjeta className="flex flex-col gap-2">
+          <p className="font-semibold">Sumar un médico que ya cargaste</p>
+          <p className="text-xs text-tenue">Es el mismo médico: queda en sus otros lugares y también en este.</p>
+          <Selector aria-label="Médico" value={sumarId} onChange={(e) => setSumarId(e.target.value)}>
+            <option value="">Elegí el médico…</option>
+            {otros.map((m) => <option key={m.id} value={m.id}>{m.nombre}{m.especialidad ? ` · ${m.especialidad}` : ''}</option>)}
+          </Selector>
+          <Entrada aria-label="Horario en este lugar" placeholder="Horario acá (ej.: mar y jue 9 a 12)" value={sumarHorario} onChange={(e) => setSumarHorario(e.target.value)} />
+          {errorSumar && <Aviso tipo="error">{errorSumar}</Aviso>}
+          <Boton onClick={() => void sumarMedico()} disabled={!sumarId || sumando}>{sumando ? 'Sumando…' : 'Sumar a este lugar'}</Boton>
+        </Tarjeta>
+      )}
       {lugar.notas && <Aviso tipo="info">{lugar.notas}</Aviso>}
       {aBuscar.length > 0 && (
         <Tarjeta className="flex flex-col gap-2 border-amber-300 dark:border-amber-800">
