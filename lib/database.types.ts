@@ -318,7 +318,7 @@ export type FilaRuteoSemana = {
   dia: string; orden: number; parada_id: string; lugar_id: string; lugar: string; tipo_lugar: string | null; direccion: string | null; notas: string | null
   lat: number | null; lng: number | null; objetivo_id: string | null; medico_id: string | null; medico: string | null; especialidad: string | null
   visita_id: string | null; fecha_hora: string | null; resultado: string | null; medico_visitado: string | null; observaciones: string | null
-  proxima_visita: string | null; productos: ProductoVisita[] | null; llegada: string | null
+  proxima_visita: string | null; productos: ProductoVisita[] | null; llegada: string | null; llegadas: string[] | null
 }
 export type LugarDeMedico = { lugar_id: string; nombre: string; horario: string | null }
 export type ProductoVisita = { producto: string; muestras: number }

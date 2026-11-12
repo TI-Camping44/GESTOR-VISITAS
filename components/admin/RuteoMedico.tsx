@@ -17,6 +17,9 @@ const COLOR: Record<Estado, string> = {
   Visitado: 'bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-200', Reprogramado: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
   'Sin acceso': 'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200', 'No atendió': 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
 }
+// Horas reales de llegada del día (vuelve al mismo lugar: «09:10 · 15:30»).
+const horasReales = (f: FilaRuteoSemana) => (f.llegadas?.length ? f.llegadas : f.llegada ? [f.llegada] : []).map((h) => fmtSoloHora(h)).join(' · ')
+
 function estado(f: FilaRuteoSemana, hoy: string): Estado {
   if (!f.visita_id) return f.llegada ? 'Llegó' : f.dia < hoy ? 'No visitado' : 'Pendiente'
   if (f.resultado === 'Pidió volver otro día') return 'Reprogramado'
@@ -70,7 +73,7 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
       { titulo: 'Fecha', valor: (f: FilaRuteoSemana) => fmtFecha(f.dia) },
       { titulo: 'Orden', valor: (f: FilaRuteoSemana) => f.orden },
       { titulo: 'Llegada est.', valor: (f: FilaRuteoSemana) => horas.get(f.parada_id) ?? '' },
-      { titulo: 'Llegó (real)', valor: (f: FilaRuteoSemana) => (f.llegada ? fmtSoloHora(f.llegada) : '') },
+      { titulo: 'Llegó (real)', valor: (f: FilaRuteoSemana) => horasReales(f) },
       { titulo: 'Centro médico / Consultorio', valor: (f: FilaRuteoSemana) => f.lugar },
       { titulo: 'Dirección', valor: (f: FilaRuteoSemana) => f.direccion ?? '' },
       { titulo: 'Especialidad', valor: (f: FilaRuteoSemana) => f.especialidad ?? '' },
@@ -154,12 +157,12 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
                       <tr key={`${f.parada_id}-${f.objetivo_id ?? i}`} className={cn('align-top [&>td]:px-2 [&>td]:py-1.5', primera && 'border-t border-borde')}>
                         <td className="tabular text-tenue">{primera ? f.orden : ''}</td>
                         <td className="tabular">{primera && (f.llegada
-                          ? <span title="Hora real en que marcó «Llegué acá»" className="font-semibold text-green-700 dark:text-green-400">{fmtSoloHora(f.llegada)}</span>
+                          ? <span title="Hora real en que marcó «Llegué acá» (si volvió en el día, cada llegada)" className="font-semibold text-green-700 dark:text-green-400">{horasReales(f)}</span>
                           : <span title="Hora aproximada" className="text-tenue">≈ {horas.get(f.parada_id)}</span>)}</td>
                         <td>{primera && <><p className="font-medium">{f.lugar}</p>{f.direccion && <p className="text-xs text-tenue">{f.direccion}</p>}</>}</td>
                         <td>{f.especialidad ?? <span className="text-tenue">—</span>}</td>
                         <td>{f.medico ?? (f.medico_visitado ? <span className="text-tenue">visitó a {f.medico_visitado}</span> : <span className="text-tenue">{f.objetivo_id ? 'a buscar' : '—'}</span>)}</td>
-                        <td>{f.resultado ?? ''}{f.observaciones && <p className="text-xs text-tenue">{f.observaciones}</p>}</td>
+                        <td>{f.fecha_hora && <span className="tabular text-tenue">{fmtSoloHora(f.fecha_hora)} · </span>}{f.resultado ?? ''}{f.observaciones && <p className="text-xs text-tenue">{f.observaciones}</p>}</td>
                         <td className="tabular">{f.proxima_visita ? fmtFecha(f.proxima_visita) : ''}</td>
                         <td><span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', COLOR[e])}>{e}</span></td>
                       </tr>
