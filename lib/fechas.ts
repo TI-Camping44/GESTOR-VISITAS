@@ -49,6 +49,11 @@ export function fmtFechaHora(v: string | Date | null | undefined): string {
 }
 
 export const fmtSoloHora = (v: string | Date) => fmtHora.format(typeof v === 'string' ? new Date(v) : v)
+/** Varias horas: «09:10», «09:10 y 15:30», «09:10, 12:00 y 15:30». */
+export const fmtHoras = (hs: (string | Date)[]) => {
+  const t = hs.map(fmtSoloHora)
+  return t.length > 1 ? `${t.slice(0, -1).join(', ')} y ${t.at(-1)}` : (t[0] ?? '')
+}
 
 /** "lun 12/10" */
 export const fmtDia = (iso: string) => fmtDiaCorto.format(aUtc(iso)).replace('.', '')

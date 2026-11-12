@@ -1033,4 +1033,67 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── Quitar una llegada marcada por error (0031) ────────────────────
+insert into vis_clientes (razon_social, categoria, ciudad, empresa_id, vendedor_id)
+select 'Consultorio Por Error', 'lugar', 'Asunción', v.empresa_id, v.id from vis_vendedores v where v.nombre = 'Vale';
+select pg_temp.como('vale@vitalica.com.py') \gset
+set role authenticated;
+do $$ declare r jsonb; q jsonb; v_l uuid := (select id from vis_clientes where razon_social = 'Consultorio Por Error'); begin
+  r := vis_marcar_llegada(jsonb_build_object('lugar_id', v_l, 'lat', -25.4, 'lng', -57.5, 'precision_m', 8));
+  assert (select lat from vis_clientes where id = v_l) = -25.4, 'la llegada le puso ubicación';
+  perform set_config('test.llegada', r ->> 'id', false);
+  q := vis_quitar_llegada((r ->> 'id')::uuid);
+  assert (q ->> 'parada_quitada')::boolean and (q ->> 'ubicacion_quitada')::boolean, format('quitar: %s', q);
+  assert not exists (select 1 from vis_llegadas where id = (r ->> 'id')::uuid), 'la llegada se fue';
+  assert (select lat from vis_clientes where id = v_l) is null, 'y la ubicación que había puesto';
+  assert not exists (select 1 from vis_paradas_dia(vis_hoy(), vis_mi_id()) where razon_social = 'Consultorio Por Error'), 'y sale de Hoy';
+  -- Con visitas en el lugar, no.
+  r := vis_marcar_llegada(jsonb_build_object('lugar_id', (select id from vis_clientes where razon_social = 'Consultorio Sin Ruta')));
+  begin
+    perform vis_quitar_llegada((select id from vis_llegadas where lugar_id = (select id from vis_clientes where razon_social = 'Lugar Visita Suelta') limit 1));
+    assert false, 'no hay llegada ahí: error';
+  exception when raise_exception then null;
+  end;
+end $$;
+reset role;
+insert into vis_llegadas (vendedor_id, lugar_id, fecha_hora) select vendedor_id, id, now() - interval '1 hour' from vis_clientes where razon_social = 'Lugar Visita Suelta';
+select pg_temp.como('vale@vitalica.com.py') \gset
+set role authenticated;
+do $$ begin
+  begin
+    perform vis_quitar_llegada((select id from vis_llegadas where lugar_id = (select id from vis_clientes where razon_social = 'Lugar Visita Suelta') limit 1));
+    assert false, 'con visitas registradas después de la llegada no se quita';
+  exception when raise_exception then null;
+  end;
+end $$;
+reset role;
+select pg_temp.como('hugo@vitalica.com.py') \gset
+set role authenticated;
+do $$ begin
+  begin
+    perform vis_quitar_llegada((select id from vis_llegadas limit 1));
+    assert false, 'nadie quita llegadas ajenas';
+  exception when raise_exception then null;
+  end;
+end $$;
+reset role;
+
+-- Volver al mismo lugar en el día: dos llegadas, la de la tarde se puede quitar aunque haya visitas a la mañana.
+select pg_temp.como('vale@vitalica.com.py') \gset
+set role authenticated;
+do $$ declare r jsonb; v_l uuid := (select id from vis_clientes where razon_social = 'Lugar Visita Suelta'); begin
+  r := vis_marcar_llegada(jsonb_build_object('lugar_id', v_l));
+  assert (select count(*) from vis_llegadas where lugar_id = v_l) = 2, 'segunda llegada al mismo lugar';
+  assert (select array_length(llegadas, 1) from vis_ruteo_semana(vis_mi_id(), vis_hoy()) where lugar = 'Lugar Visita Suelta' limit 1) = 2, 'el ruteo muestra las dos';
+  -- Dos visitas del día en un lugar sin objetivos: dos filas en el ruteo.
+  perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_l,
+    'fecha_hora', now() - interval '30 minutes', 'resultado_id', (select id from vis_resultados where nombre = 'Presentó productos')));
+  assert (select count(*) from vis_ruteo_semana(vis_mi_id(), vis_hoy()) where lugar = 'Lugar Visita Suelta' and dia = vis_hoy()) =
+         (select count(*) from vis_visitas where cliente_id = v_l and (fecha_hora at time zone 'America/Asuncion')::date = vis_hoy()), 'una fila por visita del día';
+  perform vis_quitar_llegada((r ->> 'id')::uuid);
+  assert (select count(*) from vis_llegadas where lugar_id = v_l) = 1, 'la de la tarde se quita aunque haya visitas antes';
+  assert exists (select 1 from vis_paradas_dia(vis_hoy(), vis_mi_id()) where razon_social = 'Lugar Visita Suelta'), 'y la parada queda (tiene la visita)';
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;
