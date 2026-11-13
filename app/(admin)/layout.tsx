@@ -1,5 +1,8 @@
 import type { Viewport } from 'next'
 import Link from 'next/link'
+import { cookies } from 'next/headers'
+import { ProveedorPanel, SelectorModo } from '@/components/admin/PanelModo'
+import { COOKIE_MODO, type ModoPanel } from '@/lib/panel'
 import { obtenerPerfil, requerirSupervisor } from '@/lib/sesion'
 import { supabaseServidor } from '@/lib/supabase/server'
 import { NavAdmin } from '@/components/admin/NavAdmin'
@@ -30,9 +33,13 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
   }
   // Clientes dados de alta en zona de otro vendedor, sin revisar (las de su gente, por RLS).
   const { count: altas } = await sb.from('vis_alertas_alta').select('id', { count: 'exact', head: true }).is('revisada_el', null)
-  // Visita médica: el menú aparece si la empresa tiene alguna visitadora.
-  const { count: visitadoras } = await sb.from('vis_vendedores').select('id', { count: 'exact', head: true }).eq('tipo', 'medica').eq('activo', true)
+  // Visita médica: si la empresa tiene visitadoras, el panel se divide en «Ventas» y «Visita médica».
+  // Todas (también las inactivas), para separar su historial de lo de los vendedores.
+  const { data: medicas } = await sb.from('vis_vendedores').select('id, activo').eq('tipo', 'medica')
+  const idsMedica = (medicas ?? []).some((m) => m.activo) ? (medicas ?? []).map((m) => m.id) : []
+  const guardado: ModoPanel = (await cookies()).get(COOKIE_MODO)?.value === 'medica' ? 'medica' : 'ventas'
   return (
+    <ProveedorPanel idsMedica={idsMedica} guardado={guardado}>
     <div data-empresa={temaEmpresa(perfil.empresa)} className="min-h-full bg-fondo text-tinta lg:grid lg:grid-cols-[220px_1fr]">
       <a href="#contenido" className="sr-only z-50 rounded-lg bg-superficie px-3 py-2 text-sm font-medium text-tinta shadow focus:not-sr-only focus:fixed focus:left-3 focus:top-3">Saltar al contenido</a>
       <aside className="border-b border-borde bg-barra px-3 py-3 text-barra-tinta lg:border-b-0 lg:border-r">
@@ -45,7 +52,8 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
           <p className="truncate text-xs text-barra-tenue lg:mt-1">{perfil.nombre}</p>
           {perfil.multi_empresa && <SelectorEmpresa actual={perfil.empresa_id} />}
         </div>
-        <NavAdmin rol={perfil.rol} altas={altas ?? 0} medica={(visitadoras ?? 0) > 0} />
+        <SelectorModo />
+        <NavAdmin rol={perfil.rol} altas={altas ?? 0} />
         <SelectorTema enBarra className="mt-3 hidden lg:flex" />
         <BotonSalir className="mt-3 hidden w-full lg:flex" />
         </div>
@@ -66,5 +74,6 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
         <main id="contenido" tabIndex={-1} className="mx-auto max-w-7xl px-4 py-5 focus:outline-none">{children}</main>
       </div>
     </div>
+    </ProveedorPanel>
   )
 }

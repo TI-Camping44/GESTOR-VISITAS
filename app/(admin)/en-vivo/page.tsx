@@ -2,6 +2,7 @@
 // Vendedores en vivo (BRIEF §4b): marcador por vendedor en jornada, actualizado por Realtime sobre
 // vis_posicion_actual. Color por frescura: verde < 5 min, amarillo 5–15, gris > VIS_SIN_SENAL_MIN.
 // Nunca se muestra un punto viejo como si fuera en vivo. Abajo, el recorrido de un día.
+import { usePanel } from '@/components/admin/PanelModo'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { RecorridoDia } from '@/components/admin/RecorridoDia'
@@ -22,6 +23,7 @@ function frescura(fecha: string, ahora: number): Frescura {
 const iniciales = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join('')
 
 export default function EnVivo() {
+  const { delModo } = usePanel() // con visitadoras: en Ventas no aparecen, en Visita médica solo ellas
   const sb = supabaseNavegador()
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
   const [posiciones, setPosiciones] = useState<Map<string, PosicionActual>>(new Map())
@@ -60,9 +62,10 @@ export default function EnVivo() {
         sb.from('vis_posicion_actual').select('*'),
       ])
       if (v.error || p.error) return setError(mensajeError(v.error ?? p.error))
-      setVendedores(v.data ?? [])
+      const deLaVista = (v.data ?? []).filter((x) => delModo(x.id))
+      setVendedores(deLaVista)
       setPosiciones(new Map((p.data ?? []).map((x) => [x.vendedor_id, x])))
-      void cargarResumen(v.data ?? [])
+      void cargarResumen(deLaVista)
     })()
     const canal = sb.channel('vis-en-vivo')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vis_posicion_actual' }, (cambio) => {
@@ -75,7 +78,7 @@ export default function EnVivo() {
       .subscribe((estado) => setConectado(estado === 'SUBSCRIBED'))
     const reloj = setInterval(() => setAhora(Date.now()), 30_000)
     return () => { void sb.removeChannel(canal); clearInterval(reloj) }
-  }, [sb, cargarResumen])
+  }, [sb, cargarResumen, delModo])
 
   useEffect(() => {
     if (!vendedores.length) return

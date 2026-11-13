@@ -48,7 +48,8 @@ export default function Clientes() {
   }, [sb])
 
   const cargar = useCallback(async () => {
-    let consulta = sb.from('vis_clientes_v').select('*', { count: 'exact' }).order('razon_social').range(pagina * POR_PAGINA, pagina * POR_PAGINA + POR_PAGINA - 1)
+    // Sin los lugares de visita médica: tienen su página (Visita médica → Consultorios y lugares).
+    let consulta = sb.from('vis_clientes_v').select('*', { count: 'exact' }).eq('categoria', 'cliente').order('razon_social').range(pagina * POR_PAGINA, pagina * POR_PAGINA + POR_PAGINA - 1)
     const t = q.trim()
     if (t) consulta = consulta.or(`razon_social.ilike.%${t.replace(/[%,()]/g, ' ')}%,ruc.ilike.%${t.replace(/[%,()]/g, ' ')}%,ciudad.ilike.%${t.replace(/[%,()]/g, ' ')}%`)
     if (estado) consulta = consulta.eq('estado', estado)

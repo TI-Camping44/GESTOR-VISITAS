@@ -1,5 +1,6 @@
 'use client'
 // Rutas con nombre por semana y vendedor (requerimiento 5). Ej.: "Ruta Norte – Sem 42 – Antonio".
+import { usePanel } from '@/components/admin/PanelModo'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -14,6 +15,7 @@ import type { EstadoRuta, Vendedor, Zona } from '@/lib/database.types'
 type FilaRuta = { id: string; nombre: string; estado: EstadoRuta; vendedor_id: string; zona_id: string | null; paradas: { count: number }[] }
 
 export default function Rutas() {
+  const { delModo } = usePanel() // con visitadoras: en Ventas no aparecen, en Visita médica solo ellas
   const router = useRouter()
   const [semana, setSemana] = useState(lunesDe(hoyIso()))
   const [rutas, setRutas] = useState<FilaRuta[] | null>(null)
@@ -25,16 +27,16 @@ export default function Rutas() {
 
   useEffect(() => {
     const sb = supabaseNavegador()
-    sb.from('vis_vendedores').select('*').eq('activo', true).order('nombre').then(({ data }) => setVendedores(data ?? []))
+    sb.from('vis_vendedores').select('*').eq('activo', true).order('nombre').then(({ data }) => setVendedores((data ?? []).filter((v) => delModo(v.id))))
     sb.from('vis_zonas').select('*').eq('activo', true).order('nombre').then(({ data }) => setZonas(data ?? []))
-  }, [])
+  }, [delModo])
 
   useEffect(() => {
     setRutas(null)
     supabaseNavegador().from('vis_rutas').select('id, nombre, estado, vendedor_id, zona_id, paradas:vis_ruta_paradas(count)')
       .eq('semana_inicio', semana).order('nombre')
-      .then(({ data, error }) => { if (error) setError(mensajeError(error)); else setRutas((data ?? []) as unknown as FilaRuta[]) })
-  }, [semana])
+      .then(({ data, error }) => { if (error) setError(mensajeError(error)); else setRutas(((data ?? []) as unknown as FilaRuta[]).filter((r) => delModo(r.vendedor_id))) })
+  }, [semana, delModo])
 
   const semMes = semanaDelMes(semana)
   const tocan = zonas.filter((z) => z.semanas_mes.includes(semMes))

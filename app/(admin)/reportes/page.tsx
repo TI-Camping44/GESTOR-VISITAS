@@ -1,6 +1,7 @@
 'use client'
 // Reportes: productividad por vendedor (visitas, pedidos, conversión, cobranzas, km, horas),
 // motivos de las visitas, cobertura por zona y clientes descuidados. Todo exportable a Excel.
+import { usePanel } from '@/components/admin/PanelModo'
 import { useEffect, useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
 import { Aviso, Boton, Entrada, PuntoEstado, Selector, Tarjeta, Vacio } from '@/components/ui'
@@ -41,6 +42,7 @@ const fmtNum = (n: number, dec = 0) => Number(n).toLocaleString('es-PY', { maxim
 const hhmm = (t: string | null) => (t ? t.slice(0, 5) : '—')
 
 export default function Reportes() {
+  const { delModo } = usePanel() // con visitadoras: en Ventas no aparecen, en Visita médica solo ellas
   const sb = supabaseNavegador()
   const opciones = useMemo(rangos, [])
   const [preset, setPreset] = useState<string>('semana')
@@ -64,12 +66,12 @@ export default function Reportes() {
       const e = v.error ?? r.error ?? z.error
       if (e) { setError(mensajeError(e)); return }
       setError(null)
-      setVendedores((v.data ?? []) as unknown as FilaVendedor[])
+      setVendedores(((v.data ?? []) as unknown as FilaVendedor[]).filter((f) => delModo(f.vendedor_id)))
       setResultados((r.data ?? []) as unknown as FilaResultado[])
       setZonas((z.data ?? []) as unknown as FilaZona[])
     })
     return () => { vivo = false }
-  }, [sb, rango])
+  }, [sb, rango, delModo])
 
   useEffect(() => {
     sb.rpc('vis_clientes_sin_visita', { p_dias: diasSinVisita })
