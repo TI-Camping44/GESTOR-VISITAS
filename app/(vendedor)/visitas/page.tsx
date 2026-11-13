@@ -2,6 +2,7 @@
 // Mis visitas (pedido de los comerciales): a quiénes visité y qué pasó, día por día,
 // y la lista de clientes visitados en el período. Solo las visitas propias (vis_mis_visitas).
 import { useEffect, useMemo, useState } from 'react'
+import { useParamUrl } from '@/lib/useParamUrl'
 import { Phone, MessageCircle, CloudOff } from 'lucide-react'
 import { useVendedor } from '@/components/vendedor/Proveedor'
 import { Aviso, Entrada, Insignia, Tarjeta, Vacio } from '@/components/ui'
@@ -24,9 +25,12 @@ function tituloDia(iso: string, hoy: string) {
 export default function MisVisitas() {
   const { perfil, pendientes, soloLectura } = useVendedor()
   const hoy = hoyIso()
-  const [vista, setVista] = useState<'dia' | 'clientes'>('dia')
-  const [periodo, setPeriodo] = useState(30)
-  const [dia, setDia] = useState('')
+  // Vista, período y día en la URL: al volver de una visita queda donde estaba.
+  const [vista, setVista] = useParamUrl<'dia' | 'clientes'>('vista', 'dia')
+  const [periodoTxt, setPeriodoTxt] = useParamUrl('periodo', '30')
+  const periodo = Number(periodoTxt) || 30
+  const setPeriodo = (n: number) => setPeriodoTxt(String(n))
+  const [dia, setDia] = useParamUrl('dia', '')
   const [buscar, setBuscar] = useState('')
   const [visitas, setVisitas] = useState<MiVisita[] | null>(null)
   const [sinEnviar, setSinEnviar] = useState<VisitaPendiente[]>([])
@@ -86,15 +90,15 @@ export default function MisVisitas() {
     <div className="flex flex-col gap-4 p-4">
       <h1 className="text-xl font-semibold">Mis visitas</h1>
 
-      <div className="flex rounded-xl bg-fondo p-1 ring-1 ring-borde" role="tablist">
-        <button role="tab" aria-selected={vista === 'dia'} className={pestana(vista === 'dia')} onClick={() => setVista('dia')}>Por día</button>
-        <button role="tab" aria-selected={vista === 'clientes'} className={pestana(vista === 'clientes')} onClick={() => setVista('clientes')}>Clientes</button>
+      <div className="flex rounded-xl bg-fondo p-1 ring-1 ring-borde" role="group" aria-label="Ver">
+        <button type="button" aria-pressed={vista === 'dia'} className={pestana(vista === 'dia')} onClick={() => setVista('dia')}>Por día</button>
+        <button type="button" aria-pressed={vista === 'clientes'} className={pestana(vista === 'clientes')} onClick={() => setVista('clientes')}>Clientes</button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         {PERIODOS.map((p) => (
           <button key={p.dias} onClick={() => { setPeriodo(p.dias); setDia('') }}
-            className={cn('rounded-full border px-3 py-1 text-sm', !dia && periodo === p.dias ? 'border-marca bg-marca text-white' : 'border-borde text-tinta')}>
+            className={cn('rounded-full border px-3 py-1 text-sm', !dia && periodo === p.dias ? 'border-marca bg-marca text-sobre-marca' : 'border-borde text-tinta')}>
             {p.texto}
           </button>
         ))}

@@ -5,15 +5,15 @@ import Link from 'next/link'
 import { Phone, MessageCircle, Navigation, CheckCircle2, SkipForward, Undo2, Stethoscope, Clock } from 'lucide-react'
 import { useVendedor } from '@/components/vendedor/Proveedor'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
-import { Aviso, Boton, PuntoEstado, Tarjeta, Vacio } from '@/components/ui'
+import { Aviso, PuntoEstado, Tarjeta, Vacio, claseBoton } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
-import { fmtFecha, fmtHoras, hace, hoyIso, lunesDe } from '@/lib/fechas'
+import { fmtFecha, fmtHoras, hace, minutosDelDia, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
 import { fmtMin, horasEstimadas } from '@/lib/ruteo'
 import { urlParaVisitar } from '@/lib/rutas'
 import { BuscarCliente } from '@/components/vendedor/BuscarCliente'
-import { COLOR_ESTADO } from '@/lib/config'
+import { COLOR_ESTADO, COLOR_ESTADO_FUERTE } from '@/lib/config'
 import { linkComoLlegar, linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
 import type { FilaTablero, ParadaDia, ProximaVisita } from '@/lib/database.types'
 
@@ -117,7 +117,7 @@ export default function Hoy() {
   const horas = useMemo(() => {
     if (!esMedica || !datos) return new Map<string, string>()
     const enOrden = datos.paradas.filter((p) => !saltadas.has(p.parada_id))
-    const ini = jornada ? (() => { const d = new Date(jornada.inicio); return Math.max(d.getHours() * 60 + d.getMinutes(), 0) })() : 8 * 60
+    const ini = jornada ? minutosDelDia(jornada.inicio) : 8 * 60
     const h = horasEstimadas(datos.base ?? null, enOrden, { inicioMin: ini })
     return new Map(enOrden.map((p, i) => [p.parada_id, fmtMin(h[i]!.llegada)]))
   }, [esMedica, datos, saltadas, jornada])
@@ -182,7 +182,7 @@ export default function Hoy() {
             <li key={p.parada_id}>
               <Tarjeta className={p.visitada || salteada ? 'opacity-70' : undefined}>
                 <div className="flex items-start gap-3">
-                  <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full text-sm font-semibold text-white" style={{ background: p.visitada ? '#6b7280' : COLOR_ESTADO[p.estado] }}>
+                  <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full text-sm font-semibold text-white" style={{ background: p.visitada ? '#6b7280' : COLOR_ESTADO_FUERTE[p.estado] }}>
                     {i + 1}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -237,12 +237,12 @@ export default function Hoy() {
                       <CheckCircle2 className="size-4" aria-hidden /> Visitado
                     </span>
                   ) : (
-                    <Link href={urlParaVisitar(esMedica, p.cliente_id, { parada: p.parada_id })} className="flex-1">
-                      <Boton className="w-full">{esMedica ? 'Llegué · Ver médicos' : 'Llegué · Registrar visita'}</Boton>
+                    <Link href={urlParaVisitar(esMedica, p.cliente_id, { parada: p.parada_id })} className={claseBoton({ className: 'flex-1' })}>
+                      {esMedica ? 'Llegué · Ver médicos' : 'Llegué · Registrar visita'}
                     </Link>
                   )}
-                  {tel && <a href={tel} aria-label={`Llamar a ${p.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" /></a>}
-                  {wa && <a href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp a ${p.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><MessageCircle className="size-4" /></a>}
+                  {tel && <a href={tel} aria-label={`Llamar a ${p.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" aria-hidden /></a>}
+                  {wa && <a href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp a ${p.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><MessageCircle className="size-4" aria-hidden /></a>}
                 </div>
               </Tarjeta>
             </li>
@@ -275,9 +275,9 @@ export default function Hoy() {
                     {x.ultima_observacion && <p className="mt-1 text-sm">{x.ultima_observacion}</p>}
                     <p className="mt-1 text-xs text-tenue">Última visita {fmtFecha(x.ultima_visita)} · quedaste en volver el {fmtFecha(x.proxima_visita)}</p>
                     <div className="mt-3 flex gap-2">
-                      <Link href={urlParaVisitar(esMedica, x.cliente_id)} className="flex-1"><Boton variante="secundario" className="w-full">{esMedica ? 'Ver médicos' : 'Registrar visita'}</Boton></Link>
-                      {tel && <a href={tel} aria-label={`Llamar a ${x.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" /></a>}
-                      {wa && <a href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp a ${x.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><MessageCircle className="size-4" /></a>}
+                      <Link href={urlParaVisitar(esMedica, x.cliente_id)} className={claseBoton({ variante: 'secundario', className: 'flex-1' })}>{esMedica ? 'Ver médicos' : 'Registrar visita'}</Link>
+                      {tel && <a href={tel} aria-label={`Llamar a ${x.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" aria-hidden /></a>}
+                      {wa && <a href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp a ${x.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><MessageCircle className="size-4" aria-hidden /></a>}
                     </div>
                   </Tarjeta>
                 </li>

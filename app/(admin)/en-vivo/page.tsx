@@ -15,8 +15,8 @@ import type { FilaTablero, ParadaDia, PosicionActual, Vendedor } from '@/lib/dat
 type Frescura = { color: string; texto: string; nivel: 0 | 1 | 2 }
 function frescura(fecha: string, ahora: number): Frescura {
   const min = (ahora - new Date(fecha).getTime()) / 60000
-  if (min < 5) return { color: '#16a34a', texto: 'en vivo', nivel: 0 }
-  if (min < VIS.sinSenalMin) return { color: '#d97706', texto: `hace ${Math.round(min)} min`, nivel: 1 }
+  if (min < 5) return { color: '#15803d', texto: 'en vivo', nivel: 0 }
+  if (min < VIS.sinSenalMin) return { color: '#b45309', texto: `hace ${Math.round(min)} min`, nivel: 1 }
   return { color: '#6b7280', texto: `sin señal ${hace(fecha, ahora)}`, nivel: 2 }
 }
 const iniciales = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join('')

@@ -25,6 +25,9 @@
   --c-barra-tenue: var(--c-tenue);
   --c-barra-hover: var(--c-fondo);
   --c-barra-acento: var(--c-marca);
+  /* Texto sobre el color de marca (botones, pestañas elegidas): blanco en claro, casi negro en oscuro,
+     donde la marca se aclara. Contraste mínimo 4,5:1 en todos los temas. */
+  --c-sobre-marca: #ffffff;
 }
 :root[data-tema='oscuro'] {
   --c-marca: #e5e5e5;
@@ -34,6 +37,7 @@
   --c-tinta: #ececec;
   --c-tenue: #a3a3a3;
   --c-borde: #2e2e2e;
+  --c-sobre-marca: #141414;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -45,6 +49,7 @@
     --c-tinta: #ececec;
     --c-tenue: #a3a3a3;
     --c-borde: #2e2e2e;
+    --c-sobre-marca: #141414;
     color-scheme: dark;
   }
 }
@@ -62,10 +67,12 @@
   --c-barra-tenue: #b3b3b3;
   --c-barra-hover: #2b2b2b;
   --c-barra-acento: #ff4040;
+  --c-sobre-marca: #ffffff;
 }
 [data-empresa='vitalica'] {
-  --c-marca: #d9640a;
-  --c-marca-oscuro: #b4520a;
+  /* Naranja de Vitalica en el tono que da 5:1 con texto blanco (#d9640a daba 3,6:1). */
+  --c-marca: #b4520a;
+  --c-marca-oscuro: #9a4508;
   --c-fondo: #f6f5f3;
   --c-superficie: #ffffff;
   --c-tinta: #2b2b2b;
@@ -75,7 +82,8 @@
   --c-barra-tinta: #ffffff;
   --c-barra-tenue: #dedede;
   --c-barra-hover: #626262;
-  --c-barra-acento: #ffb37a;
+  --c-barra-acento: #ffc08f;
+  --c-sobre-marca: #ffffff;
 }
 [data-tema='oscuro'] [data-empresa='camping44'] {
   --c-marca: #ff4040;
@@ -86,6 +94,7 @@
   --c-tenue: #a3a3a3;
   --c-borde: #2e2e2e;
   --c-barra: #000000;
+  --c-sobre-marca: #141414;
   --c-barra-hover: #1f1f1f;
 }
 [data-tema='oscuro'] [data-empresa='vitalica'] {
@@ -97,6 +106,7 @@
   --c-tenue: #a8a8a8;
   --c-borde: #34312e;
   --c-barra: #2e2e2e;
+  --c-sobre-marca: #141414;
   --c-barra-hover: #3d3d3d;
 }
 @media (prefers-color-scheme: dark) {
@@ -109,6 +119,7 @@
     --c-tenue: #a3a3a3;
     --c-borde: #2e2e2e;
     --c-barra: #000000;
+    --c-sobre-marca: #141414;
     --c-barra-hover: #1f1f1f;
   }
   :root:not([data-tema='claro']) [data-empresa='vitalica'] {
@@ -120,6 +131,7 @@
     --c-tenue: #a8a8a8;
     --c-borde: #34312e;
     --c-barra: #2e2e2e;
+    --c-sobre-marca: #141414;
     --c-barra-hover: #3d3d3d;
   }
 }
@@ -137,16 +149,28 @@
   --color-barra-tenue: var(--c-barra-tenue);
   --color-barra-hover: var(--c-barra-hover);
   --color-barra-acento: var(--c-barra-acento);
+  --color-sobre-marca: var(--c-sobre-marca);
   --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
 }
 
 html, body { height: 100%; }
+/* App del vendedor: la barra de jornada (arriba) y el menú (abajo) quedan fijos; que no tapen el campo
+   o botón al que se llega con Tab o al marcar un error. */
+html:has([data-barra-jornada]) { scroll-padding-top: 7rem; scroll-padding-bottom: 5.5rem; }
 body {
   background: var(--c-fondo);
   color: var(--c-tinta);
   -webkit-tap-highlight-color: transparent;
 }
 .tabular { font-variant-numeric: tabular-nums; }
+
+/* Tocar: sin demora de doble toque, y respuesta visible al apretar (el celular no tiene hover y el
+   resaltado del navegador está apagado arriba). :where() para que cualquier clase lo pueda cambiar. */
+:where(a, button, summary, select, label, [role='button']) { touch-action: manipulation; }
+@media (pointer: coarse) {
+  :where(a, summary, label:has(input)):active,
+  :where(button:not(:disabled)):active { opacity: 0.7; }
+}
 
 /* MapLibre: que los popups sigan el tema. Selectores más específicos que los de
    maplibre-gl.css, que se carga después y si no vuelve a poner el fondo blanco. */

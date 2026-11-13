@@ -10,7 +10,7 @@ import { leerGps } from '@/lib/gps'
 import { distanciaM, fmtDistancia } from '@/lib/geo'
 import { fmtHoras, fmtSoloHora } from '@/lib/fechas'
 import { AVISO_SOLO_LECTURA, useVendedor } from '@/components/vendedor/Proveedor'
-import { Aviso, Boton, Entrada, Selector, Tarjeta, Vacio } from '@/components/ui'
+import { Aviso, Boton, Entrada, Selector, Tarjeta, Vacio, claseBoton } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
 import { hace } from '@/lib/fechas'
@@ -252,7 +252,7 @@ export default function PaginaLugar() {
                     <p className="font-semibold leading-snug">{m.nombre}</p>
                     <p className="text-sm text-tenue">{[m.especialidad, horario].filter(Boolean).join(' · ') || 'Sin especialidad'}</p>
                   </div>
-                  {objetivoIds.has(m.id) && <span className="shrink-0 rounded-full bg-marca px-2 py-0.5 text-xs font-medium text-white"><Stethoscope className="-mt-0.5 mr-0.5 inline size-3" aria-hidden />hoy</span>}
+                  {objetivoIds.has(m.id) && <span className="shrink-0 rounded-full bg-marca px-2 py-0.5 text-xs font-medium text-sobre-marca"><Stethoscope className="-mt-0.5 mr-0.5 inline size-3" aria-hidden />hoy</span>}
                   {!visitado && toca && !objetivoIds.has(m.id) && <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">toca visita</span>}
                 </div>
                 <p className="mt-1 text-xs text-tenue">Última visita: {m.ultima_visita ? hace(m.ultima_visita) : 'nunca'} · cada {m.frecuencia_dias} días</p>
@@ -260,11 +260,11 @@ export default function PaginaLugar() {
                   {visitado ? (
                     <span className="inline-flex flex-1 items-center justify-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-400"><CheckCircle2 className="size-4" aria-hidden /> Visitado hoy</span>
                   ) : (
-                    <Link href={urlVisitaMedico(lugar.id, m.id, { parada })} className="flex-1"><Boton className="w-full">Registrar visita</Boton></Link>
+                    <Link href={urlVisitaMedico(lugar.id, m.id, { parada })} className={claseBoton({ className: 'flex-1' })}>Registrar visita</Link>
                   )}
-                  {tel && <a href={tel} aria-label={`Llamar a ${m.nombre}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" /></a>}
-                  {wa && <a href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp a ${m.nombre}`} className="grid size-10 place-items-center rounded-lg border border-borde"><MessageCircle className="size-4" /></a>}
-                  <Link href={`/medicos/nuevo?id=${m.id}`} aria-label={`Editar a ${m.nombre}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Pencil className="size-4" /></Link>
+                  {tel && <a href={tel} aria-label={`Llamar a ${m.nombre}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" aria-hidden /></a>}
+                  {wa && <a href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp a ${m.nombre}`} className="grid size-10 place-items-center rounded-lg border border-borde"><MessageCircle className="size-4" aria-hidden /></a>}
+                  <Link href={`/medicos/nuevo?id=${m.id}`} aria-label={`Editar a ${m.nombre}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Pencil className="size-4" aria-hidden /></Link>
                 </div>
               </Tarjeta>
             </li>

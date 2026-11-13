@@ -1,11 +1,23 @@
+import type { Viewport } from 'next'
 import Link from 'next/link'
-import { requerirSupervisor } from '@/lib/sesion'
+import { obtenerPerfil, requerirSupervisor } from '@/lib/sesion'
 import { supabaseServidor } from '@/lib/supabase/server'
 import { NavAdmin } from '@/components/admin/NavAdmin'
 import { BotonSalir } from '@/components/BotonSalir'
 import { SelectorEmpresa } from '@/components/admin/SelectorEmpresa'
 import { SelectorTema } from '@/components/SelectorTema'
 import { temaEmpresa } from '@/lib/utils'
+
+// Barra del celular del mismo color que la barra del panel de cada empresa.
+const BARRA: Record<string, { claro: string; oscuro: string }> = {
+  camping44: { claro: '#141414', oscuro: '#000000' },
+  vitalica: { claro: '#525252', oscuro: '#2e2e2e' },
+}
+export async function generateViewport(): Promise<Viewport> {
+  const { perfil } = await obtenerPerfil()
+  const b = BARRA[temaEmpresa(perfil?.empresa) ?? '']
+  return b ? { themeColor: [{ media: '(prefers-color-scheme: light)', color: b.claro }, { media: '(prefers-color-scheme: dark)', color: b.oscuro }] } : {}
+}
 
 export default async function LayoutAdmin({ children }: { children: React.ReactNode }) {
   const perfil = await requerirSupervisor()
@@ -22,6 +34,7 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
   const { count: visitadoras } = await sb.from('vis_vendedores').select('id', { count: 'exact', head: true }).eq('tipo', 'medica').eq('activo', true)
   return (
     <div data-empresa={temaEmpresa(perfil.empresa)} className="min-h-full bg-fondo text-tinta lg:grid lg:grid-cols-[220px_1fr]">
+      <a href="#contenido" className="sr-only z-50 rounded-lg bg-superficie px-3 py-2 text-sm font-medium text-tinta shadow focus:not-sr-only focus:fixed focus:left-3 focus:top-3">Saltar al contenido</a>
       <aside className="border-b border-borde bg-barra px-3 py-3 text-barra-tinta lg:border-b-0 lg:border-r">
         <div className="lg:sticky lg:top-3">
         <div className="mb-3 flex items-center justify-between gap-2 px-2 lg:block">
@@ -50,7 +63,7 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
             <Link href="/altas" className="underline">Revisar</Link>
           </div>
         )}
-        <main className="mx-auto max-w-7xl px-4 py-5">{children}</main>
+        <main id="contenido" tabIndex={-1} className="mx-auto max-w-7xl px-4 py-5 focus:outline-none">{children}</main>
       </div>
     </div>
   )

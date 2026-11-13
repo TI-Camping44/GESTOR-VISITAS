@@ -2,6 +2,7 @@
 // Tablero semanal (requerimiento 3): planificado vs. realizado por día y vendedor,
 // cumplimiento contra la meta, agrupado por zona/ciudad y en el mapa con clustering.
 import { useEffect, useMemo, useState } from 'react'
+import { useParamUrl } from '@/lib/useParamUrl'
 import { SelectorSemana } from '@/components/admin/SelectorSemana'
 import { DetalleTablero, type Seleccion } from '@/components/admin/DetalleTablero'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
@@ -26,7 +27,7 @@ function colorCumplimiento(hechas: number, meta: number) {
 }
 
 export default function Tablero() {
-  const [semana, setSemana] = useState(lunesDe(hoyIso()))
+  const [semana, setSemana] = useParamUrl('semana', lunesDe(hoyIso())) // en la URL: se puede pasar el link de esa semana
   const [filas, setFilas] = useState<FilaTablero[] | null>(null)
   const [visitas, setVisitas] = useState<VisitaSemana[]>([])
   const [kmHoras, setKmHoras] = useState<Map<string, { km: number; horas: number }>>(new Map())
@@ -91,6 +92,7 @@ export default function Tablero() {
         <h1 className="text-2xl font-semibold">Tablero semanal</h1>
         <SelectorSemana semana={semana} alCambiar={setSemana} />
       </div>
+      <p className="-mt-3 text-sm text-tenue">Tocá un número (por ejemplo <b className="font-semibold text-tinta">7 / 10</b>) para ver qué clientes visitó y cuáles quedaron sin visitar.</p>
       {error && <Aviso tipo="error">{error}</Aviso>}
 
       <Tarjeta className="overflow-x-auto p-0">
@@ -122,24 +124,24 @@ export default function Tablero() {
                   {lista.map((f, i) => (
                     <td key={dias[i]} className="px-1 py-2 text-center">
                       <button type="button" onClick={() => setSel({ vendedorId: id, nombre: v.nombre, desde: dias[i]!, hasta: dias[i]! })}
-                        className={cn('inline-block min-w-16 rounded-md px-2 py-1 hover:ring-2 hover:ring-marca/40', colorCumplimiento(Number(f?.realizadas ?? 0), v.metaD),
+                        className={cn('inline-block min-w-16 rounded-md border border-current/15 px-2 py-1 hover:ring-2 hover:ring-marca/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marca', colorCumplimiento(Number(f?.realizadas ?? 0), v.metaD),
                           sel?.vendedorId === id && sel.desde === dias[i] && sel.hasta === dias[i] && 'ring-2 ring-marca')}
                         title={`${f?.realizadas ?? 0} realizadas de ${f?.planificadas ?? 0} planificadas · meta ${v.metaD}. Tocá para ver los clientes.`}>
                         <strong>{f?.realizadas ?? 0}</strong><span className="text-tenue"> / {v.metaD}</span>
-                        <span className="block text-[11px] text-tenue">plan {f?.planificadas ?? 0}</span>
+                        <span className="block text-xs text-tenue">plan {f?.planificadas ?? 0}</span>
                       </button>
                     </td>
                   ))}
                   <td className="px-3 py-2 text-center">
                     <button type="button" onClick={() => setSel({ vendedorId: id, nombre: v.nombre, desde: dias[0]!, hasta: dias.at(-1)! })}
-                      className={cn('rounded-md px-2 py-0.5 hover:ring-2 hover:ring-marca/40', sel?.vendedorId === id && sel.desde !== sel.hasta && 'ring-2 ring-marca')}
+                      className={cn('rounded-md border border-borde px-2 py-0.5 hover:ring-2 hover:ring-marca/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marca', sel?.vendedorId === id && sel.desde !== sel.hasta && 'ring-2 ring-marca')}
                       title="Tocá para ver los clientes de la semana">
                       <strong>{total}</strong><span className="text-tenue"> / {v.metaS}</span>
                     </button>
-                    <div className="mx-auto mt-1 h-1.5 w-20 overflow-hidden rounded-full bg-fondo" aria-label={`${pct}% de la meta`}>
+                    <div className="mx-auto mt-1 h-1.5 w-20 overflow-hidden rounded-full bg-fondo" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, pct)} aria-label={`${pct}% de la meta semanal`}>
                       <div className="h-full rounded-full bg-marca" style={{ width: `${Math.min(100, pct)}%` }} />
                     </div>
-                    <span className="text-[11px] text-tenue">{pct}% · plan {plan}</span>
+                    <span className="text-xs text-tenue">{pct}% · plan {plan}</span>
                   </td>
                   <td className="px-3 py-2 text-center">{pedidos}</td>
                   <td className="px-3 py-2 text-center">{fuera}</td>

@@ -32,6 +32,14 @@ export const COLOR_ESTADO = {
   no_interesado: '#ea580c',
 } as const
 
+/** Mismos estados en un tono más oscuro, para fondos con texto blanco encima (contraste ≥ 4,5:1). */
+export const COLOR_ESTADO_FUERTE = {
+  activo: '#15803d',
+  potencial: '#2563eb',
+  inactivo: '#dc2626',
+  no_interesado: '#c2410c',
+} as const
+
 export const ETIQUETA_ESTADO = {
   activo: 'Activo',
   potencial: 'Potencial',

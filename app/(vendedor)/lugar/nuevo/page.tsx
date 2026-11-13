@@ -11,6 +11,8 @@ import { guardarCache } from '@/lib/offline/db'
 import { VIS } from '@/lib/config'
 import { mensajeError } from '@/lib/utils'
 import { TIPOS_LUGAR } from '@/lib/medicos'
+import { useErrorCampo } from '@/components/ErrorCampo'
+import { useAvisoSinGuardar } from '@/lib/sinGuardar'
 
 export default function NuevoLugar() {
   const router = useRouter()
@@ -20,6 +22,8 @@ export default function NuevoLugar() {
   const [f, setF] = useState({ nombre: '', tipo_lugar: 'Hospital', telefono: '', direccion: '', ciudad: '', notas: '' })
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const errCampo = useErrorCampo()
+  useAvisoSinGuardar(!soloLectura && !enviando && [f.nombre, f.telefono, f.direccion, f.ciudad, f.notas].some((v) => v.trim() !== ''))
   const cambiar = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF((x) => ({ ...x, [k]: e.target.value }))
 
   useEffect(() => {
@@ -32,9 +36,10 @@ export default function NuevoLugar() {
     e.preventDefault()
     if (soloLectura) return setError(AVISO_SOLO_LECTURA)
     setError(null)
-    if (!f.nombre.trim()) return setError('Falta el nombre del lugar.')
+    errCampo.limpiar()
+    if (!f.nombre.trim()) return errCampo.marcar('nombre', 'Falta el nombre del lugar.')
     const l = gps.lectura
-    if (!l) return setError('Falta la ubicación GPS. Tocá "Reintentar".')
+    if (!l) return setError('Falta la ubicación GPS. Tocá «Reintentar».')
     if (l.precision > VIS.gpsPrecisionMaxM) return setError(`Precisión actual: ${l.precision} m. Se necesita ${VIS.gpsPrecisionMaxM} m o menos: reintentá al aire libre.`)
     if (!navigator.onLine) return setError('Necesitás señal para cargar un lugar.')
     setEnviando(true)
@@ -49,7 +54,7 @@ export default function NuevoLugar() {
   }
 
   return (
-    <form onSubmit={guardar} className="flex flex-col gap-4">
+    <form onSubmit={guardar} noValidate className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Nuevo lugar</h1>
         <p className="text-sm text-tenue">Hospital, sanatorio o consultorio. Cargalo parado ahí: se guarda la ubicación del GPS. Después cargás sus médicos.</p>
@@ -57,7 +62,8 @@ export default function NuevoLugar() {
       <CapturaGps gps={gps} />
       <div>
         <Etiqueta htmlFor="nombre">Nombre *</Etiqueta>
-        <Entrada id="nombre" value={f.nombre} onChange={cambiar('nombre')} placeholder="Hospital de Clínicas" autoComplete="off" />
+        <Entrada id="nombre" value={f.nombre} onChange={cambiar('nombre')} placeholder="Ej.: Hospital de Clínicas…" autoComplete="off" {...errCampo.campo('nombre')} />
+        {errCampo.mensaje('nombre')}
       </div>
       <div>
         <Etiqueta htmlFor="tipo">Tipo</Etiqueta>
@@ -72,11 +78,11 @@ export default function NuevoLugar() {
       </div>
       <div>
         <Etiqueta htmlFor="dir">Dirección</Etiqueta>
-        <Entrada id="dir" value={f.direccion} onChange={cambiar('direccion')} />
+        <Entrada id="dir" value={f.direccion} onChange={cambiar('direccion')} autoComplete="off" placeholder="Ej.: Av. Mcal. López 1234…" />
       </div>
       <div>
         <Etiqueta htmlFor="tel">Teléfono</Etiqueta>
-        <Entrada id="tel" type="tel" inputMode="tel" value={f.telefono} onChange={cambiar('telefono')} />
+        <Entrada id="tel" type="tel" inputMode="tel" autoComplete="off" placeholder="021 123 456" value={f.telefono} onChange={cambiar('telefono')} />
       </div>
       <div>
         <Etiqueta htmlFor="notas">Notas</Etiqueta>

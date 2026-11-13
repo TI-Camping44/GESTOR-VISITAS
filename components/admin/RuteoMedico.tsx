@@ -128,9 +128,9 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
               </Selector>
             )}
             <div className="flex items-center gap-1">
-              <button type="button" aria-label="Semana anterior" onClick={() => setLunes(sumarDias(lunes, -7))} className="grid size-9 place-items-center rounded-lg border border-borde"><ChevronLeft className="size-4" /></button>
+              <button type="button" aria-label="Semana anterior" onClick={() => setLunes(sumarDias(lunes, -7))} className="grid size-9 place-items-center rounded-lg border border-borde"><ChevronLeft className="size-4" aria-hidden /></button>
               <span className="min-w-36 text-center text-sm font-medium">Sem {semanaIso(lunes)} · {fmtFecha(lunes).slice(0, 5)} al {fmtFecha(sumarDias(lunes, 5)).slice(0, 5)}</span>
-              <button type="button" aria-label="Semana siguiente" onClick={() => setLunes(sumarDias(lunes, 7))} className="grid size-9 place-items-center rounded-lg border border-borde"><ChevronRight className="size-4" /></button>
+              <button type="button" aria-label="Semana siguiente" onClick={() => setLunes(sumarDias(lunes, 7))} className="grid size-9 place-items-center rounded-lg border border-borde"><ChevronRight className="size-4" aria-hidden /></button>
             </div>
             <label className="flex items-center gap-1 text-sm">Sale
               <input type="time" value={inicio} onChange={(e) => setInicio(e.target.value)} aria-label="Hora de salida" className="min-h-9 rounded-lg border border-borde bg-superficie px-2" />

@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CheckCircle2, Copy, Satellite } from 'lucide-react'
 import { useVendedor } from '@/components/vendedor/Proveedor'
-import { Aviso, Boton, Tarjeta } from '@/components/ui'
+import { Aviso, Tarjeta, claseBoton } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { hace } from '@/lib/fechas'
 import { mensajeError } from '@/lib/utils'
@@ -63,8 +63,8 @@ export default function PaginaGps() {
           <Tarjeta className="flex flex-col gap-2">
             <p className="font-semibold">1. Instalá Traccar Client</p>
             <div className="flex flex-wrap gap-2">
-              <a href={PLAY} target="_blank" rel="noreferrer"><Boton variante="secundario">Android (Play Store)</Boton></a>
-              <a href={APPLE} target="_blank" rel="noreferrer"><Boton variante="secundario">iPhone (App Store)</Boton></a>
+              <a href={PLAY} target="_blank" rel="noreferrer" className={claseBoton({ variante: 'secundario' })}>Android (Play Store)</a>
+              <a href={APPLE} target="_blank" rel="noreferrer" className={claseBoton({ variante: 'secundario' })}>iPhone (App Store)</a>
             </div>
           </Tarjeta>
           <Tarjeta className="flex flex-col gap-3">

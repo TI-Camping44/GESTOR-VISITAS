@@ -25,7 +25,7 @@ type Datos = {
   llegadas: Llegada[]
 }
 type Llegada = { fecha_hora: string; lat: number | null; lng: number | null; lugar: { razon_social: string } | null }
-const COLOR_DONDE: Record<Donde['tipo'], string> = { visita: '#16a34a', sin_visita: '#ea580c', base: '#6b7280', fuera: '#dc2626' }
+const COLOR_DONDE: Record<Donde['tipo'], string> = { visita: '#15803d', sin_visita: '#c2410c', base: '#6b7280', fuera: '#dc2626' }
 const dur = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`)
 const AZUL = '#2563eb', ROJO = '#dc2626', VERDE = '#16a34a', VIOLETA = '#7c3aed'
 const lineaTramo = (i: number, puntos: [number, number][]): LineaMapa => ({ id: `t${i}`, color: AZUL, puntos, titulo: 'Recorrido con GPS', detalle: 'Por acá pasó: hay posiciones de GPS.' })
@@ -273,7 +273,7 @@ export function RecorridoDia({ vendedores }: { vendedores: Vendedor[] }) {
 function Leyenda() {
   const [abierta, setAbierta] = useState(true)
   const Punto = ({ color, letra }: { color: string; letra: string }) => (
-    <span className="grid size-5 shrink-0 place-items-center rounded-full border-2 border-white text-[10px] font-bold text-white shadow" style={{ background: color }}>{letra}</span>
+    <span className="grid size-6 shrink-0 place-items-center rounded-full border-2 border-white text-xs font-bold text-white shadow" style={{ background: color }}>{letra}</span>
   )
   const Linea = ({ color, punteada }: { color: string; punteada?: boolean }) => (
     <svg width="28" height="10" className="shrink-0" aria-hidden><line x1="1" y1="5" x2="27" y2="5" stroke={color} strokeWidth="4" strokeDasharray={punteada ? '4 4' : undefined} strokeLinecap="round" /></svg>

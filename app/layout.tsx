@@ -14,7 +14,11 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#1f6f4a',
+  // Color de la barra del celular: el de la barra de arriba de la app (el panel lo cambia por el de la empresa).
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#1a1a1a' },
+  ],
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',

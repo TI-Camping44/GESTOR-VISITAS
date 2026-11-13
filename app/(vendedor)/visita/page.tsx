@@ -19,6 +19,8 @@ import { distanciaM, fmtDistancia } from '@/lib/geo'
 import { VIS } from '@/lib/config'
 import { esErrorDeRed, mensajeError } from '@/lib/utils'
 import { urlLugar } from '@/lib/rutas'
+import { useErrorCampo } from '@/components/ErrorCampo'
+import { useAvisoSinGuardar } from '@/lib/sinGuardar'
 import type { EstadoCliente, Medico, ParadaDia, Producto, ProductoVisita, ProximaVisita, Resultado } from '@/lib/database.types'
 
 type ClienteVisita = { id: string; razon_social: string; ciudad: string | null; direccion: string | null; lat: number | null; lng: number | null; estado: EstadoCliente; vendedor_id?: string | null }
@@ -64,6 +66,9 @@ export default function RegistrarVisita() {
   const [error, setError] = useState<string | null>(null)
   const [fin, setFin] = useState<Fin | null>(null)
   const [ubicacionGuardada, setUbicacionGuardada] = useState(false)
+  const errCampo = useErrorCampo()
+  // Si sale con la visita a medio cargar, pregunta antes.
+  useAvisoSinGuardar(!fin && !soloLectura && !enviando && !!(resultadoId || obs.trim() || monto || proxima || foto || hizoPedido || cobranza || Object.keys(muestras).length))
 
   useEffect(() => {
     let vivo = true
@@ -142,9 +147,10 @@ export default function RegistrarVisita() {
     e.preventDefault()
     if (soloLectura) return setError(AVISO_SOLO_LECTURA)
     if (!cliente) return
-    if (!resultadoId) { setError('Elegí el resultado de la visita.'); return }
-    if (cobranza && !(Number(monto) > 0)) { setError('Indicá el monto cobrado.'); return }
-    if (noLeInteresa && !obs.trim()) { setError('Escribí en Observaciones por qué no le interesa.'); return }
+    errCampo.limpiar()
+    if (!resultadoId) return errCampo.marcar('resultado', 'Elegí el resultado de la visita.')
+    if (cobranza && !(Number(monto) > 0)) return errCampo.marcar('monto', 'Indicá el monto cobrado.')
+    if (noLeInteresa && !obs.trim()) return errCampo.marcar('obs', 'Escribí por qué no le interesa.')
     setEnviando(true)
     setError(null)
     const client_uuid = crypto.randomUUID()
@@ -234,7 +240,7 @@ export default function RegistrarVisita() {
 
   const lejos = gps.lectura && destino ? distanciaM(gps.lectura, destino) > VIS.distAlertaM : false
   return (
-    <form onSubmit={guardar} className="flex flex-col gap-4">
+    <form onSubmit={guardar} noValidate className="flex flex-col gap-4">
       <div>
         <p className="text-sm text-tenue">Registrar visita</p>
         {medico && <h1 className="text-xl font-semibold leading-snug">{medico.nombre}{medico.especialidad && <span className="font-normal text-tenue"> · {medico.especialidad}</span>}</h1>}
@@ -255,10 +261,11 @@ export default function RegistrarVisita() {
 
       <div>
         <Etiqueta htmlFor="resultado">Resultado</Etiqueta>
-        <Selector id="resultado" required value={resultadoId} onChange={(e) => setResultadoId(e.target.value)}>
+        <Selector id="resultado" required value={resultadoId} onChange={(e) => setResultadoId(e.target.value)} {...errCampo.campo('resultado')}>
           <option value="">Elegí…</option>
           {opciones.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
         </Selector>
+        {errCampo.mensaje('resultado')}
       </div>
 
       {tipoResultado === 'medica' && productos.length > 0 && (
@@ -303,14 +310,16 @@ export default function RegistrarVisita() {
         {cobranza && (
           <div>
             <Etiqueta htmlFor="monto">Monto cobrado (Gs.)</Etiqueta>
-            <Entrada id="monto" inputMode="numeric" pattern="[0-9]*" value={monto} onChange={(e) => setMonto(e.target.value.replace(/\D/g, ''))} placeholder="0" />
+            <Entrada id="monto" inputMode="numeric" pattern="[0-9]*" autoComplete="off" value={monto} onChange={(e) => setMonto(e.target.value.replace(/\D/g, ''))} placeholder="Ej.: 1500000" {...errCampo.campo('monto')} />
+            {errCampo.mensaje('monto')}
           </div>
         )}
       </div>}
 
       <div>
         <Etiqueta htmlFor="obs">{noLeInteresa ? 'Observaciones: ¿por qué no le interesa? *' : 'Observaciones'}</Etiqueta>
-        <AreaTexto id="obs" value={obs} onChange={(e) => setObs(e.target.value)} placeholder={noLeInteresa ? 'Ej.: compra a otro proveedor, cerró el rubro, precios…' : 'Qué pasó, qué necesita, a quién ver la próxima vez…'} />
+        <AreaTexto id="obs" {...errCampo.campo('obs')} value={obs} onChange={(e) => setObs(e.target.value)} placeholder={noLeInteresa ? 'Ej.: compra a otro proveedor, cerró el rubro, precios…' : 'Qué pasó, qué necesita, a quién ver la próxima vez…'} />
+        {errCampo.mensaje('obs')}
         {noLeInteresa && <p className="mt-1 text-xs text-tenue">El cliente queda en naranja («No le interesa») hasta que una próxima visita tenga otro resultado o vuelva a comprar.</p>}
       </div>
 
@@ -321,7 +330,7 @@ export default function RegistrarVisita() {
 
       <div>
         <span className="mb-1 block text-sm font-medium">{esMedica ? 'Foto (opcional)' : 'Foto de la fachada (opcional)'}</span>
-        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-borde px-3 py-3 text-sm">
+        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-borde px-3 py-3 text-sm focus-within:border-marca focus-within:ring-2 focus-within:ring-marca/45 active:bg-fondo">
           <Camera className="size-5 text-marca" aria-hidden />
           {foto ? foto.name : 'Sacar o elegir foto'}
           <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => setFoto(e.target.files?.[0] ?? null)} />

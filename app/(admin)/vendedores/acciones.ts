@@ -6,7 +6,7 @@ import { enviarCorreo } from '@/lib/correo'
 import { pasosInvitacion, textoInvitacion } from '@/lib/invitacion'
 import { mensajeError, temaEmpresa } from '@/lib/utils'
 
-const COLOR: Record<string, string> = { camping44: '#d90000', vitalica: '#d9640a' }
+const COLOR: Record<string, string> = { camping44: '#d90000', vitalica: '#b4520a' }
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
 export async function enviarInvitacion(vendedorId: string): Promise<{ ok: true } | { error: string }> {

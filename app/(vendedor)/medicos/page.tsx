@@ -52,7 +52,7 @@ export default function PaginaMedicos() {
         <h1 className="text-xl font-semibold">Mis médicos</h1>
         <div className="flex gap-2">
           <Link href="/lugar/nuevo" className="inline-flex items-center gap-1 rounded-lg border border-borde px-2.5 py-1.5 text-sm font-medium"><Building2 className="size-4 text-marca" aria-hidden /> Lugar</Link>
-          <Link href="/medicos/nuevo" className="inline-flex items-center gap-1 rounded-lg bg-marca px-2.5 py-1.5 text-sm font-medium text-white"><Plus className="size-4" aria-hidden /> Médico</Link>
+          <Link href="/medicos/nuevo" className="inline-flex items-center gap-1 rounded-lg bg-marca px-2.5 py-1.5 text-sm font-medium text-sobre-marca"><Plus className="size-4" aria-hidden /> Médico</Link>
         </div>
       </div>
       {sinSenal && <Aviso tipo="alerta">Sin señal: mostrando los médicos guardados en el celular.</Aviso>}
@@ -63,7 +63,7 @@ export default function PaginaMedicos() {
       <div className="flex gap-2" role="group" aria-label="Filtrar">
         {[false, true].map((v) => (
           <button key={String(v)} type="button" aria-pressed={soloToca === v} onClick={() => setSoloToca(v)}
-            className={cn('rounded-full border px-3 py-1 text-sm', soloToca === v ? 'border-marca bg-marca text-white' : 'border-borde bg-superficie')}>
+            className={cn('rounded-full border px-3 py-1 text-sm', soloToca === v ? 'border-marca bg-marca text-sobre-marca' : 'border-borde bg-superficie')}>
             {v ? `Les toca visita (${tocan})` : `Todos (${medicos?.length ?? 0})`}
           </button>
         ))}

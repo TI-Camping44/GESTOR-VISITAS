@@ -49,6 +49,8 @@ export function fmtFechaHora(v: string | Date | null | undefined): string {
 }
 
 export const fmtSoloHora = (v: string | Date) => fmtHora.format(typeof v === 'string' ? new Date(v) : v)
+/** Minutos desde la medianoche en Asunción (no en la zona del dispositivo). */
+export const minutosDelDia = (v: string | Date) => { const [h, m] = fmtSoloHora(v).split(':').map(Number); return ((h ?? 0) % 24) * 60 + (m ?? 0) }
 /** Varias horas: «09:10», «09:10 y 15:30», «09:10, 12:00 y 15:30». */
 export const fmtHoras = (hs: (string | Date)[]) => {
   const t = hs.map(fmtSoloHora)

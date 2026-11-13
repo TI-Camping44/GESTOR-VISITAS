@@ -1,7 +1,7 @@
 'use client'
 // Clientes (BRIEF §6 supervisor 4): búsqueda, estado, zona, vendedor, última visita y factura;
 // asignación masiva de zona/vendedor; corrección de ubicación (solo en esta app) con historial.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Mapa } from '@/components/map/MapaDinamico'
 import { AreaTexto, Aviso, Boton, Entrada, Etiqueta, PuntoEstado, Selector, Tarjeta } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
@@ -9,6 +9,8 @@ import { fmtFecha, fmtFechaHora, fmtGuaranies, hace } from '@/lib/fechas'
 import { leerCoordenadas } from '@/lib/geo'
 import { COLOR_ESTADO } from '@/lib/config'
 import { mensajeError } from '@/lib/utils'
+import { useParamUrl } from '@/lib/useParamUrl'
+import { useDialogo } from '@/lib/useDialogo'
 import type { ClienteV, EstadoCliente, Vendedor, Zona } from '@/lib/database.types'
 
 const POR_PAGINA = 100
@@ -18,11 +20,21 @@ export default function Clientes() {
   const sb = supabaseNavegador()
   const [filas, setFilas] = useState<ClienteV[]>([])
   const [total, setTotal] = useState(0)
-  const [pagina, setPagina] = useState(0)
-  const [q, setQ] = useState('')
-  const [estado, setEstado] = useState<'' | EstadoCliente>('')
-  const [zonaF, setZonaF] = useState('')
-  const [vendF, setVendF] = useState('')
+  // Filtros y página en la URL: se puede recargar, volver o pasar el link.
+  const [paginaTxt, setPaginaTxt] = useParamUrl('pagina', '1')
+  const pagina = Math.max(0, (Number(paginaTxt) || 1) - 1)
+  const setPagina = (n: number) => setPaginaTxt(String(n + 1))
+  const [qUrl, setQUrl] = useParamUrl('q', '')
+  // El texto del buscador vive en el estado (escribir rápido no pierde letras) y se copia a la URL.
+  const [q, setQLocal] = useState(qUrl)
+  const [estado, setEstadoUrl] = useParamUrl<'' | EstadoCliente>('estado', '')
+  const [zonaF, setZonaUrl] = useParamUrl('zona', '')
+  const [vendF, setVendUrl] = useParamUrl('vendedor', '')
+  // Cambiar un filtro vuelve a la primera página y limpia la selección.
+  const filtro = <T,>(f: (v: T) => void) => (v: T) => { f(v); setPaginaTxt('1'); setSel(new Set()) }
+  const setQ = filtro((v: string) => { setQLocal(v); setQUrl(v) }), setEstado = filtro(setEstadoUrl), setZonaF = filtro(setZonaUrl), setVendF = filtro(setVendUrl)
+  // Asignación masiva: se elige y se confirma con «Aplicar» (antes se aplicaba al elegir en la lista).
+  const [masivo, setMasivo] = useState<{ campo: 'zona_id' | 'vendedor_id'; valor: string } | null>(null)
   const [zonas, setZonas] = useState<Zona[]>([])
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
   const [sel, setSel] = useState<Set<string>>(new Set())
@@ -50,13 +62,18 @@ export default function Clientes() {
   }, [sb, pagina, q, estado, zonaF, vendF])
 
   useEffect(() => { const t = setTimeout(() => void cargar(), 250); return () => clearTimeout(t) }, [cargar])
-  useEffect(() => { setPagina(0); setSel(new Set()) }, [q, estado, zonaF, vendF])
 
   const nombreZona = useMemo(() => new Map(zonas.map((z) => [z.id, z.nombre])), [zonas])
   const nombreVend = useMemo(() => new Map(vendedores.map((v) => [v.id, v.nombre])), [vendedores])
 
   async function asignar(campo: 'zona_id' | 'vendedor_id', valor: string) {
     if (!sel.size) return
+    const n = `${sel.size} cliente${sel.size > 1 ? 's' : ''}`
+    const que = campo === 'zona_id'
+      ? (valor ? `¿Asignar la zona «${nombreZona.get(valor)}» a ${n}?` : `¿Quitarle la zona a ${n}?`)
+      : (valor ? `¿Asignar a ${nombreVend.get(valor)} como vendedor de ${n}?` : `¿Quitarle el vendedor a ${n}?`)
+    if (!confirm(que)) return
+    setMasivo(null)
     const cambios = campo === 'zona_id' ? { zona_id: valor || null } : { vendedor_id: valor || null }
     const { error } = await sb.from('vis_clientes').update(cambios).in('id', [...sel])
     if (error) return setError(mensajeError(error))
@@ -87,15 +104,22 @@ export default function Clientes() {
       {sel.size > 0 && (
         <Tarjeta className="flex flex-wrap items-center gap-3 p-3">
           <span className="text-sm font-medium">{sel.size} seleccionado{sel.size > 1 ? 's' : ''}:</span>
-          <Selector className="w-auto" defaultValue="" onChange={(e) => { if (e.target.value !== '') void asignar('zona_id', e.target.value === 'ninguna' ? '' : e.target.value); e.target.value = '' }} aria-label="Asignar zona">
+          <Selector className="w-auto" value={masivo?.campo === 'zona_id' ? masivo.valor : ''} aria-label="Zona a asignar"
+            onChange={(e) => setMasivo(e.target.value === '' ? null : { campo: 'zona_id', valor: e.target.value })}>
             <option value="">Asignar zona…</option><option value="ninguna">Quitar zona</option>
             {zonas.filter((z) => z.activo).map((z) => <option key={z.id} value={z.id}>{z.nombre}</option>)}
           </Selector>
-          <Selector className="w-auto" defaultValue="" onChange={(e) => { if (e.target.value !== '') void asignar('vendedor_id', e.target.value === 'ninguno' ? '' : e.target.value); e.target.value = '' }} aria-label="Asignar vendedor">
+          <Selector className="w-auto" value={masivo?.campo === 'vendedor_id' ? masivo.valor : ''} aria-label="Vendedor a asignar"
+            onChange={(e) => setMasivo(e.target.value === '' ? null : { campo: 'vendedor_id', valor: e.target.value })}>
             <option value="">Asignar vendedor…</option><option value="ninguno">Quitar vendedor</option>
             {vendedores.filter((v) => v.activo).map((v) => <option key={v.id} value={v.id}>{v.nombre}</option>)}
           </Selector>
-          <Boton variante="fantasma" onClick={() => setSel(new Set())}>Cancelar</Boton>
+          {masivo && (
+            <Boton onClick={() => void asignar(masivo.campo, masivo.valor === 'ninguna' || masivo.valor === 'ninguno' ? '' : masivo.valor)}>
+              Aplicar a {sel.size}
+            </Boton>
+          )}
+          <Boton variante="fantasma" onClick={() => { setSel(new Set()); setMasivo(null) }}>Cancelar</Boton>
         </Tarjeta>
       )}
       {aviso && <Aviso tipo="ok">{aviso}</Aviso>}
@@ -134,8 +158,8 @@ export default function Clientes() {
       <div className="flex items-center justify-between text-sm text-tenue tabular">
         <span>{total} clientes</span>
         <div className="flex gap-2">
-          <Boton variante="secundario" disabled={pagina === 0} onClick={() => setPagina((p) => p - 1)}>Anterior</Boton>
-          <Boton variante="secundario" disabled={(pagina + 1) * POR_PAGINA >= total} onClick={() => setPagina((p) => p + 1)}>Siguiente</Boton>
+          <Boton variante="secundario" disabled={pagina === 0} onClick={() => setPagina(pagina - 1)}>Anterior</Boton>
+          <Boton variante="secundario" disabled={(pagina + 1) * POR_PAGINA >= total} onClick={() => setPagina(pagina + 1)}>Siguiente</Boton>
         </div>
       </div>
 
@@ -157,6 +181,10 @@ function DetalleCliente({ cliente: c, zona, alCerrar }: { cliente: ClienteV; zon
       .then(({ data }) => setHist((data ?? []) as unknown as Hist[]))
   }, [c.id, sb])
 
+  // Panel con foco adentro, Esc para cerrar. Si hay algo escrito, pregunta antes de descartarlo.
+  const panel = useRef<HTMLDivElement>(null)
+  const cerrar = () => { if ((coords.trim() || motivo.trim()) && !confirm('Tenés una corrección de ubicación sin guardar. ¿Cerrar igual?')) return; alCerrar(false) }
+  useDialogo(panel, cerrar)
   const nueva = leerCoordenadas(coords)
   async function guardar() {
     if (!nueva) return setError('Pegá coordenadas válidas, por ejemplo -25.2637, -57.5759 o un link de Google Maps.')
@@ -175,15 +203,16 @@ function DetalleCliente({ cliente: c, zona, alCerrar }: { cliente: ClienteV; zon
   ]
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="dialog" aria-modal="true" aria-label={c.razon_social ?? 'Cliente'} onClick={() => alCerrar(false)}>
-      <div className="h-full w-full max-w-xl overflow-y-auto bg-superficie p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={cerrar}>
+      <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="detalle-cliente-titulo"
+        className="h-full w-full max-w-xl overflow-y-auto overscroll-contain bg-superficie p-5 shadow-xl focus:outline-none" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h2 className="text-xl font-semibold">{c.razon_social}</h2>
+            <h2 id="detalle-cliente-titulo" className="text-xl font-semibold">{c.razon_social}</h2>
             <p className="text-sm text-tenue">{[c.ruc, c.telefono, c.direccion, c.ciudad, zona].filter(Boolean).join(' · ')}</p>
             <div className="mt-1"><PuntoEstado estado={c.estado} conTexto /></div>
           </div>
-          <Boton variante="fantasma" onClick={() => alCerrar(false)}>Cerrar</Boton>
+          <Boton variante="fantasma" onClick={cerrar}>Cerrar</Boton>
         </div>
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
           <div><dt className="text-tenue">Última factura</dt><dd>{fmtFecha(c.ultima_factura_fecha)}</dd></div>

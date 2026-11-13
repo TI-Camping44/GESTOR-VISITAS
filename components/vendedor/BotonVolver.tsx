@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { ChevronLeft } from 'lucide-react'
 import { urlLugar } from '@/lib/rutas'
 import { useVendedor } from './Proveedor'
+import { puedeSalir } from '@/lib/sinGuardar'
 
 const PESTANAS = ['/hoy', '/visitas', '/mapa', '/medicos']
 
@@ -34,7 +35,7 @@ export function BotonVolver() {
     '/hoy'
 
   return (
-    <button type="button" onClick={() => (navegaciones.current > 0 ? router.back() : router.push(destino))}
+    <button type="button" onClick={() => { if (!puedeSalir()) return; if (navegaciones.current > 0) router.back(); else router.push(destino) }}
       className="-ml-1 mb-2 inline-flex items-center gap-0.5 rounded-lg py-1 pr-2 text-sm font-medium text-marca">
       <ChevronLeft className="size-5" aria-hidden /> Volver
     </button>

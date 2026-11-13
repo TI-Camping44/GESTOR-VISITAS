@@ -27,7 +27,7 @@ export function NavAdmin({ rol, altas = 0, medica = false }: { rol: Rol; altas?:
         const activo = ruta === href || ruta.startsWith(`${href}/`)
         return (
           <Link key={href} href={href} aria-current={activo ? 'page' : undefined}
-            className={cn('flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium', activo ? 'bg-marca text-white' : 'text-barra-tinta hover:bg-barra-hover')}>
+            className={cn('flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium', activo ? 'bg-marca text-sobre-marca' : 'text-barra-tinta hover:bg-barra-hover')}>
             <Icono className="size-4" aria-hidden />{texto}
             {contador > 0 && <span className="ml-auto rounded-full bg-amber-400 px-1.5 text-xs font-semibold text-black">{contador}</span>}
           </Link>

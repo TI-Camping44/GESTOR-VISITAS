@@ -131,7 +131,7 @@ function FilaZona({ zona: z, vendedores, equipos, cambiaEquipo, alGuardar, alFal
               <div className="flex gap-1">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <button key={n} type="button" aria-pressed={f.semanas.has(n)} onClick={() => setF((x) => { const s = new Set(x.semanas); if (s.has(n)) s.delete(n); else s.add(n); return { ...x, semanas: s } })}
-                    className={cn('rounded-md border px-3 py-1.5 text-sm font-medium', f.semanas.has(n) ? 'border-marca bg-marca text-white' : 'border-borde')}>{ORDINAL_SEMANA[n]}</button>
+                    className={cn('rounded-md border px-3 py-1.5 text-sm font-medium', f.semanas.has(n) ? 'border-marca bg-marca text-sobre-marca' : 'border-borde')}>{ORDINAL_SEMANA[n]}</button>
                 ))}
               </div>
             </div>
