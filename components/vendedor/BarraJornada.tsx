@@ -41,7 +41,7 @@ export function BarraJornada() {
 
   return (
     <>
-      <div className="sticky top-0 z-20 border-b border-borde bg-superficie/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+12px)] backdrop-blur">
+      <div data-barra-jornada className="sticky top-0 z-20 border-b border-borde bg-superficie/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+12px)] backdrop-blur">
         {!enLinea && (
           <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-300">
             <WifiOff className="size-4" aria-hidden /> Sin señal: lo que cargues se guarda y se sube solo.
@@ -52,23 +52,30 @@ export function BarraJornada() {
         ) : cargandoJornada ? (
           <div className="h-14 animate-pulse rounded-lg bg-borde/50" />
         ) : jornada ? (
-          <div className="flex flex-col gap-2">
-            <p className="flex items-center gap-1.5 text-sm font-medium text-marca">
-              <MapPin className="size-4" aria-hidden /> Ubicación compartida con tu supervisor · desde las {fmtSoloHora(jornada.inicio)}
-            </p>
-            {segundoPlano === 'falta' && <Link href="/gps" className="text-sm font-medium text-amber-700 underline dark:text-amber-300">Activá el GPS en segundo plano (Traccar) →</Link>}
-            {segundoPlano === 'ok' && <p className="text-xs text-tenue">GPS en segundo plano: activo</p>}
-            {confirmarFin ? (
+          // Compacta: con la jornada abierta la barra queda arriba en todas las pantallas, que no se coma el celular.
+          confirmarFin ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="min-w-0 flex-1 text-sm font-medium">¿Terminar la jornada? Se deja de compartir la ubicación.</p>
               <div className="flex gap-2">
-                <Boton variante="peligro" grande className="flex-1" disabled={ocupado} onClick={() => void correr(async () => { await terminarJornada(); setConfirmarFin(false) })}>
+                <Boton variante="peligro" disabled={ocupado} onClick={() => void correr(async () => { await terminarJornada(); setConfirmarFin(false) })}>
                   {ocupado ? 'Terminando…' : 'Sí, terminar'}
                 </Boton>
-                <Boton variante="secundario" grande onClick={() => setConfirmarFin(false)}>Cancelar</Boton>
+                <Boton variante="secundario" onClick={() => setConfirmarFin(false)}>Cancelar</Boton>
               </div>
-            ) : (
-              <Boton variante="secundario" grande onClick={() => setConfirmarFin(true)}>Terminar jornada</Boton>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-1.5 text-sm font-medium text-marca">
+                  <MapPin className="size-4 shrink-0" aria-hidden /> Jornada desde las {fmtSoloHora(jornada.inicio)}
+                </p>
+                {segundoPlano === 'falta'
+                  ? <Link href="/gps" className="text-xs font-medium text-amber-700 underline dark:text-amber-300">Activá el GPS en segundo plano →</Link>
+                  : <p className="truncate text-xs text-tenue">Ubicación compartida con tu supervisor{segundoPlano === 'ok' ? ' · GPS en segundo plano activo' : ''}</p>}
+              </div>
+              <Boton variante="secundario" className="shrink-0" onClick={() => setConfirmarFin(true)}>Terminar</Boton>
+            </div>
+          )
         ) : (
           <Boton variante="exito" grande className="w-full" disabled={ocupado} onClick={alIniciar}>
             {ocupado ? 'Iniciando…' : 'Iniciar jornada'}

@@ -3,6 +3,7 @@
 // por color, filtro por estado y "cerca mío".
 // Por defecto solo los propios; si se muestran otros, cada uno dice de qué vendedor es.
 import { useEffect, useMemo, useState } from 'react'
+import { useParamUrl } from '@/lib/useParamUrl'
 import Link from 'next/link'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, Boton, PuntoEstado, Tarjeta } from '@/components/ui'
@@ -22,7 +23,7 @@ const ESTADOS: EstadoCliente[] = ['activo', 'potencial', 'inactivo', 'no_interes
 
 export default function MapaVendedor() {
   const { perfil, nombreVendedor, esMedica } = useVendedor()
-  const [vista, setVista] = useState<'lista' | 'mapa'>('lista')
+  const [vista, setVista] = useParamUrl<'lista' | 'mapa'>('vista', 'lista')
   const [clientes, setClientes] = useState<C[]>([])
   const [soloMios, setSoloMios] = useState(true)
   const [filtro, setFiltro] = useState<Set<EstadoCliente>>(new Set(ESTADOS))
@@ -76,11 +77,11 @@ export default function MapaVendedor() {
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">{esMedica ? 'Mis lugares' : 'Mis clientes'}</h1>
-        {esMedica && <Link href="/lugar/nuevo" className="rounded-lg bg-marca px-2.5 py-1.5 text-sm font-medium text-white">+ Nuevo lugar</Link>}
+        {esMedica && <Link href="/lugar/nuevo" className="rounded-lg bg-marca px-2.5 py-1.5 text-sm font-medium text-sobre-marca">+ Nuevo lugar</Link>}
       </div>
-      <div className="flex rounded-xl bg-fondo p-1 ring-1 ring-borde" role="tablist">
+      <div className="flex rounded-xl bg-fondo p-1 ring-1 ring-borde" role="group" aria-label="Ver como">
         {(['lista', 'mapa'] as const).map((v) => (
-          <button key={v} role="tab" aria-selected={vista === v} onClick={() => setVista(v)}
+          <button key={v} aria-pressed={vista === v} onClick={() => setVista(v)}
             className={cn('flex-1 rounded-lg py-2 text-sm font-medium', vista === v ? 'bg-superficie text-tinta shadow-sm' : 'text-tenue')}>
             {v === 'lista' ? 'Lista' : 'Mapa'}
           </button>

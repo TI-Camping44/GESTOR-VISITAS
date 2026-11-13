@@ -96,7 +96,7 @@ export default function Reportes() {
           <div className="flex gap-1 rounded-lg border border-borde bg-superficie p-1" role="group" aria-label="Período">
             {Object.entries(opciones).map(([k, o]) => (
               <button key={k} type="button" aria-pressed={preset === k} onClick={() => { setPreset(k); setRango(o.r) }}
-                className={cn('rounded-md px-3 py-1.5 text-sm font-medium', preset === k ? 'bg-marca text-white' : 'hover:bg-fondo')}>{o.texto}</button>
+                className={cn('rounded-md px-3 py-1.5 text-sm font-medium', preset === k ? 'bg-marca text-sobre-marca' : 'hover:bg-fondo')}>{o.texto}</button>
             ))}
           </div>
           <Entrada type="date" aria-label="Desde" className="w-40" value={rango.desde} max={rango.hasta} onChange={(e) => { setPreset(''); setRango((r) => ({ ...r, desde: e.target.value })) }} />

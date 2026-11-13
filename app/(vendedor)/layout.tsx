@@ -34,10 +34,11 @@ export default async function LayoutVendedor({ children }: { children: React.Rea
   return (
     <ProveedorVendedor key={perfil.id} perfil={perfil} observador={visto ? real.nombre : null}>
       <div data-empresa={temaEmpresa(perfil.empresa)} className="min-h-full bg-fondo text-tinta">
+        <a href="#contenido" className="sr-only z-50 rounded-lg bg-superficie px-3 py-2 text-sm font-medium text-tinta shadow focus:not-sr-only focus:fixed focus:left-3 focus:top-3">Saltar al contenido</a>
         <div className="mx-auto min-h-full max-w-lg pb-24">
           {visto && <BannerVerComo nombre={visto.nombre} />}
           <BarraJornada />
-          <main className="px-4 py-4"><Suspense fallback={null}><BotonVolver /></Suspense>{children}</main>
+          <main id="contenido" tabIndex={-1} className="scroll-mt-28 px-4 py-4 focus:outline-none"><Suspense fallback={null}><BotonVolver /></Suspense>{children}</main>
           <div className="mx-4 mb-2 text-center"><Link href="/gps" className="text-sm text-tenue underline">GPS en segundo plano</Link></div>
           <SelectorTema className="mx-4 mb-4" />
         </div>

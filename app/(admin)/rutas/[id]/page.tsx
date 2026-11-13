@@ -289,9 +289,9 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
                         <div className="flex items-center gap-1.5"><PuntoEstado estado={a.c.estado} /><p className="truncate text-sm font-medium">{a.c.razon_social}</p></div>
                         <p className="truncate text-xs text-tenue">{a.c.ciudad ?? 'Sin ciudad'}{a.c.motivos.length ? ` · ${a.c.motivos.join(' · ')}` : ''}</p>
                       </div>
-                      <button type="button" aria-label={`Sacar ${a.c.razon_social}`} className="rounded p-0.5 text-tenue hover:text-red-600"
+                      <button type="button" aria-label={`Sacar ${a.c.razon_social}`} className="grid size-8 place-items-center rounded-lg text-tenue hover:bg-fondo hover:text-red-600"
                         onClick={() => setSugerencia((s) => { const n = (s ?? []).filter((x) => x.c.cliente_id !== a.c.cliente_id); return n.length ? n : null })}>
-                        <X className="size-4" />
+                        <X className="size-4" aria-hidden />
                       </button>
                     </li>
                   ))}
@@ -330,7 +330,7 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
             {filtrados.slice(0, 400).map((c) => {
               const enDias = diasDe(c.id)
               return (
-                <li key={c.id} className="border-b border-borde px-1 py-2 last:border-0">
+                <li key={c.id} className="border-b border-borde px-1 py-2 [contain-intrinsic-size:auto_76px] [content-visibility:auto] last:border-0">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{c.razon_social}</p>
@@ -341,7 +341,7 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
                   <div className="mt-1.5 flex gap-1" role="group" aria-label={`Días para ${c.razon_social}`}>
                     {dias.map((d, i) => (
                       <button key={d} type="button" disabled={ocupado} aria-pressed={enDias.has(d)} onClick={() => void alternarDia(c.id, d)}
-                        className={cn('flex-1 rounded-md border px-1 py-1 text-xs font-medium', enDias.has(d) ? 'border-marca bg-marca text-white' : 'border-borde hover:border-marca')}>
+                        className={cn('flex-1 rounded-md border px-1 py-1 text-xs font-medium', enDias.has(d) ? 'border-marca bg-marca text-sobre-marca' : 'border-borde hover:border-marca')}>
                         {LETRA[i]}
                       </button>
                     ))}
@@ -355,10 +355,10 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
 
         <div className="flex min-w-0 flex-col gap-4">
           {/* Días */}
-          <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="Día">
+          <div className="flex gap-1 overflow-x-auto" role="group" aria-label="Día de la ruta">
             {dias.map((d, i) => (
-              <button key={d} role="tab" aria-selected={diaSel === i} onClick={() => setDiaSel(i)}
-                className={cn('shrink-0 rounded-lg px-3 py-2 text-sm font-medium', diaSel === i ? 'bg-marca text-white' : 'bg-superficie text-tinta border border-borde')}>
+              <button key={d} type="button" aria-pressed={diaSel === i} onClick={() => setDiaSel(i)}
+                className={cn('shrink-0 rounded-lg px-3 py-2 text-sm font-medium', diaSel === i ? 'bg-marca text-sobre-marca' : 'bg-superficie text-tinta border border-borde')}>
                 {fmtDia(d)} <span className="tabular opacity-80">({delDia(d).length})</span>
               </button>
             ))}
@@ -378,14 +378,15 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
                     const c = porId.get(p.cliente_id)
                     return (
                       <li key={p.id} className="flex items-center gap-2 rounded-lg bg-fondo px-2 py-1.5">
-                        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-marca text-xs font-semibold text-white">{i + 1}</span>
+                        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-marca text-xs font-semibold text-sobre-marca">{i + 1}</span>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">{c?.razon_social ?? '…'}</p>
                           <p className="truncate text-xs text-tenue">{c?.ciudad ?? ''}{c && c.lat == null ? ' · sin ubicación' : ''}</p>
                         </div>
-                        <button type="button" aria-label="Subir" disabled={ocupado || i === 0} onClick={() => void mover(p, -1)} className="rounded p-1 disabled:opacity-30"><ArrowUp className="size-4" /></button>
-                        <button type="button" aria-label="Bajar" disabled={ocupado || i === arr.length - 1} onClick={() => void mover(p, 1)} className="rounded p-1 disabled:opacity-30"><ArrowDown className="size-4" /></button>
-                        <button type="button" aria-label="Quitar" disabled={ocupado} onClick={() => void hacer(async () => sb.from('vis_ruta_paradas').delete().eq('id', p.id))} className="rounded p-1 text-red-600"><Trash2 className="size-4" /></button>
+                        <button type="button" aria-label={`Subir ${c?.razon_social ?? 'parada'}`} disabled={ocupado || i === 0} onClick={() => void mover(p, -1)} className="grid size-9 place-items-center rounded-lg hover:bg-superficie disabled:opacity-30"><ArrowUp className="size-4" aria-hidden /></button>
+                        <button type="button" aria-label={`Bajar ${c?.razon_social ?? 'parada'}`} disabled={ocupado || i === arr.length - 1} onClick={() => void mover(p, 1)} className="grid size-9 place-items-center rounded-lg hover:bg-superficie disabled:opacity-30"><ArrowDown className="size-4" aria-hidden /></button>
+                        <button type="button" aria-label={`Quitar ${c?.razon_social ?? 'parada'} de la ruta`} disabled={ocupado} className="grid size-9 place-items-center rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+                          onClick={() => { if (confirm(`¿Quitar a ${c?.razon_social ?? 'este cliente'} del ${fmtDia(diaActivo)}?`)) void hacer(async () => sb.from('vis_ruta_paradas').delete().eq('id', p.id)) }}><Trash2 className="size-4" aria-hidden /></button>
                       </li>
                     )
                   })}

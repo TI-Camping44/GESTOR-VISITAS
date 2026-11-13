@@ -11,6 +11,8 @@ import { guardarCache, leerCache } from '@/lib/offline/db'
 import { mensajeError } from '@/lib/utils'
 import { urlLugar } from '@/lib/rutas'
 import { ESPECIALIDADES } from '@/lib/medicos'
+import { useErrorCampo } from '@/components/ErrorCampo'
+import { puedeSalir, useAvisoSinGuardar } from '@/lib/sinGuardar'
 
 type LugarOpcion = { id: string; razon_social: string; ciudad: string | null }
 const FRECUENCIAS = [7, 15, 30, 60, 90]
@@ -28,6 +30,9 @@ export default function EditarMedico() {
   const [cargando, setCargando] = useState(!!id)
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const errCampo = useErrorCampo()
+  const [tocado, setTocado] = useState(false)
+  useAvisoSinGuardar(tocado && !enviando && !soloLectura)
 
   useEffect(() => {
     let vivo = true
@@ -68,8 +73,9 @@ export default function EditarMedico() {
     e.preventDefault()
     if (soloLectura) return setError(AVISO_SOLO_LECTURA)
     setError(null)
-    if (!f.nombre.trim()) return setError('Falta el nombre del médico.')
-    if (!Object.keys(elegidos).length) return setError('Elegí al menos un lugar donde atiende.')
+    errCampo.limpiar()
+    if (!f.nombre.trim()) return errCampo.marcar('nombre', 'Falta el nombre del médico.')
+    if (!Object.keys(elegidos).length) return errCampo.marcar('donde', 'Elegí al menos un lugar donde atiende.')
     if (!navigator.onLine) return setError('Necesitás señal para guardar el médico.')
     setEnviando(true)
     try {
@@ -116,11 +122,12 @@ export default function EditarMedico() {
 
   if (cargando) return <div className="h-40 animate-pulse rounded-xl bg-borde/40" />
   return (
-    <form onSubmit={guardar} className="flex flex-col gap-4">
+    <form onSubmit={guardar} onChange={() => setTocado(true)} noValidate className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">{id ? 'Editar médico' : 'Nuevo médico'}</h1>
       <div>
         <Etiqueta htmlFor="nombre">Nombre *</Etiqueta>
-        <Entrada id="nombre" value={f.nombre} onChange={cambiar('nombre')} placeholder="Dra. Ana Gómez" autoComplete="off" />
+        <Entrada id="nombre" value={f.nombre} onChange={cambiar('nombre')} placeholder="Dra. Ana Gómez" autoComplete="off" {...errCampo.campo('nombre')} />
+        {errCampo.mensaje('nombre')}
       </div>
       <div>
         <Etiqueta htmlFor="especialidad">Especialidad</Etiqueta>
@@ -130,7 +137,7 @@ export default function EditarMedico() {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Etiqueta htmlFor="telefono">Celular</Etiqueta>
-          <Entrada id="telefono" type="tel" inputMode="tel" value={f.telefono} onChange={cambiar('telefono')} placeholder="0981 123 456" />
+          <Entrada id="telefono" type="tel" inputMode="tel" autoComplete="off" value={f.telefono} onChange={cambiar('telefono')} placeholder="0981 123 456" />
         </div>
         <div>
           <Etiqueta htmlFor="frecuencia">Visitarlo cada</Etiqueta>
@@ -140,8 +147,9 @@ export default function EditarMedico() {
         </div>
       </div>
 
-      <fieldset className="flex flex-col gap-2">
+      <fieldset id="donde" tabIndex={-1} aria-describedby={errCampo.campo('donde')['aria-describedby']} className="flex flex-col gap-2 rounded-lg focus:outline-none">
         <legend className="mb-1 text-sm font-medium">Dónde atiende *</legend>
+        {errCampo.mensaje('donde')}
         {lugares.length === 0 && <Aviso tipo="info">Todavía no tenés lugares. <Link href="/lugar/nuevo" className="font-medium underline">Cargá el hospital o consultorio</Link> parado ahí y después volvé.</Aviso>}
         {lugares.map((l) => {
           const marcado = l.id in elegidos
@@ -149,7 +157,7 @@ export default function EditarMedico() {
             <Tarjeta key={l.id} className="flex flex-col gap-2 py-3">
               <label className="flex items-center gap-3">
                 <input type="checkbox" className="size-5 accent-[var(--c-marca)]" checked={marcado}
-                  onChange={(e) => setElegidos((x) => { const n = { ...x }; if (e.target.checked) n[l.id] = ''; else delete n[l.id]; return n })} />
+                  onChange={(e) => { errCampo.limpiar(); setElegidos((x) => { const n = { ...x }; if (e.target.checked) n[l.id] = ''; else delete n[l.id]; return n }) }} />
                 <span className="min-w-0"><span className="font-medium">{l.razon_social}</span>{l.ciudad && <span className="text-sm text-tenue"> · {l.ciudad}</span>}</span>
               </label>
               {marcado && (
@@ -168,7 +176,7 @@ export default function EditarMedico() {
       {error && <Aviso tipo="error">{error}</Aviso>}
       <Boton type="submit" grande disabled={enviando}>{enviando ? 'Guardando…' : 'Guardar médico'}</Boton>
       <div className="flex justify-between">
-        <button type="button" className="text-sm text-tenue underline" onClick={salir}>Cancelar</button>
+        <button type="button" className="text-sm text-tenue underline" onClick={() => { if (puedeSalir()) salir() }}>Cancelar</button>
         {id && <button type="button" className="text-sm text-red-700 underline dark:text-red-300" onClick={() => void darDeBaja()}>Borrar médico</button>}
       </div>
     </form>

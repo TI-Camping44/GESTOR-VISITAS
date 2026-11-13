@@ -88,7 +88,11 @@ export default function Vendedores() {
     const { error } = await sb.from('vis_vendedores').update(cambios).eq('id', id)
     if (error) setError(mensajeError(error))
     void cargar()
+    return !error
   }
+  // El celular se guarda al salir del campo: un «Guardado» corto confirma que quedó.
+  const [telGuardado, setTelGuardado] = useState<string | null>(null)
+  useEffect(() => { if (!telGuardado) return; const t = setTimeout(() => setTelGuardado(null), 2500); return () => clearTimeout(t) }, [telGuardado])
 
   async function crear(e: React.FormEvent) {
     e.preventDefault()
@@ -194,8 +198,9 @@ export default function Vendedores() {
                         <p className="truncate font-medium" title={v.nombre}>{v.nombre}</p>
                         <p className="truncate text-xs text-tenue" title={v.email}>{v.email}</p>
                         <input disabled={!ed} type="tel" inputMode="tel" defaultValue={v.telefono ?? ''} placeholder="+ celular" aria-label={`Celular de ${v.nombre}`}
-                          className="-ml-1 mt-0.5 w-36 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-tenue hover:border-borde focus:border-borde focus:bg-superficie focus:outline-none disabled:hover:border-transparent"
-                          onBlur={(e) => { const t = e.target.value.trim() || null; if (t !== v.telefono) void actualizar(v.id, { telefono: t }) }} />
+                          className="-ml-1 mt-0.5 w-36 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-tenue hover:border-borde focus:border-marca focus:bg-superficie focus:text-tinta focus:outline-none focus:ring-2 focus:ring-marca/45 disabled:hover:border-transparent"
+                          autoComplete="off" onBlur={(e) => { const t = e.target.value.trim() || null; if (t !== v.telefono) void actualizar(v.id, { telefono: t }).then((ok) => { if (ok) setTelGuardado(v.id) }) }} />
+                        <span role="status" className="ml-1 text-xs font-medium text-green-700 dark:text-green-400">{telGuardado === v.id ? 'Guardado' : ''}</span>
                       </div>
                     </div>
                   </td>
@@ -257,7 +262,7 @@ export default function Vendedores() {
                     <div className="mt-1 flex items-center gap-2">
                       {ed && v.activo && <Invitacion compacto id={v.id} v={v} empresa={empresaDe(v)} />}
                       <input type="checkbox" className="ml-auto size-4 accent-[var(--c-marca)]" disabled={!ed || v.id === perfil?.id} checked={v.activo} title={v.activo ? 'Activo (destildá para quitarle el acceso)' : 'Inactivo'}
-                        onChange={(e) => void actualizar(v.id, { activo: e.target.checked })} aria-label={`Activo: ${v.nombre}`} />
+                        onChange={(e) => { if (!e.target.checked && !confirm(`¿Quitarle el acceso a ${v.nombre}? No va a poder entrar a la app hasta que lo vuelvas a activar.`)) return; void actualizar(v.id, { activo: e.target.checked }) }} aria-label={`Activo: ${v.nombre}`} />
                     </div>
                   </td>
                 </tr>

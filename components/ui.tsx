@@ -5,28 +5,30 @@ import type { EstadoCliente } from '@/lib/database.types'
 
 type Variante = 'primario' | 'secundario' | 'peligro' | 'fantasma' | 'exito'
 const VARIANTES: Record<Variante, string> = {
-  primario: 'bg-marca text-white hover:bg-marca-oscuro disabled:bg-marca/50',
+  primario: 'bg-marca text-sobre-marca hover:bg-marca-oscuro disabled:bg-marca/50',
   secundario: 'bg-superficie text-tinta border border-borde hover:bg-fondo',
   peligro: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-600/50',
-  exito: 'bg-green-600 text-white hover:bg-green-700 disabled:bg-green-600/50',
+  exito: 'bg-green-700 text-white hover:bg-green-800 disabled:bg-green-700/50',
   fantasma: 'text-tinta hover:bg-fondo',
+}
+
+/** Clases de un botón, para usar también en un link que se ve como botón (<Link className={claseBoton()}>):
+ *  un <button> adentro de un <a> es HTML inválido y se anuncia dos veces. */
+export function claseBoton({ variante = 'primario', grande, className }: { variante?: Variante; grande?: boolean; className?: string } = {}) {
+  return cn(
+    'inline-flex touch-manipulation select-none items-center justify-center gap-2 rounded-lg font-medium transition-[background-color,color,transform] disabled:cursor-not-allowed',
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marca',
+    // Respuesta al tocar (en el celular no hay hover).
+    'active:brightness-95 motion-safe:active:scale-[0.98] disabled:active:scale-100',
+    grande ? 'min-h-14 px-5 text-lg' : 'min-h-10 px-4 text-sm',
+    VARIANTES[variante],
+    className,
+  )
 }
 
 export const Boton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { variante?: Variante; grande?: boolean }>(
   function Boton({ className, variante = 'primario', grande, ...p }, ref) {
-    return (
-      <button
-        ref={ref}
-        className={cn(
-          'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:cursor-not-allowed',
-          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marca',
-          grande ? 'min-h-14 px-5 text-lg' : 'min-h-10 px-4 text-sm',
-          VARIANTES[variante],
-          className,
-        )}
-        {...p}
-      />
-    )
+    return <button ref={ref} className={claseBoton({ variante, grande, className })} {...p} />
   },
 )
 
@@ -38,7 +40,7 @@ export function Etiqueta({ htmlFor, children, className }: { htmlFor?: string; c
   return <label htmlFor={htmlFor} className={cn('mb-1 block text-sm font-medium text-tinta', className)}>{children}</label>
 }
 
-const campo = 'w-full rounded-lg border border-borde bg-superficie px-3 py-2 text-base text-tinta placeholder:text-tenue focus:border-marca focus:outline-none focus:ring-2 focus:ring-marca/20'
+const campo = 'w-full rounded-lg border border-borde bg-superficie px-3 py-2 text-base text-tinta placeholder:text-tenue focus:border-marca focus:outline-none focus:ring-2 focus:ring-marca/45 aria-[invalid=true]:border-red-600 dark:aria-[invalid=true]:border-red-400'
 
 export const Entrada = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Entrada({ className, ...p }, ref) {
   return <input ref={ref} className={cn(campo, className)} {...p} />

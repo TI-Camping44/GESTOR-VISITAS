@@ -14,6 +14,8 @@ import { fmtDistancia } from '@/lib/geo'
 import { VIS } from '@/lib/config'
 import { mensajeError } from '@/lib/utils'
 import { urlVisita } from '@/lib/rutas'
+import { useErrorCampo } from '@/components/ErrorCampo'
+import { useAvisoSinGuardar } from '@/lib/sinGuardar'
 import type { Duplicado, Zona } from '@/lib/database.types'
 
 const OTRA = '__otra'
@@ -30,6 +32,8 @@ export default function NuevoProspecto() {
   const [duplicados, setDuplicados] = useState<Duplicado[] | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const errCampo = useErrorCampo()
+  useAvisoSinGuardar(!soloLectura && !enviando && Object.values(f).some((v) => v.trim() !== ''))
   const cambiar = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setF((x) => ({ ...x, [k]: e.target.value }))
     setDuplicados(null)
@@ -76,11 +80,12 @@ export default function NuevoProspecto() {
   async function guardar(forzar: boolean) {
     if (soloLectura) return setError(AVISO_SOLO_LECTURA)
     setError(null)
-    if (!f.razon_social.trim()) return setError('Falta la razón social.')
-    if (f.telefono.replace(/\D/g, '').length < 9) return setError('Falta el teléfono o está incompleto.')
-    if (!f.ciudad.trim()) return setError('Falta la ciudad.')
+    errCampo.limpiar()
+    if (!f.razon_social.trim()) return errCampo.marcar('razon', 'Falta la razón social.')
+    if (f.telefono.replace(/\D/g, '').length < 9) return errCampo.marcar('tel', 'Falta el teléfono o está incompleto (por ejemplo 0981 123 456).')
+    if (!f.ciudad.trim()) return errCampo.marcar(otraCiudad ? 'ciudad-otra' : 'ciudad', 'Elegí la ciudad.')
     const l = gps.lectura
-    if (!l) return setError('Falta la ubicación GPS. Tocá "Reintentar".')
+    if (!l) return setError('Falta la ubicación GPS. Tocá «Reintentar».')
     if (l.precision > VIS.gpsPrecisionMaxM) return setError(`Precisión actual: ${l.precision} m. Se necesita ${VIS.gpsPrecisionMaxM} m o menos: reintentá al aire libre.`)
     if (!navigator.onLine) return setError('Necesitás señal para dar de alta un cliente: hay que verificar que no esté repetido.')
 
@@ -97,7 +102,7 @@ export default function NuevoProspecto() {
   }
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void guardar(false) }} className="flex flex-col gap-4">
+    <form onSubmit={(e) => { e.preventDefault(); void guardar(false) }} noValidate className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Nuevo cliente</h1>
         <p className="text-sm text-tenue">Hacé el alta parado en el local: se guarda la ubicación del GPS.</p>
@@ -107,19 +112,21 @@ export default function NuevoProspecto() {
 
       <div>
         <Etiqueta htmlFor="razon">Razón social *</Etiqueta>
-        <Entrada id="razon" required value={f.razon_social} onChange={cambiar('razon_social')} autoComplete="organization" />
+        <Entrada id="razon" required value={f.razon_social} onChange={cambiar('razon_social')} autoComplete="organization" {...errCampo.campo('razon')} />
+        {errCampo.mensaje('razon')}
       </div>
       <div>
         <Etiqueta htmlFor="tel">Teléfono *</Etiqueta>
-        <Entrada id="tel" required type="tel" inputMode="tel" placeholder="0981 123 456" value={f.telefono} onChange={cambiar('telefono')} />
+        <Entrada id="tel" required type="tel" inputMode="tel" autoComplete="tel" placeholder="0981 123 456" value={f.telefono} onChange={cambiar('telefono')} {...errCampo.campo('tel')} />
+        {errCampo.mensaje('tel')}
       </div>
       <div>
         <Etiqueta htmlFor="ruc">RUC</Etiqueta>
-        <Entrada id="ruc" value={f.ruc} onChange={cambiar('ruc')} placeholder="80012345-6" />
+        <Entrada id="ruc" value={f.ruc} onChange={cambiar('ruc')} placeholder="80012345-6" autoComplete="off" spellCheck={false} />
       </div>
       <div>
         <Etiqueta htmlFor="ciudad">Ciudad *</Etiqueta>
-        <Selector id="ciudad" required value={otraCiudad ? OTRA : f.ciudad} onChange={elegirCiudad}>
+        <Selector id="ciudad" required value={otraCiudad ? OTRA : f.ciudad} onChange={elegirCiudad} {...errCampo.campo('ciudad')}>
           <option value="" disabled>Elegí la ciudad…</option>
           {ciudades.mias.length > 0 && (
             <optgroup label="Tus zonas">{ciudades.mias.map((c) => <option key={c} value={c}>{c}</option>)}</optgroup>
@@ -130,8 +137,9 @@ export default function NuevoProspecto() {
           <option value={OTRA}>Otra ciudad (escribir)</option>
         </Selector>
         {otraCiudad && (
-          <Entrada id="ciudad-otra" aria-label="Nombre de la ciudad" className="mt-2" autoFocus placeholder="Nombre de la ciudad" value={f.ciudad} onChange={cambiar('ciudad')} />
+          <Entrada id="ciudad-otra" aria-label="Nombre de la ciudad" className="mt-2" autoFocus placeholder="Nombre de la ciudad…" value={f.ciudad} onChange={cambiar('ciudad')} {...errCampo.campo('ciudad-otra')} />
         )}
+        {errCampo.mensaje('ciudad')}{errCampo.mensaje('ciudad-otra')}
       </div>
       {(zonasDeOtros.length > 0 || vecinos.length > 0) && (
         <Aviso tipo="alerta">
@@ -149,7 +157,7 @@ export default function NuevoProspecto() {
       )}
       <div>
         <Etiqueta htmlFor="dir">Dirección</Etiqueta>
-        <Entrada id="dir" value={f.direccion} onChange={cambiar('direccion')} />
+        <Entrada id="dir" value={f.direccion} onChange={cambiar('direccion')} autoComplete="street-address" placeholder="Ej.: Av. Mcal. López 1234…" />
       </div>
       <div>
         <Etiqueta htmlFor="notas">Notas</Etiqueta>

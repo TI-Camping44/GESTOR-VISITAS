@@ -86,7 +86,7 @@ export function DetalleTablero({ sel, alCerrar }: { sel: Seleccion; alCerrar: ()
           <h2 className="font-semibold">{titulo}</h2>
           <div className="flex items-center gap-2">
             <Boton variante="secundario" onClick={excel} disabled={!filas?.length}>Excel</Boton>
-            <button type="button" onClick={alCerrar} aria-label="Cerrar el detalle" className="grid size-10 place-items-center rounded-lg border border-borde"><X className="size-4" /></button>
+            <button type="button" onClick={alCerrar} aria-label="Cerrar el detalle" className="grid size-10 place-items-center rounded-lg border border-borde"><X className="size-4" aria-hidden /></button>
           </div>
         </div>
         {error && <p className="text-sm text-red-700 dark:text-red-300">{error}</p>}

@@ -2,6 +2,7 @@
 // Altas a revisar: clientes que un vendedor dio de alta en la zona de otro vendedor o a menos de
 // 300 m de clientes de otro vendedor (0019). El supervisor lo pasa al otro vendedor o lo deja.
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useParamUrl } from '@/lib/useParamUrl'
 import { useRouter } from 'next/navigation'
 import { Aviso, Boton, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
@@ -16,7 +17,7 @@ type Cliente = { id: string; razon_social: string; ciudad: string | null; vended
 export default function Altas() {
   const sb = supabaseNavegador()
   const router = useRouter()
-  const [vista, setVista] = useState<'pendientes' | 'revisadas'>('pendientes')
+  const [vista, setVista] = useParamUrl<'pendientes' | 'revisadas'>('vista', 'pendientes')
   const [alertas, setAlertas] = useState<Alerta[] | null>(null)
   const [clientes, setClientes] = useState<Map<string, Cliente>>(new Map())
   const [zonas, setZonas] = useState<Map<string, string>>(new Map())
@@ -79,9 +80,9 @@ export default function Altas() {
         Clientes que un vendedor dio de alta en la zona de otro vendedor, o a menos de 300 m de clientes de otro vendedor.
         Decidí si lo pasás al otro vendedor o si queda con quien lo cargó. La visita del alta queda siempre a nombre de quien la hizo.
       </p>
-      <div className="flex w-fit rounded-xl bg-fondo p-1 ring-1 ring-borde" role="tablist">
-        <button role="tab" aria-selected={vista === 'pendientes'} className={pestana(vista === 'pendientes')} onClick={() => setVista('pendientes')}>Pendientes{pendientes ? ` (${pendientes})` : ''}</button>
-        <button role="tab" aria-selected={vista === 'revisadas'} className={pestana(vista === 'revisadas')} onClick={() => setVista('revisadas')}>Revisadas</button>
+      <div className="flex w-fit rounded-xl bg-fondo p-1 ring-1 ring-borde" role="group" aria-label="Ver">
+        <button type="button" aria-pressed={vista === 'pendientes'} className={pestana(vista === 'pendientes')} onClick={() => setVista('pendientes')}>Pendientes{pendientes ? ` (${pendientes})` : ''}</button>
+        <button type="button" aria-pressed={vista === 'revisadas'} className={pestana(vista === 'revisadas')} onClick={() => setVista('revisadas')}>Revisadas</button>
       </div>
       {ok && <Aviso tipo="ok">{ok}</Aviso>}
       {error && <Aviso tipo="error">{error}</Aviso>}
