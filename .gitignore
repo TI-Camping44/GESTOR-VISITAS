@@ -17,3 +17,6 @@ out/
 # Copiado de node_modules en postinstall
 public/maplibre/
 *.tsbuildinfo
+
+# Capturas y PDFs generados de los manuales
+manuales/salida/
