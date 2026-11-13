@@ -1,6 +1,7 @@
 'use client'
 // Tablero semanal (requerimiento 3): planificado vs. realizado por día y vendedor,
 // cumplimiento contra la meta, agrupado por zona/ciudad y en el mapa con clustering.
+import { usePanel } from '@/components/admin/PanelModo'
 import { useEffect, useMemo, useState } from 'react'
 import { useParamUrl } from '@/lib/useParamUrl'
 import { SelectorSemana } from '@/components/admin/SelectorSemana'
@@ -27,6 +28,7 @@ function colorCumplimiento(hechas: number, meta: number) {
 }
 
 export default function Tablero() {
+  const { delModo } = usePanel() // con visitadoras: en Ventas no aparecen, en Visita médica solo ellas
   const [semana, setSemana] = useParamUrl('semana', lunesDe(hoyIso())) // en la URL: se puede pasar el link de esa semana
   const [filas, setFilas] = useState<FilaTablero[] | null>(null)
   const [visitas, setVisitas] = useState<VisitaSemana[]>([])
@@ -47,12 +49,12 @@ export default function Tablero() {
     ]).then(([t, v, r]) => {
       if (!vivo) return
       if (t.error || v.error) setError(mensajeError(t.error ?? v.error))
-      else { setError(null); setFilas((t.data ?? []) as FilaTablero[]); setVisitas((v.data ?? []) as unknown as VisitaSemana[]) }
+      else { setError(null); setFilas(((t.data ?? []) as FilaTablero[]).filter((f) => delModo(f.vendedor_id))); setVisitas(((v.data ?? []) as unknown as VisitaSemana[]).filter((x) => delModo(x.vendedor_id))) }
       const filasR = (r.data ?? []) as unknown as { vendedor_id: string; km: number; horas_jornada: number }[]
       setKmHoras(new Map(filasR.map((f) => [f.vendedor_id, { km: Number(f.km), horas: Number(f.horas_jornada) }])))
     })
     return () => { vivo = false }
-  }, [semana])
+  }, [semana, delModo])
   useEffect(() => { setSel(null) }, [semana])
 
   const dias = useMemo(() => Array.from({ length: 6 }, (_, i) => sumarDias(semana, i)), [semana])

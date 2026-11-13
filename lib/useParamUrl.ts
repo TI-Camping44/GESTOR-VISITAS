@@ -13,7 +13,8 @@ export function useParamUrl<T extends string = string>(clave: string, porDefecto
     if (v === porDefecto || v === '') p.delete(clave)
     else p.set(clave, v)
     const qs = p.toString()
-    window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`)
+    // null (no el estado de Next): así Next lo toma como un cambio de la página y actualiza useSearchParams.
+    window.history.replaceState(null, '', `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`)
   }, [clave, porDefecto])
   return [valor, cambiar]
 }
