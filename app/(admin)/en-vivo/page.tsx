@@ -23,7 +23,7 @@ function frescura(fecha: string, ahora: number): Frescura {
 const iniciales = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join('')
 
 export default function EnVivo() {
-  const { delModo } = usePanel() // con visitadoras: en Ventas no aparecen, en Visita médica solo ellas
+  const { delModo, modo } = usePanel() // con visitadoras: en Ventas no aparecen, en Visita médica solo ellas
   const sb = supabaseNavegador()
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
   const [posiciones, setPosiciones] = useState<Map<string, PosicionActual>>(new Map())
@@ -105,7 +105,7 @@ export default function EnVivo() {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Vendedores en vivo</h1>
+        <h1 className="text-2xl font-semibold">{modo === 'medica' ? 'Visitadoras en vivo' : 'Vendedores en vivo'}</h1>
         <p className="flex items-center gap-2 text-sm text-tenue">
           <span className={`size-2 rounded-full ${conectado ? 'bg-green-500' : 'bg-gray-400'}`} aria-hidden />
           {conectado ? 'Actualizando en tiempo real' : 'Conectando…'}

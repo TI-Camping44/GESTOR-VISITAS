@@ -86,7 +86,7 @@ export function BarraJornada() {
             <CloudUpload className="size-3.5" aria-hidden />
             Pendientes de subir: {pendientes.visitas > 0 && `${pendientes.visitas} visita${pendientes.visitas === 1 ? '' : 's'}`}
             {pendientes.visitas > 0 && pendientes.posiciones > 0 && ' · '}
-            {pendientes.posiciones > 0 && `${pendientes.posiciones} posiciones`}
+            {pendientes.posiciones > 0 && `${pendientes.posiciones} ${pendientes.posiciones === 1 ? 'posición' : 'posiciones'}`}
           </p>
         )}
         {erroresSubida.length > 0 && (
