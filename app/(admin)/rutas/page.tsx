@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { SelectorSemana } from '@/components/admin/SelectorSemana'
+import { Ciclos } from '@/components/admin/Ciclos'
 import { Aviso, Boton, Entrada, Etiqueta, Insignia, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { hoyIso, lunesDe, ORDINAL_SEMANA, semanaDelMes, semanaIso } from '@/lib/fechas'
@@ -12,7 +13,7 @@ import { mensajeError } from '@/lib/utils'
 import { COLOR_ESTADO_RUTA } from '@/lib/rutas'
 import type { EstadoRuta, Vendedor, Zona } from '@/lib/database.types'
 
-type FilaRuta = { id: string; nombre: string; estado: EstadoRuta; vendedor_id: string; zona_id: string | null; paradas: { count: number }[] }
+type FilaRuta = { id: string; nombre: string; estado: EstadoRuta; vendedor_id: string; zona_id: string | null; ciclo_semana: number | null; ciclo_modelo_id: string | null; ciclo: { nombre: string; semanas: number } | null; paradas: { count: number }[] }
 
 export default function Rutas() {
   const { delModo } = usePanel() // con visitadoras: en Ventas no aparecen, en Visita médica solo ellas
@@ -33,7 +34,7 @@ export default function Rutas() {
 
   useEffect(() => {
     setRutas(null)
-    supabaseNavegador().from('vis_rutas').select('id, nombre, estado, vendedor_id, zona_id, paradas:vis_ruta_paradas(count)')
+    supabaseNavegador().from('vis_rutas').select('id, nombre, estado, vendedor_id, zona_id, ciclo_semana, ciclo_modelo_id, ciclo:vis_ciclos(nombre, semanas), paradas:vis_ruta_paradas(count)')
       .eq('semana_inicio', semana).order('nombre')
       .then(({ data, error }) => { if (error) setError(mensajeError(error)); else setRutas(((data ?? []) as unknown as FilaRuta[]).filter((r) => delModo(r.vendedor_id))) })
   }, [semana, delModo])
@@ -115,6 +116,9 @@ export default function Rutas() {
 
       {error && <Aviso tipo="error">{error}</Aviso>}
 
+      <Ciclos vendedores={vendedores} zonas={zonas} />
+
+      <h2 className="-mb-2 text-lg font-semibold">Rutas de la semana</h2>
       {rutas === null ? <div className="h-24 animate-pulse rounded-xl bg-borde/40" /> : rutas.length === 0 ? (
         <Vacio titulo="No hay rutas esta semana">Creá una arriba, o duplicá una de la semana pasada desde su planificador.</Vacio>
       ) : (
@@ -127,6 +131,7 @@ export default function Rutas() {
                   <Insignia className={COLOR_ESTADO_RUTA[r.estado]}>{r.estado}</Insignia>
                 </div>
                 <p className="mt-1 text-sm text-tenue">{nombreV(r.vendedor_id)} · {nombreZ(r.zona_id)} · {r.paradas[0]?.count ?? 0} paradas</p>
+                {r.ciclo && <p className="mt-1 text-xs text-tenue">{r.ciclo.nombre} · semana {r.ciclo_semana ?? '—'} de {r.ciclo.semanas} · {r.ciclo_modelo_id ? 'generada' : 'modelo'}</p>}
               </Link>
             </li>
           ))}

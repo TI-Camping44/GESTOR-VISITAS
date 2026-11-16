@@ -1,17 +1,20 @@
 'use client'
 // Tablero semanal (requerimiento 3): planificado vs. realizado por día y vendedor,
 // cumplimiento contra la meta, agrupado por zona/ciudad y en el mapa con clustering.
+// TI-0115: no concretadas (con motivo) y cumplimiento por ruta, zona y semana del ciclo.
 import { usePanel } from '@/components/admin/PanelModo'
 import { useEffect, useMemo, useState } from 'react'
 import { useParamUrl } from '@/lib/useParamUrl'
 import { SelectorSemana } from '@/components/admin/SelectorSemana'
 import { DetalleTablero, type Seleccion } from '@/components/admin/DetalleTablero'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
-import { Aviso, Tarjeta, Vacio } from '@/components/ui'
+import Link from 'next/link'
+import { Aviso, Boton, Tarjeta, Vacio } from '@/components/ui'
+import { descargarCsv } from '@/lib/csv'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { fmtDia, fmtFechaHora, hoyIso, lunesDe, sumarDias } from '@/lib/fechas'
 import { cn, mensajeError } from '@/lib/utils'
-import type { FilaTablero } from '@/lib/database.types'
+import type { FilaTablero, FilaTableroRuta } from '@/lib/database.types'
 
 type VisitaSemana = {
   id: string; vendedor_id: string | null; fecha_hora: string; lat: number | null; lng: number | null; hizo_pedido: boolean
@@ -31,6 +34,7 @@ export default function Tablero() {
   const { delModo } = usePanel() // con visitadoras: en Ventas no aparecen, en Visita médica solo ellas
   const [semana, setSemana] = useParamUrl('semana', lunesDe(hoyIso())) // en la URL: se puede pasar el link de esa semana
   const [filas, setFilas] = useState<FilaTablero[] | null>(null)
+  const [porRuta, setPorRuta] = useState<FilaTableroRuta[]>([])
   const [visitas, setVisitas] = useState<VisitaSemana[]>([])
   const [kmHoras, setKmHoras] = useState<Map<string, { km: number; horas: number }>>(new Map())
   const [error, setError] = useState<string | null>(null)
@@ -46,12 +50,17 @@ export default function Tablero() {
         .select('id, vendedor_id, fecha_hora, lat, lng, hizo_pedido, ruta_parada_id, cliente:vis_clientes!vis_visitas_cliente_id_fkey(razon_social, ciudad), zona:vis_zonas!vis_visitas_zona_id_fkey(nombre)')
         .eq('origen', 'app').gte('fecha_hora', inicioDia(semana)).lt('fecha_hora', inicioDia(sumarDias(semana, 7))).limit(5000),
       sb.rpc('vis_reporte_vendedores', { p_desde: semana, p_hasta: sumarDias(semana, 6) }),
-    ]).then(([t, v, r]) => {
+      sb.rpc('vis_tablero_rutas', { p_semana: semana }),
+    ]).then(([t, v, r, pr]) => {
       if (!vivo) return
       if (t.error || v.error) setError(mensajeError(t.error ?? v.error))
       else { setError(null); setFilas(((t.data ?? []) as FilaTablero[]).filter((f) => delModo(f.vendedor_id))); setVisitas(((v.data ?? []) as unknown as VisitaSemana[]).filter((x) => delModo(x.vendedor_id))) }
       const filasR = (r.data ?? []) as unknown as { vendedor_id: string; km: number; horas_jornada: number }[]
       setKmHoras(new Map(filasR.map((f) => [f.vendedor_id, { km: Number(f.km), horas: Number(f.horas_jornada) }])))
+      setPorRuta(((pr.data ?? []) as FilaTableroRuta[]).filter((x) => delModo(x.vendedor_id)).map((x) => ({
+        ...x, planificadas: Number(x.planificadas), realizadas: Number(x.realizadas), no_concretadas: Number(x.no_concretadas),
+        pendientes: Number(x.pendientes), vencidas: Number(x.vencidas),
+      })))
     })
     return () => { vivo = false }
   }, [semana, delModo])
@@ -106,19 +115,21 @@ export default function Tablero() {
               <th className="px-3 py-3 text-center font-medium">Semana</th>
               <th className="px-3 py-3 text-center font-medium">Con pedido</th>
               <th className="px-3 py-3 text-center font-medium">Fuera de ruta</th>
+              <th className="px-3 py-3 text-center font-medium">No concretadas</th>
               <th className="px-3 py-3 text-center font-medium">Km</th>
               <th className="px-3 py-3 text-center font-medium">Horas</th>
             </tr>
           </thead>
           <tbody>
-            {filas === null && <tr><td colSpan={12} className="px-4 py-6 text-center text-tenue">Cargando…</td></tr>}
-            {filas && porVendedor.length === 0 && <tr><td colSpan={12} className="px-4 py-6 text-center text-tenue">No hay vendedores activos. Cargalos en Vendedores.</td></tr>}
+            {filas === null && <tr><td colSpan={13} className="px-4 py-6 text-center text-tenue">Cargando…</td></tr>}
+            {filas && porVendedor.length === 0 && <tr><td colSpan={13} className="px-4 py-6 text-center text-tenue">No hay vendedores activos. Cargalos en Vendedores.</td></tr>}
             {porVendedor.map(([id, v]) => {
               const lista = dias.map((d) => v.dias.get(d))
               const total = lista.reduce((s, f) => s + Number(f?.realizadas ?? 0), 0)
               const plan = lista.reduce((s, f) => s + Number(f?.planificadas ?? 0), 0)
               const pedidos = lista.reduce((s, f) => s + Number(f?.con_pedido ?? 0), 0)
               const fuera = lista.reduce((s, f) => s + Number(f?.fuera_de_ruta ?? 0), 0)
+              const noConcretadas = lista.reduce((s, f) => s + Number(f?.no_concretadas ?? 0), 0)
               const pct = v.metaS ? Math.round((total / v.metaS) * 100) : 0
               return (
                 <tr key={id} className="border-b border-borde last:border-0">
@@ -147,6 +158,7 @@ export default function Tablero() {
                   </td>
                   <td className="px-3 py-2 text-center">{pedidos}</td>
                   <td className="px-3 py-2 text-center">{fuera}</td>
+                  <td className="px-3 py-2 text-center">{noConcretadas > 0 ? <span className="font-medium text-amber-800 dark:text-amber-300">{noConcretadas}</span> : 0}</td>
                   <td className="px-3 py-2 text-center">{kmHoras.get(id)?.km.toLocaleString('es-PY', { maximumFractionDigits: 1 }) ?? '—'}</td>
                   <td className="px-3 py-2 text-center">{kmHoras.get(id)?.horas.toLocaleString('es-PY', { maximumFractionDigits: 1 }) ?? '—'}</td>
                 </tr>
@@ -158,6 +170,8 @@ export default function Tablero() {
       <p className="-mt-3 text-xs text-tenue">Tocá el número de un día (o el total de la semana) para ver los clientes visitados y los que no visitó.</p>
 
       {sel && <DetalleTablero sel={sel} alCerrar={() => setSel(null)} />}
+
+      <CumplimientoRutas filas={porRuta} semana={semana} hoy={hoy} />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_1.4fr]">
         <Tarjeta className="overflow-x-auto p-0">
@@ -182,5 +196,62 @@ export default function Tablero() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Cumplimiento por ruta de la semana (TI-0115): zona, semana del ciclo, planificadas, realizadas, no concretadas
+// (con motivo, ver el detalle) y pendientes (las de días que ya pasaron quedaron sin visitar).
+function CumplimientoRutas({ filas, semana, hoy }: { filas: FilaTableroRuta[]; semana: string; hoy: string }) {
+  const semanaCiclo = (f: FilaTableroRuta) => (f.ciclo ? `${f.ciclo} · semana ${f.ciclo_semana ?? '—'} de ${f.ciclo_semanas ?? '—'}` : '—')
+  const pct = (f: FilaTableroRuta) => (f.planificadas ? Math.round((f.realizadas / f.planificadas) * 100) : 0)
+  const terminada = sumarDias(semana, 6) < hoy
+  function excel() {
+    descargarCsv(`Cumplimiento de rutas semana ${semana}`, [
+      { titulo: 'Zona', valor: (f: FilaTableroRuta) => f.zona ?? 'Sin zona' },
+      { titulo: 'Ruta', valor: (f: FilaTableroRuta) => f.ruta },
+      { titulo: 'Vendedor', valor: (f: FilaTableroRuta) => f.vendedor },
+      { titulo: 'Semana del ciclo', valor: semanaCiclo },
+      { titulo: 'Planificadas', valor: (f: FilaTableroRuta) => f.planificadas },
+      { titulo: 'Realizadas', valor: (f: FilaTableroRuta) => f.realizadas },
+      { titulo: 'No concretadas', valor: (f: FilaTableroRuta) => f.no_concretadas },
+      { titulo: 'Pendientes', valor: (f: FilaTableroRuta) => f.pendientes },
+      { titulo: 'Sin visitar (días pasados)', valor: (f: FilaTableroRuta) => f.vencidas },
+      { titulo: 'Cumplimiento %', valor: pct },
+    ], filas)
+  }
+  return (
+    <Tarjeta className="overflow-x-auto p-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
+        <div>
+          <h2 className="font-semibold">Cumplimiento por ruta, zona y semana del ciclo</h2>
+          <p className="text-xs text-tenue">Realizadas: paradas con visita ese día. No concretadas: marcadas «No pude visitarlo», con motivo (tocá el día del vendedor arriba para verlo). {terminada ? 'Pendientes: quedaron sin visitar.' : 'Pendientes: todavía por visitar (o sin visitar si el día ya pasó).'}</p>
+        </div>
+        <Boton variante="secundario" onClick={excel} disabled={!filas.length}>Excel</Boton>
+      </div>
+      {filas.length === 0 ? <div className="p-4"><Vacio titulo="Sin rutas publicadas esta semana" /></div> : (
+        <table className="mt-2 w-full min-w-[860px] text-sm tabular">
+          <thead><tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-tenue">
+            <th className="px-4 py-2 font-medium">Zona</th><th className="px-2 py-2 font-medium">Ruta</th><th className="px-2 py-2 font-medium">Semana del ciclo</th>
+            <th className="px-2 py-2 text-right font-medium">Plan</th><th className="px-2 py-2 text-right font-medium">Realizadas</th>
+            <th className="px-2 py-2 text-right font-medium">No concretadas</th><th className="px-2 py-2 text-right font-medium">Pendientes</th>
+            <th className="px-4 py-2 text-right font-medium">Cumplimiento</th>
+          </tr></thead>
+          <tbody>
+            {filas.map((f) => (
+              <tr key={f.ruta_id} className="border-b border-borde last:border-0">
+                <td className="px-4 py-2">{f.zona ?? <span className="text-tenue">Sin zona</span>}</td>
+                <td className="px-2 py-2"><Link href={`/rutas/${f.ruta_id}`} className="font-medium text-marca hover:underline">{f.ruta}</Link><p className="text-xs text-tenue">{f.vendedor}</p></td>
+                <td className="px-2 py-2">{semanaCiclo(f)}</td>
+                <td className="px-2 py-2 text-right">{f.planificadas}</td>
+                <td className="px-2 py-2 text-right">{f.realizadas}</td>
+                <td className="px-2 py-2 text-right">{f.no_concretadas > 0 ? <span className="font-medium text-amber-800 dark:text-amber-300">{f.no_concretadas}</span> : 0}</td>
+                <td className="px-2 py-2 text-right">{f.pendientes}{f.vencidas > 0 && <span className="block text-xs text-red-700 dark:text-red-300">{f.vencidas} sin visitar</span>}</td>
+                <td className="px-4 py-2 text-right"><span className={cn('rounded-md px-2 py-0.5', colorCumplimiento(f.realizadas, f.planificadas))}>{pct(f)}%</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Tarjeta>
   )
 }

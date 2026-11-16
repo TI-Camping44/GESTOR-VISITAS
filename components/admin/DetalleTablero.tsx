@@ -41,7 +41,7 @@ export function DetalleTablero({ sel, alCerrar }: { sel: Seleccion; alCerrar: ()
       { titulo: 'Cliente', valor: (f: FilaTableroDetalle) => f.razon_social },
       { titulo: 'Ciudad', valor: (f: FilaTableroDetalle) => f.ciudad ?? '' },
       { titulo: 'Estado', valor: (f: FilaTableroDetalle) => ETIQUETA_ESTADO[f.estado] ?? f.estado },
-      { titulo: 'Fecha visita', valor: (f: FilaTableroDetalle) => (f.fecha_hora ? `${fmtFecha(f.fecha_hora)} ${fmtSoloHora(f.fecha_hora)}` : f.dia ? `planificado ${fmtFecha(f.dia)}` : '') },
+      { titulo: 'Fecha visita', valor: (f: FilaTableroDetalle) => (f.tipo === 'visita' && f.fecha_hora ? `${fmtFecha(f.fecha_hora)} ${fmtSoloHora(f.fecha_hora)}` : f.dia ? `planificado ${fmtFecha(f.dia)}` : '') },
       { titulo: 'Motivo', valor: (f: FilaTableroDetalle) => f.resultado ?? '' },
       { titulo: 'Observaciones', valor: (f: FilaTableroDetalle) => f.observaciones ?? '' },
       { titulo: 'Fecha última visita', valor: (f: FilaTableroDetalle) => (f.ultima_anterior ? fmtFecha(f.ultima_anterior) : '') },
@@ -49,6 +49,8 @@ export function DetalleTablero({ sel, alCerrar }: { sel: Seleccion; alCerrar: ()
     ], [...visitas, ...ruta, ...zona])
   }
 
+  // En la ruta y no visitó: si el vendedor la marcó «No pude visitarlo», el motivo (TI-0115).
+  const conMotivo = (lista: FilaTableroDetalle[]) => lista.some((f) => f.tipo === 'ruta' && f.resultado)
   const Tabla = ({ lista, conVisita }: { lista: FilaTableroDetalle[]; conVisita: boolean }) => (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[820px] text-sm">
@@ -56,6 +58,7 @@ export function DetalleTablero({ sel, alCerrar }: { sel: Seleccion; alCerrar: ()
           <tr className="border-b border-borde [&>th]:px-2 [&>th]:py-2 [&>th]:font-medium">
             <th>Cliente</th><th>Estado</th>
             {conVisita ? <><th>Fecha visita</th><th>Motivo</th><th>Obs.</th></> : <th>{unDia ? 'Zona' : 'Planificado'}</th>}
+            {!conVisita && conMotivo(lista) && <th>No concretada</th>}
             <th>Últ. visita {conVisita ? 'anterior' : ''}</th>
           </tr>
         </thead>
@@ -71,6 +74,11 @@ export function DetalleTablero({ sel, alCerrar }: { sel: Seleccion; alCerrar: ()
                   <td className="max-w-80">{f.observaciones ?? <span className="text-tenue">—</span>}</td>
                 </>
               ) : <td className="whitespace-nowrap">{f.tipo === 'ruta' && f.dia && !unDia ? fmtDia(f.dia) : f.zona ?? '—'}</td>}
+              {!conVisita && conMotivo(lista) && (
+                <td className="max-w-80">{f.resultado
+                  ? <><p className="text-amber-800 dark:text-amber-300">{f.resultado.replace(/^No concretada: /, '')}{f.fecha_hora && <span className="text-xs text-tenue"> · {fmtSoloHora(f.fecha_hora)}</span>}</p>{f.observaciones && <p className="text-xs text-tenue">«{f.observaciones}»</p>}</>
+                  : <span className="text-tenue">—</span>}</td>
+              )}
               <td className="whitespace-nowrap tabular">{f.ultima_anterior ? fmtFecha(f.ultima_anterior) : <span className="text-tenue">nunca</span>}</td>
             </tr>
           ))}
@@ -98,7 +106,7 @@ export function DetalleTablero({ sel, alCerrar }: { sel: Seleccion; alCerrar: ()
               {visitas.length ? <Tabla lista={visitas} conVisita /> : <p className="text-sm text-tenue">No registró visitas.</p>}
             </section>
             <section className="flex flex-col gap-2">
-              <h3 className="text-sm font-semibold text-red-700 dark:text-red-300">En la ruta y no visitó ({ruta.length})</h3>
+              <h3 className="text-sm font-semibold text-red-700 dark:text-red-300">En la ruta y no visitó ({ruta.length}){ruta.some((f) => f.resultado) && <span className="font-normal text-tenue"> · {ruta.filter((f) => f.resultado).length} no concretada{ruta.filter((f) => f.resultado).length > 1 ? 's' : ''} con motivo</span>}</h3>
               {ruta.length ? <Tabla lista={ruta} conVisita={false} /> : <p className="text-sm text-tenue">Visitó todos los de la ruta{unDia ? ' de ese día' : ''}.</p>}
             </section>
             <section className="flex flex-col gap-2">
