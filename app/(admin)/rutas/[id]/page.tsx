@@ -15,7 +15,7 @@ import { COLOR_ESTADO, VIS } from '@/lib/config'
 import { COLOR_ESTADO_RUTA, ETIQUETA_ESTADO_RUTA, renombrarSemana } from '@/lib/rutas'
 import { repartirEnDias, type Asignacion } from '@/lib/sugerencia'
 import { cn, mensajeError } from '@/lib/utils'
-import type { EstadoCliente, EstadoRuta, HistorialZona, Parada, ProximaVisita, Ruta, Sugerida, Vendedor, Zona } from '@/lib/database.types'
+import type { Ciclo, EstadoCliente, EstadoRuta, HistorialZona, Parada, ProximaVisita, Ruta, Sugerida, Vendedor, Zona } from '@/lib/database.types'
 
 type Cand = { id: string; razon_social: string; ciudad: string | null; lat: number | null; lng: number | null; estado: EstadoCliente; ultima_visita: string | null; zona_id: string | null }
 const LETRA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -29,6 +29,7 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
   const [vendedor, setVendedor] = useState<Vendedor | null>(null)
   const [baseDeposito, setBaseDeposito] = useState<{ lat: number; lng: number } | null>(VIS.base)
   const [zona, setZona] = useState<Zona | null>(null)
+  const [ciclo, setCiclo] = useState<Ciclo | null>(null)
   const [paradas, setParadas] = useState<Parada[]>([])
   const [base, setBase] = useState<Cand[]>([])
   const [extras, setExtras] = useState<Cand[]>([])
@@ -59,12 +60,14 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
       setDestinoDup(sumarDias(r.semana_inicio, 7))
       const idxHoy = LETRA.findIndex((_, i) => sumarDias(r.semana_inicio, i) === hoyIso())
       if (idxHoy >= 0) setDiaSel(idxHoy)
-      const [v, z] = await Promise.all([
+      const [v, z, c] = await Promise.all([
         sb.from('vis_vendedores').select('*').eq('id', r.vendedor_id).single(),
         r.zona_id ? sb.from('vis_zonas').select('*').eq('id', r.zona_id).single() : Promise.resolve({ data: null }),
+        r.ciclo_id ? sb.from('vis_ciclos').select('*').eq('id', r.ciclo_id).maybeSingle() : Promise.resolve({ data: null }),
       ])
       setVendedor(v.data)
       setZona(z.data)
+      setCiclo(c.data)
       const { data: cfg } = await sb.from('vis_config').select('base_lat, base_lng').maybeSingle()
       if (cfg?.base_lat != null && cfg.base_lng != null) setBaseDeposito({ lat: cfg.base_lat, lng: cfg.base_lng })
       if (r.zona_id) {
@@ -259,6 +262,9 @@ export default function Planificador({ params }: { params: Promise<{ id: string 
           {ruta.estado === 'cerrada' && <Boton variante="secundario" disabled={ocupado} onClick={() => void cambiarEstado('publicada')}>Reabrir</Boton>}
         </div>
       </div>
+      {ciclo && (ruta.ciclo_modelo_id
+        ? <Aviso tipo="info">Generada del ciclo <b>{ciclo.nombre}</b> (semana {ruta.ciclo_semana} de {ciclo.semanas}). Lo que cambies acá vale solo para esta semana: para cambiar todas, editá la <Link href={`/rutas/${ruta.ciclo_modelo_id}`} className="font-medium underline">ruta modelo</Link>.</Aviso>
+        : <Aviso tipo="info">Semana modelo {ruta.ciclo_semana} de {ciclo.semanas} del ciclo <b>{ciclo.nombre}</b>. Las paradas se copian a las semanas que se generen de acá en adelante (las ya generadas se rehacen desde Rutas → «Rehacer semanas futuras»).</Aviso>)}
       {!origen && <Aviso tipo="alerta">Sin punto de salida: “Ordenar” arranca desde la primera parada. Cargá el del vendedor o el del depósito en Vendedores.</Aviso>}
       {error && <Aviso tipo="error">{error}</Aviso>}
 

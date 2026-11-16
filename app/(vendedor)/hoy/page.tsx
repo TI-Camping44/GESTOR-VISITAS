@@ -14,6 +14,7 @@ import { linksGoogleMaps } from '@/lib/geo'
 import { fmtMin, horasEstimadas } from '@/lib/ruteo'
 import { urlParaVisitar } from '@/lib/rutas'
 import { BuscarCliente } from '@/components/vendedor/BuscarCliente'
+import { NoPudeVisitar } from '@/components/vendedor/NoPudeVisitar'
 import { COLOR_ESTADO, COLOR_ESTADO_FUERTE } from '@/lib/config'
 import { linkComoLlegar, linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
 import type { FilaTablero, ParadaDia, ProximaVisita } from '@/lib/database.types'
@@ -26,7 +27,7 @@ const horasLlegada = (v: string[] | string | undefined) => (Array.isArray(v) ? v
 type Datos = { paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[]; objetivos?: Objetivo[]; llegadas?: Record<string, string[]>; noVisitados?: Record<string, { hora: string; motivo: string }>; base?: { lat: number | null; lng: number | null } | null }
 
 export default function Hoy() {
-  const { perfil, pendientes, esMedica, jornada } = useVendedor()
+  const { perfil, pendientes, esMedica, jornada, soloLectura } = useVendedor()
   const [datos, setDatos] = useState<Datos | null>(null)
   const [guardadoEl, setGuardadoEl] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -55,17 +56,18 @@ export default function Hoy() {
       let base: Datos['base'] = null
       const llegadas: Record<string, string[]> = {}
       const noVisitados: Record<string, { hora: string; motivo: string }> = {}
+      const desdeHoy = new Date(`${hoy}T00:00:00-03:00`).toISOString()
+      // «No pude visitar» de hoy: la visitadora (lugares) y el vendedor (paradas de su ruta, TI-0115).
+      const nv = await sb.from('vis_no_visitados').select('lugar_id, fecha_hora, motivo').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora')
+      for (const x of nv.data ?? []) noVisitados[x.lugar_id] = { hora: x.fecha_hora, motivo: x.motivo } // la última del día
       if (esMedica) {
-        const desdeHoy = new Date(`${hoy}T00:00:00-03:00`).toISOString()
-        const [o, b, c, ll, nv] = await Promise.all([
+        const [o, b, c, ll] = await Promise.all([
           paradas.length ? sb.from('vis_parada_objetivos').select('parada_id, especialidad, orden, medico:vis_medicos(id, nombre, especialidad)').in('parada_id', paradas.map((x) => x.parada_id)) : Promise.resolve({ data: [] }),
           sb.from('vis_vendedores').select('base_lat, base_lng').eq('id', perfil.id).maybeSingle(),
           sb.from('vis_config').select('base_lat, base_lng').maybeSingle(),
           sb.from('vis_llegadas').select('lugar_id, fecha_hora').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
-          sb.from('vis_no_visitados').select('lugar_id, fecha_hora, motivo').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
         ])
         for (const x of ll.data ?? []) (llegadas[x.lugar_id] ??= []).push(x.fecha_hora)
-        for (const x of nv.data ?? []) noVisitados[x.lugar_id] = { hora: x.fecha_hora, motivo: x.motivo } // la última del día
         if (!vivo) return
         objetivos = ((o.data ?? []) as Objetivo[]).sort((a, z) => a.orden - z.orden)
         base = b.data?.base_lat != null ? { lat: b.data.base_lat, lng: b.data.base_lng } : c.data ? { lat: c.data.base_lat, lng: c.data.base_lng } : null
@@ -217,8 +219,8 @@ export default function Hoy() {
                     {esMedica && horasLlegada(datos?.llegadas?.[p.cliente_id]).length > 0 && (
                       <p className="mt-1 flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400"><CheckCircle2 className="size-3.5" aria-hidden /> Llegaste a las {fmtHoras(horasLlegada(datos?.llegadas?.[p.cliente_id]))}</p>
                     )}
-                    {esMedica && datos?.noVisitados?.[p.cliente_id] && (
-                      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300"><CircleSlash className="size-3.5" aria-hidden /> No pudiste visitar ({fmtSoloHora(datos.noVisitados[p.cliente_id]!.hora)}): {textoMotivo(datos.noVisitados[p.cliente_id]!.motivo)}</p>
+                    {datos?.noVisitados?.[p.cliente_id] && (
+                      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300"><CircleSlash className="size-3.5" aria-hidden /> {esMedica || p.visitada ? 'No pudiste visitar' : 'No concretada'} ({fmtSoloHora(datos.noVisitados[p.cliente_id]!.hora)}): {textoMotivo(datos.noVisitados[p.cliente_id]!.motivo)}</p>
                     )}
                     {esMedica && !p.visitada && !datos?.noVisitados?.[p.cliente_id] && horasLlegada(datos?.llegadas?.[p.cliente_id]).length === 0 && horas.get(p.parada_id) && (
                       <p className="mt-1 flex items-center gap-1 text-xs text-tenue"><Clock className="size-3.5" aria-hidden /> Llegada aprox. {horas.get(p.parada_id)}</p>
@@ -252,6 +254,10 @@ export default function Hoy() {
                   {tel && <a href={tel} aria-label={`Llamar a ${p.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" aria-hidden /></a>}
                   {wa && <a href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp a ${p.razon_social}`} className="grid size-10 place-items-center rounded-lg border border-borde"><MessageCircle className="size-4" aria-hidden /></a>}
                 </div>
+                {/* Venta: no pudo hacer la visita de esta parada (queda como «no concretada» con motivo en el tablero). */}
+                {!esMedica && !p.visitada && !datos?.noVisitados?.[p.cliente_id] && (
+                  <div className="mt-2"><NoPudeVisitar venta lugarId={p.cliente_id} vendedorId={perfil.id} soloLectura={soloLectura} nombre={p.razon_social} /></div>
+                )}
               </Tarjeta>
             </li>
           )

@@ -1138,4 +1138,92 @@ do $$ declare v_l1 uuid := (select id from vis_clientes where razon_social = 'Co
 end $$;
 reset role;
 
+-- Ciclos de rutas (0034, TI-0115): semanas modelo, generación de las siguientes, sin duplicar, rehacer y permisos.
+insert into vis_clientes (razon_social, ciudad, lat, lng, vendedor_id) values
+  ('Kiosco Ciclo Uno', 'Asunción', -25.30, -57.60, (select id from vis_vendedores where nombre = 'Antonio')),
+  ('Kiosco Ciclo Dos', 'Asunción', -25.31, -57.61, (select id from vis_vendedores where nombre = 'Antonio'));
+select pg_temp.como('super@camping44.com.py') \gset
+set role authenticated;
+do $$ declare
+  v_ant uuid := (select id from vis_vendedores where nombre = 'Antonio');
+  v_ini date := date_trunc('week', vis_hoy())::date - 28;
+  v_c uuid; v_r1 uuid; v_r2 uuid; r jsonb;
+begin
+  insert into vis_ciclos (vendedor_id, nombre, inicio, semanas) values (v_ant, 'Ciclo prueba', v_ini, 2) returning id into v_c;
+  insert into vis_rutas (nombre, vendedor_id, semana_inicio, estado, ciclo_id, ciclo_semana)
+    values ('Ruta Ciclo – Sem 1 – Antonio', v_ant, v_ini, 'publicada', v_c, 1) returning id into v_r1;
+  insert into vis_rutas (nombre, vendedor_id, semana_inicio, estado, ciclo_id, ciclo_semana)
+    values ('Ruta Ciclo B – Antonio', v_ant, v_ini + 7, 'publicada', v_c, 2) returning id into v_r2;
+  insert into vis_ruta_paradas (ruta_id, cliente_id, dia, orden) values
+    (v_r1, (select id from vis_clientes where razon_social = 'Kiosco Ciclo Uno'), v_ini + 1, 1),
+    (v_r1, (select id from vis_clientes where razon_social = 'Kiosco Ciclo Dos'), v_ini + 1, 2),
+    (v_r2, (select id from vis_clientes where razon_social = 'Kiosco Ciclo Dos'), v_ini + 7 + 3, 1);
+  assert vis_ciclo_semana(v_ini, 2, date_trunc('week', vis_hoy())::date) = 1, 'la semana actual es la 1 del ciclo (4 semanas después)';
+  r := vis_generar_ciclo(v_c, 2);
+  assert (r ->> 'creadas')::int = 3, format('genera la semana actual y las 2 siguientes: %s', r);
+  assert exists (select 1 from vis_rutas where ciclo_modelo_id = v_r1 and semana_inicio = date_trunc('week', vis_hoy())::date and estado = 'publicada'
+                 and nombre like 'Ruta Ciclo – Sem % – Antonio'), 'la semana actual copia el modelo 1, publicada y con la semana en el nombre';
+  assert (select count(*) from vis_ruta_paradas pa join vis_rutas x on x.id = pa.ruta_id
+          where x.ciclo_modelo_id = v_r1 and x.semana_inicio = date_trunc('week', vis_hoy())::date
+            and pa.dia = date_trunc('week', vis_hoy())::date + 1) = 2, 'las paradas van al mismo día de la semana, en orden';
+  assert exists (select 1 from vis_rutas where ciclo_modelo_id = v_r2 and semana_inicio = date_trunc('week', vis_hoy())::date + 7 and ciclo_semana = 2), 'la siguiente copia el modelo 2';
+  r := vis_generar_ciclo(v_c, 2);
+  assert (r ->> 'creadas')::int = 0, 'volver a generar no duplica';
+  r := vis_generar_ciclo(v_c, 2, true);
+  assert (r ->> 'rehechas')::int = 2 and (r ->> 'creadas')::int = 2, format('rehacer: solo las semanas futuras: %s', r);
+  update vis_ciclos set activo = false where id = v_c;
+  begin perform vis_generar_ciclo(v_c, 2); assert false, 'un ciclo pausado no genera';
+  exception when raise_exception then null; end;
+  update vis_ciclos set activo = true where id = v_c;
+end $$;
+reset role;
+select pg_temp.como('antonio@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert (select count(*) from vis_ciclos) = 0, 'el vendedor no ve los ciclos';
+  begin perform vis_generar_ciclo((select id from vis_ciclos limit 1), 2); assert false, 'el vendedor no genera';
+  exception when raise_exception then null; end;
+  begin perform vis_generar_ciclos_todos(); assert false, 'la generación de todos es solo de pg_cron';
+  exception when insufficient_privilege then null; end;
+  assert exists (select 1 from vis_rutas where ciclo_modelo_id is not null and semana_inicio = date_trunc('week', vis_hoy())::date), 've la ruta generada (publicada)';
+end $$;
+reset role;
+do $$ begin
+  assert vis_generar_ciclos_todos() = 0, 'pg_cron: lo que ya está generado no se repite';
+end $$;
+
+-- No concretadas en la venta (0036): solo sobre una parada de su ruta publicada de hoy, con motivos de venta.
+insert into vis_clientes (razon_social, ciudad, vendedor_id) values ('Kiosco No Concretada', 'Asunción', (select id from vis_vendedores where nombre = 'Antonio')),
+  ('Kiosco Fuera De Ruta', 'Asunción', (select id from vis_vendedores where nombre = 'Antonio'));
+insert into vis_rutas (nombre, vendedor_id, semana_inicio, estado) values
+  ('Ruta No Concretada', (select id from vis_vendedores where nombre = 'Antonio'), date_trunc('week', vis_hoy())::date, 'publicada');
+insert into vis_ruta_paradas (ruta_id, cliente_id, dia, orden) values
+  ((select id from vis_rutas where nombre = 'Ruta No Concretada'), (select id from vis_clientes where razon_social = 'Kiosco No Concretada'), vis_hoy(), 1);
+select pg_temp.como('antonio@camping44.com.py') \gset
+set role authenticated;
+do $$ declare r jsonb; v_k uuid := (select id from vis_clientes where razon_social = 'Kiosco No Concretada'); begin
+  begin perform vis_marcar_no_visitado(jsonb_build_object('lugar_id', v_k, 'motivo', 'sin_medicos')); assert false, 'motivo de visita médica en la venta';
+  exception when raise_exception then null; end;
+  begin perform vis_marcar_no_visitado(jsonb_build_object('lugar_id', (select id from vis_clientes where razon_social = 'Kiosco Fuera De Ruta'), 'motivo', 'sin_tiempo'));
+    assert false, 'un cliente que no está en la ruta de hoy';
+  exception when raise_exception then null; end;
+  r := vis_marcar_no_visitado(jsonb_build_object('lugar_id', v_k, 'motivo', 'reprogramado', 'observaciones', 'Pasar el jueves'));
+  assert (r ->> 'parada_id') is not null, 'queda en la parada de su ruta';
+  assert (select count(*) from vis_ruta_paradas pa join vis_rutas x on x.id = pa.ruta_id where pa.cliente_id = v_k) = 1, 'no suma paradas';
+  assert (select no_concretadas from vis_tablero(date_trunc('week', vis_hoy())::date, vis_mi_id()) where dia = vis_hoy()) = 1, 'el tablero la cuenta';
+  assert (select resultado from vis_tablero_detalle(vis_mi_id(), vis_hoy(), vis_hoy()) where tipo = 'ruta' and razon_social = 'Kiosco No Concretada')
+         = 'No concretada: El cliente pidió que vuelva otro día', 'el detalle muestra el motivo';
+  -- Si al final la visita se hace, deja de contar como no concretada.
+  perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_k, 'resultado_id', (select id from vis_resultados where nombre = 'Otro')));
+  assert (select no_concretadas from vis_tablero(date_trunc('week', vis_hoy())::date, vis_mi_id()) where dia = vis_hoy()) = 0, 'con visita ya no es no concretada';
+end $$;
+reset role;
+select pg_temp.como('super@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert (select realizadas from vis_tablero_rutas(vis_hoy()) where ruta = 'Ruta No Concretada') = 1, 'cumplimiento por ruta: realizada';
+  assert exists (select 1 from vis_tablero_rutas(vis_hoy()) where ciclo = 'Ciclo prueba' and ciclo_semana = 1 and ciclo_semanas = 2), 'por ruta: semana del ciclo';
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;
