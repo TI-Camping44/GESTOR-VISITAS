@@ -1,4 +1,4 @@
-import type { Medico } from '@/lib/database.types'
+import type { Medico, MotivoNoVisita } from '@/lib/database.types'
 
 /** Días desde la última visita al médico (null = nunca). */
 export function diasSinVisita(m: Pick<Medico, 'ultima_visita'>, ahora = Date.now()): number | null {
@@ -59,3 +59,13 @@ export function diasDeHorario(horario: string | null | undefined): number[] {
 
 /** Clave para agrupar especialidades escritas distinto («Clínica Medica» = «Clínica médica»). */
 export const claveEspecialidad = (e: string | null | undefined) => normalTexto((e ?? '').trim()).replace(/\s+/g, ' ')
+
+/** Motivos de «No pude visitar este lugar» (en el orden en que se ofrecen). */
+export const MOTIVOS_NO_VISITA: { valor: MotivoNoVisita; texto: string }[] = [
+  { valor: 'sin_medicos', texto: 'No había médicos' },
+  { valor: 'sin_acceso', texto: 'Sin acceso: no me dejaron pasar' },
+  { valor: 'cerrado', texto: 'Estaba cerrado' },
+  { valor: 'licencia', texto: 'Médico de vacaciones o con licencia' },
+  { valor: 'otro', texto: 'Otro motivo' },
+]
+export const textoMotivo = (m: string | null | undefined) => MOTIVOS_NO_VISITA.find((x) => x.valor === m)?.texto ?? 'Otro motivo'

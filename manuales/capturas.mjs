@@ -136,7 +136,28 @@ async function panelVit() {
   })
 }
 
-const grupos = { 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit }
-for (const g of grupo === 'todos' ? Object.keys(grupos) : [grupo]) await grupos[g]()
+async function noVisita() {
+  await conMock('noe', true, async () => {
+    const p = await contexto(true)
+    await p.context().setGeolocation({ latitude: -25.2900, longitude: -57.5800, accuracy: 9 })
+    await ir(p, '/lugar?c=l4', 3200)
+    await p.getByRole('button', { name: 'No pude visitar este lugar' }).evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'n-boton')
+    await p.getByRole('button', { name: 'No pude visitar este lugar' }).click(); await espera(300)
+    await p.getByLabel('No había médicos').check(); await p.getByLabel(/Observación/).fill('Hay congreso de diabetes, vuelven el jueves.')
+    await p.getByRole('button', { name: 'Guardar', exact: true }).evaluate((e) => e.scrollIntoView({ block: 'end' })); await espera(300); await foto(p, 'n-form')
+    await p.getByRole('button', { name: 'Guardar', exact: true }).click()
+    await p.getByText('Tu supervisor ya lo ve.').last().waitFor({ timeout: 20000 }); await espera(500)
+    await p.getByText('Tu supervisor ya lo ve.').last().evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'n-guardado')
+    await ir(p, '/hoy', 3500); await p.getByText('No pudiste visitar (').first().evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(400); await foto(p, 'n-hoy')
+  })
+  await conMock('ser', false, async () => {
+    const p = await contexto(false)
+    await ir(p, '/medica', 3500); await foto(p, 'n-actividad')
+    await ir(p, '/medica/ruteo', 3500); await foto(p, 'n-ruteo')
+  })
+}
+
+const grupos = { 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita }
+for (const g of grupo === 'todos' ? Object.keys(grupos).filter((x) => x !== 'no-visita') : [grupo]) await grupos[g]()
 await browser.close()
 if (errores.length) console.log('ERRORES:\n' + [...new Set(errores)].join('\n'))

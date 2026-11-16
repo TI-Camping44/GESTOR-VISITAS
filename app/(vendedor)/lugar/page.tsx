@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { CheckCircle2, MapPin, MessageCircle, Navigation, Pencil, Phone, Plus, Search, Stethoscope, Trash2 } from 'lucide-react'
 import { leerGps } from '@/lib/gps'
+import { NoPudeVisitar } from '@/components/vendedor/NoPudeVisitar'
 import { distanciaM, fmtDistancia } from '@/lib/geo'
 import { fmtHoras, fmtSoloHora } from '@/lib/fechas'
 import { AVISO_SOLO_LECTURA, useVendedor } from '@/components/vendedor/Proveedor'
@@ -204,6 +205,7 @@ export default function PaginaLugar() {
             </>
           )}
           {errorLlegada && <Aviso tipo="error">{errorLlegada}</Aviso>}
+          <NoPudeVisitar lugarId={lugar.id} vendedorId={perfil.id} soloLectura={soloLectura} />
         </div>
       )}
       {sumar && (

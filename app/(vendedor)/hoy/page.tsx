@@ -2,13 +2,14 @@
 // Hoy: la ruta del día con contador, mapa y acciones por parada (BRIEF §6 vendedor 1).
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Phone, MessageCircle, Navigation, CheckCircle2, SkipForward, Undo2, Stethoscope, Clock } from 'lucide-react'
+import { Phone, MessageCircle, Navigation, CheckCircle2, SkipForward, Undo2, Stethoscope, Clock, CircleSlash } from 'lucide-react'
 import { useVendedor } from '@/components/vendedor/Proveedor'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, PuntoEstado, Tarjeta, Vacio, claseBoton } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
-import { fmtFecha, fmtHoras, hace, minutosDelDia, hoyIso, lunesDe } from '@/lib/fechas'
+import { textoMotivo } from '@/lib/medicos'
+import { fmtFecha, fmtHoras, fmtSoloHora, hace, minutosDelDia, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
 import { fmtMin, horasEstimadas } from '@/lib/ruteo'
 import { urlParaVisitar } from '@/lib/rutas'
@@ -22,7 +23,7 @@ type Objetivo = { parada_id: string; especialidad: string | null; orden: number;
 // Llegadas de hoy a un lugar (lo guardado por una versión anterior era una sola hora).
 const horasLlegada = (v: string[] | string | undefined) => (Array.isArray(v) ? v : v ? [v] : [])
 
-type Datos = { paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[]; objetivos?: Objetivo[]; llegadas?: Record<string, string[]>; base?: { lat: number | null; lng: number | null } | null }
+type Datos = { paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[]; objetivos?: Objetivo[]; llegadas?: Record<string, string[]>; noVisitados?: Record<string, { hora: string; motivo: string }>; base?: { lat: number | null; lng: number | null } | null }
 
 export default function Hoy() {
   const { perfil, pendientes, esMedica, jornada } = useVendedor()
@@ -53,15 +54,18 @@ export default function Hoy() {
       let objetivos: Objetivo[] = []
       let base: Datos['base'] = null
       const llegadas: Record<string, string[]> = {}
+      const noVisitados: Record<string, { hora: string; motivo: string }> = {}
       if (esMedica) {
         const desdeHoy = new Date(`${hoy}T00:00:00-03:00`).toISOString()
-        const [o, b, c, ll] = await Promise.all([
+        const [o, b, c, ll, nv] = await Promise.all([
           paradas.length ? sb.from('vis_parada_objetivos').select('parada_id, especialidad, orden, medico:vis_medicos(id, nombre, especialidad)').in('parada_id', paradas.map((x) => x.parada_id)) : Promise.resolve({ data: [] }),
           sb.from('vis_vendedores').select('base_lat, base_lng').eq('id', perfil.id).maybeSingle(),
           sb.from('vis_config').select('base_lat, base_lng').maybeSingle(),
           sb.from('vis_llegadas').select('lugar_id, fecha_hora').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
+          sb.from('vis_no_visitados').select('lugar_id, fecha_hora, motivo').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
         ])
         for (const x of ll.data ?? []) (llegadas[x.lugar_id] ??= []).push(x.fecha_hora)
+        for (const x of nv.data ?? []) noVisitados[x.lugar_id] = { hora: x.fecha_hora, motivo: x.motivo } // la última del día
         if (!vivo) return
         objetivos = ((o.data ?? []) as Objetivo[]).sort((a, z) => a.orden - z.orden)
         base = b.data?.base_lat != null ? { lat: b.data.base_lat, lng: b.data.base_lng } : c.data ? { lat: c.data.base_lat, lng: c.data.base_lng } : null
@@ -70,6 +74,7 @@ export default function Hoy() {
         paradas,
         objetivos,
         llegadas,
+        noVisitados,
         base,
         hoy: filas.find((f) => f.dia === hoy)?.realizadas ?? 0,
         semana: filas.reduce((s, f) => s + Number(f.realizadas), 0),
@@ -212,7 +217,10 @@ export default function Hoy() {
                     {esMedica && horasLlegada(datos?.llegadas?.[p.cliente_id]).length > 0 && (
                       <p className="mt-1 flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400"><CheckCircle2 className="size-3.5" aria-hidden /> Llegaste a las {fmtHoras(horasLlegada(datos?.llegadas?.[p.cliente_id]))}</p>
                     )}
-                    {esMedica && !p.visitada && horasLlegada(datos?.llegadas?.[p.cliente_id]).length === 0 && horas.get(p.parada_id) && (
+                    {esMedica && datos?.noVisitados?.[p.cliente_id] && (
+                      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300"><CircleSlash className="size-3.5" aria-hidden /> No pudiste visitar ({fmtSoloHora(datos.noVisitados[p.cliente_id]!.hora)}): {textoMotivo(datos.noVisitados[p.cliente_id]!.motivo)}</p>
+                    )}
+                    {esMedica && !p.visitada && !datos?.noVisitados?.[p.cliente_id] && horasLlegada(datos?.llegadas?.[p.cliente_id]).length === 0 && horas.get(p.parada_id) && (
                       <p className="mt-1 flex items-center gap-1 text-xs text-tenue"><Clock className="size-3.5" aria-hidden /> Llegada aprox. {horas.get(p.parada_id)}</p>
                     )}
                     {p.lat == null && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Sin ubicación cargada: al registrar la visita se puede guardar.</p>}

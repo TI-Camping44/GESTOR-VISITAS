@@ -9,19 +9,23 @@ import { descargarCsv } from '@/lib/csv'
 import { fmtDia, fmtFecha, fmtSoloHora, hoyIso, lunesDe, semanaIso, sumarDias } from '@/lib/fechas'
 import { fmtMin, horasEstimadas, leerPlanilla, minDeHora } from '@/lib/ruteo'
 import { cn, mensajeError } from '@/lib/utils'
+import { textoMotivo } from '@/lib/medicos'
 import type { FilaRuteoSemana } from '@/lib/database.types'
 
-type Estado = 'Pendiente' | 'Llegó' | 'Visitado' | 'Reprogramado' | 'Sin acceso' | 'No atendió' | 'No visitado'
+type Estado = 'Pendiente' | 'Llegó' | 'Visitado' | 'Reprogramado' | 'Sin acceso' | 'No atendió' | 'No visitado' | 'No pudo visitar'
 const COLOR: Record<Estado, string> = {
   Pendiente: 'bg-fondo text-tenue', 'Llegó': 'bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200', 'No visitado': 'bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200',
   Visitado: 'bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-200', Reprogramado: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
   'Sin acceso': 'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200', 'No atendió': 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
+  'No pudo visitar': 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200',
 }
+// «No pude visitar este lugar» del día (motivo y observación), si lo marcó.
+const textoNoVisitado = (f: FilaRuteoSemana) => (f.no_visitado ?? []).map((n) => `${fmtSoloHora(n.hora)} · ${textoMotivo(n.motivo)}${n.observaciones ? ` («${n.observaciones}»)` : ''}`).join(' / ')
 // Horas reales de llegada del día (vuelve al mismo lugar: «09:10 · 15:30»).
 const horasReales = (f: FilaRuteoSemana) => (f.llegadas?.length ? f.llegadas : f.llegada ? [f.llegada] : []).map((h) => fmtSoloHora(h)).join(' · ')
 
 function estado(f: FilaRuteoSemana, hoy: string): Estado {
-  if (!f.visita_id) return f.llegada ? 'Llegó' : f.dia < hoy ? 'No visitado' : 'Pendiente'
+  if (!f.visita_id) return f.no_visitado?.length ? 'No pudo visitar' : f.llegada ? 'Llegó' : f.dia < hoy ? 'No visitado' : 'Pendiente'
   if (f.resultado === 'Pidió volver otro día') return 'Reprogramado'
   if (f.resultado === 'Sin acceso') return 'Sin acceso'
   if (f.resultado === 'No estaba / no atendió') return 'No atendió'
@@ -81,6 +85,7 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
       { titulo: 'Médico visitado', valor: (f: FilaRuteoSemana) => f.medico_visitado ?? '' },
       { titulo: 'Hora de la visita', valor: (f: FilaRuteoSemana) => (f.fecha_hora ? new Date(f.fecha_hora).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Asuncion' }) : '') },
       { titulo: 'Resultado', valor: (f: FilaRuteoSemana) => f.resultado ?? '' },
+      { titulo: 'No pudo visitar', valor: (f: FilaRuteoSemana) => textoNoVisitado(f) },
       { titulo: 'Productos / muestras', valor: (f: FilaRuteoSemana) => (f.productos ?? []).map((p) => `${p.producto}${p.muestras ? ` (${p.muestras})` : ''}`).join(', ') },
       { titulo: 'Observaciones', valor: (f: FilaRuteoSemana) => f.observaciones ?? '' },
       { titulo: 'Próxima visita', valor: (f: FilaRuteoSemana) => (f.proxima_visita ? fmtFecha(f.proxima_visita) : '') },
@@ -162,7 +167,7 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
                         <td>{primera && <><p className="font-medium">{f.lugar}</p>{f.direccion && <p className="text-xs text-tenue">{f.direccion}</p>}</>}</td>
                         <td>{f.especialidad ?? <span className="text-tenue">—</span>}</td>
                         <td>{f.medico ?? (f.medico_visitado ? <span className="text-tenue">visitó a {f.medico_visitado}</span> : <span className="text-tenue">{f.objetivo_id ? 'a buscar' : '—'}</span>)}</td>
-                        <td>{f.fecha_hora && <span className="tabular text-tenue">{fmtSoloHora(f.fecha_hora)} · </span>}{f.resultado ?? ''}{f.observaciones && <p className="text-xs text-tenue">{f.observaciones}</p>}</td>
+                        <td>{!f.visita_id && primera && f.no_visitado?.length ? <span className="text-orange-800 dark:text-orange-300">No pudo visitar: {textoNoVisitado(f)}</span> : null}{f.fecha_hora && <span className="tabular text-tenue">{fmtSoloHora(f.fecha_hora)} · </span>}{f.resultado ?? ''}{f.observaciones && <p className="text-xs text-tenue">{f.observaciones}</p>}</td>
                         <td className="tabular">{f.proxima_visita ? fmtFecha(f.proxima_visita) : ''}</td>
                         <td><span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', COLOR[e])}>{e}</span></td>
                       </tr>
