@@ -5,34 +5,45 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CheckCircle2, MapPin, MessageCircle, Navigation, Pencil, Phone, Plus, Search, Stethoscope, Trash2 } from 'lucide-react'
+import { CheckCircle2, CircleSlash, MapPin, MessageCircle, Navigation, Pencil, Phone, Plus, Search, Stethoscope, Trash2 } from 'lucide-react'
 import { leerGps } from '@/lib/gps'
 import { NoPudeVisitar } from '@/components/vendedor/NoPudeVisitar'
 import { distanciaM, fmtDistancia } from '@/lib/geo'
-import { fmtHoras, fmtSoloHora } from '@/lib/fechas'
+import { fmtHoras, fmtSoloHora, hoyIso } from '@/lib/fechas'
+import { encolarVisita } from '@/lib/offline/subir'
 import { AVISO_SOLO_LECTURA, useVendedor } from '@/components/vendedor/Proveedor'
 import { Aviso, Boton, Entrada, Selector, Tarjeta, Vacio, claseBoton } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
 import { hace } from '@/lib/fechas'
-import { linkComoLlegar, linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
+import { esErrorDeRed, linkComoLlegar, linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
 import { urlVisitaMedico } from '@/lib/rutas'
 import { tocaVisitar } from '@/lib/medicos'
-import type { Medico } from '@/lib/database.types'
+import type { Medico, Resultado } from '@/lib/database.types'
 
 type Lugar = { id: string; razon_social: string; ciudad: string | null; direccion: string | null; lat: number | null; lng: number | null; tipo_lugar?: string | null; telefono?: string | null; notas?: string | null }
 type Objetivo = { medico_id: string | null; especialidad: string | null; orden: number }
+const NO_ESTABA = 'No estaba / no atendió'
 
 export default function PaginaLugar() {
   const busqueda = useSearchParams()
   const lugarId = busqueda.get('c') ?? ''
   const parada = busqueda.get('parada')
-  const { perfil, soloLectura, esMedica } = useVendedor()
+  const { perfil, soloLectura, esMedica, refrescarPendientes } = useVendedor()
   const [lugar, setLugar] = useState<Lugar | null>(null)
   const [medicos, setMedicos] = useState<Medico[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hoyVisitados, setHoyVisitados] = useState<Set<string>>(new Set())
   const [objetivos, setObjetivos] = useState<Objetivo[]>([])
+  // La parada de hoy de este lugar (la de Hoy, o la que armó el supervisor si se abrió desde Lugares).
+  const [paradaHoy, setParadaHoy] = useState<string | null>(parada)
+  // Cómo quedó hoy cada médico: visitado o «no estaba» (con la hora).
+  const [estadoHoy, setEstadoHoy] = useState<Map<string, { noEstaba: boolean; hora: string }>>(new Map())
+  const [idNoEstaba, setIdNoEstaba] = useState<number | null>(null)
+  const [noEsta, setNoEsta] = useState<string | null>(null) // médico con «No está» abierto
+  const [obsNoEsta, setObsNoEsta] = useState('')
+  const [guardandoNoEsta, setGuardandoNoEsta] = useState(false)
+  const [errorNoEsta, setErrorNoEsta] = useState<string | null>(null)
   // «Llegué acá»: hora y GPS de la llegada; el lugar se suma a la ruta de hoy y Sergio lo ve en el momento.
   // Puede volver al mismo lugar en el día (a la mañana un médico, a la tarde otro): una llegada por vez que llega.
   const [llegadas, setLlegadas] = useState<{ id: string; hora: string; creada: string }[]>([])
@@ -67,7 +78,7 @@ export default function PaginaLugar() {
       const [rl, rm, rv] = await Promise.all([
         sb.from('vis_clientes_v').select('id, razon_social, ciudad, direccion, lat, lng, tipo_lugar, telefono, notas').eq('id', lugarId).maybeSingle(),
         sb.from('vis_medicos_v').select('*').order('nombre').limit(3000),
-        sb.from('vis_visitas').select('medico_id, fecha_hora').eq('vendedor_id', perfil.id).eq('cliente_id', lugarId).gte('fecha_hora', desde.toISOString()),
+        sb.from('vis_visitas').select('medico_id, fecha_hora, resultado:vis_resultados!vis_visitas_resultado_id_fkey(nombre)').eq('vendedor_id', perfil.id).eq('cliente_id', lugarId).gte('fecha_hora', desde.toISOString()),
       ])
       void sb.from('vis_llegadas').select('id, fecha_hora, created_at').eq('vendedor_id', perfil.id).eq('lugar_id', lugarId).gte('fecha_hora', desde.toISOString())
         .order('fecha_hora').then(({ data }) => { if (vivo && data) setLlegadas(data.map((x) => ({ id: x.id, hora: x.fecha_hora, creada: x.created_at }))) })
@@ -76,14 +87,22 @@ export default function PaginaLugar() {
       else if (!guardado) setError(rl.error ? 'Sin señal y este lugar no está guardado en el celular. Abrilo una vez con señal.' : 'No encontramos este lugar.')
       if (rm.data) { setMedicos(rm.data); void guardarCache(`medicos:${perfil.id}`, rm.data) }
       // A quién ir hoy en esta parada (lo arma Sergio en el panel). Sin señal, lo guardado en Hoy.
-      if (parada) {
-        const ro = await sb.from('vis_parada_objetivos').select('medico_id, especialidad, orden').eq('parada_id', parada).order('orden')
+      const pid = parada ?? (await sb.from('vis_ruta_paradas').select('id').eq('cliente_id', lugarId).eq('dia', hoyIso()).limit(1)).data?.[0]?.id ?? null
+      if (vivo) setParadaHoy(pid)
+      if (pid) {
+        const ro = await sb.from('vis_parada_objetivos').select('medico_id, especialidad, orden').eq('parada_id', pid).order('orden')
         if (vivo && ro.data) setObjetivos(ro.data)
       }
       if (rv.data) {
-        setHoyVisitados(new Set(rv.data.map((v) => v.medico_id).filter((x): x is string => !!x)))
-        setHorasVisitas(rv.data.map((v) => v.fecha_hora))
+        const vs = rv.data as unknown as { medico_id: string | null; fecha_hora: string; resultado: { nombre: string } | null }[]
+        setHoyVisitados(new Set(vs.map((v) => v.medico_id).filter((x): x is string => !!x)))
+        setHorasVisitas(vs.map((v) => v.fecha_hora))
+        setEstadoHoy(new Map(vs.filter((v) => v.medico_id).map((v) => [v.medico_id!, { noEstaba: v.resultado?.nombre === NO_ESTABA, hora: v.fecha_hora }])))
       }
+      // El resultado «No estaba / no atendió» (para el botón «No está»), de la base o de lo guardado.
+      const rr = await sb.from('vis_resultados').select('id, nombre').eq('nombre', NO_ESTABA).maybeSingle()
+      const id = rr.data?.id ?? (await leerCache<Resultado[]>('resultados').catch(() => null))?.datos.find((r) => r.nombre === NO_ESTABA)?.id ?? null
+      if (vivo) setIdNoEstaba(id)
     })()
     return () => { vivo = false }
   }, [lugarId, perfil.id, parada])
@@ -91,7 +110,11 @@ export default function PaginaLugar() {
   const otros = useMemo(() => (medicos ?? []).filter((m) => !m.lugares.some((l) => l.lugar_id === lugarId)).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')), [medicos, lugarId])
   const objetivoIds = useMemo(() => new Set(objetivos.map((o) => o.medico_id).filter(Boolean)), [objetivos])
   const deAca = useMemo(() => (medicos ?? []).filter((m) => m.lugares.some((l) => l.lugar_id === lugarId))
-    .sort((a, b) => Number(objetivoIds.has(b.id)) - Number(objetivoIds.has(a.id)) || Number(tocaVisitar(b)) - Number(tocaVisitar(a)) || a.nombre.localeCompare(b.nombre, 'es')), [medicos, lugarId, objetivoIds])
+    .sort((a, b) => Number(tocaVisitar(b)) - Number(tocaVisitar(a)) || a.nombre.localeCompare(b.nombre, 'es')), [medicos, lugarId])
+  // «Para ver hoy»: los médicos que puso el supervisor para hoy, en su orden. Abajo, los demás del lugar.
+  const paraHoy = useMemo(() => objetivos.filter((o) => o.medico_id).sort((a, b) => a.orden - b.orden)
+    .map((o) => (medicos ?? []).find((m) => m.id === o.medico_id)).filter((m): m is Medico => !!m), [objetivos, medicos])
+  const otrosDeAca = deAca.filter((m) => !objetivoIds.has(m.id))
   // Especialidades a buscar: las de la ruta sin médico, salvo que ya haya uno de esa especialidad acá.
   const esp = (x: string | null | undefined) => (x ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
   const aBuscar = objetivos.filter((o) => !o.medico_id && o.especialidad && !deAca.some((m) => esp(m.especialidad) === esp(o.especialidad)))
@@ -133,6 +156,36 @@ export default function PaginaLugar() {
     setLlegadas((ls) => ls.filter((l) => l.id !== ultima.id))
   }
 
+  // «No está»: registra la visita a ese médico como «No estaba / no atendió», con una observación opcional.
+  async function marcarNoEsta(m: Medico) {
+    if (!lugar) return
+    if (soloLectura) return setErrorNoEsta(AVISO_SOLO_LECTURA)
+    if (!idNoEstaba) return setErrorNoEsta('Abrí la app una vez con señal para poder marcar «No está».')
+    setGuardandoNoEsta(true); setErrorNoEsta(null)
+    const gps = await leerGps(10000).catch(() => null)
+    const client_uuid = crypto.randomUUID()
+    const ahora = new Date().toISOString()
+    const payload: Record<string, unknown> = {
+      client_uuid, cliente_id: lugar.id, ruta_parada_id: paradaHoy, fecha_hora: ahora, medico_id: m.id, resultado_id: idNoEstaba,
+      lat: gps?.lat ?? null, lng: gps?.lng ?? null, precision_m: gps?.precision ?? null,
+      hizo_pedido: false, hizo_cobranza: false, monto_cobrado_gs: null, observaciones: obsNoEsta.trim() || null, proxima_visita: null, fotos: [], productos: [],
+    }
+    try {
+      if (!navigator.onLine) throw new TypeError('Failed to fetch')
+      const { error: e } = await supabaseNavegador().rpc('vis_registrar_visita', { p: payload as never })
+      if (e) throw e
+    } catch (err) {
+      if (!esErrorDeRed(err)) { setGuardandoNoEsta(false); return setErrorNoEsta(mensajeError(err)) }
+      // Sin señal: queda en el celular y se sube sola.
+      await encolarVisita({ client_uuid, payload: { ...payload, capturada_offline: true }, creada: Date.now(), intentos: 0, nombreCliente: `${m.nombre} · ${lugar.razon_social}` })
+      await refrescarPendientes()
+    }
+    setGuardandoNoEsta(false)
+    setEstadoHoy((x) => new Map(x).set(m.id, { noEstaba: true, hora: ahora }))
+    setHoyVisitados((x) => new Set(x).add(m.id))
+    setNoEsta(null); setObsNoEsta('')
+  }
+
   async function sumarMedico() {
     if (!lugar || !sumarId) return
     if (soloLectura) return setErrorSumar(AVISO_SOLO_LECTURA)
@@ -160,6 +213,60 @@ export default function PaginaLugar() {
     if (cartera) await guardarCache(`cartera:${perfil.id}`, cartera.datos.filter((c) => c.id !== lugar.id)).catch(() => {})
     router.push('/mapa')
     router.refresh()
+  }
+
+  function tarjeta(m: Medico, orden?: number) {
+    if (!lugar) return null
+    const estado = estadoHoy.get(m.id)
+    const visitado = hoyVisitados.has(m.id)
+    const toca = tocaVisitar(m)
+    const horario = m.lugares.find((l) => l.lugar_id === lugarId)?.horario
+    const tel = linkTel(m.telefono)
+    const wa = linkWhatsApp(m.telefono_norm)
+    return (
+      <Tarjeta className={orden && visitado ? 'opacity-80' : undefined}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-start gap-2.5">
+            {orden && <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-marca text-sm font-semibold text-sobre-marca">{orden}</span>}
+            <div className="min-w-0">
+              <p className="font-semibold leading-snug">{m.nombre}</p>
+              <p className="text-sm text-tenue">{[m.especialidad, horario].filter(Boolean).join(' · ') || 'Sin especialidad'}</p>
+            </div>
+          </div>
+          {!orden && !visitado && toca && <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">toca visita</span>}
+        </div>
+        <p className="mt-1 text-xs text-tenue">Última visita: {m.ultima_visita ? hace(m.ultima_visita) : 'nunca'} · cada {m.frecuencia_dias} días</p>
+        {noEsta === m.id ? (
+          <div className="mt-3 flex flex-col gap-2 rounded-lg bg-fondo p-3">
+            <label htmlFor={`obs-no-esta-${m.id}`} className="text-sm font-medium">¿Querés anotar algo? (opcional)</label>
+            <Entrada id={`obs-no-esta-${m.id}`} value={obsNoEsta} onChange={(e) => setObsNoEsta(e.target.value)} placeholder="Ej.: de vacaciones, viene a la tarde…" autoComplete="off" />
+            {errorNoEsta && <Aviso tipo="error">{errorNoEsta}</Aviso>}
+            <div className="flex gap-2">
+              <Boton variante="secundario" className="flex-1" disabled={guardandoNoEsta} onClick={() => void marcarNoEsta(m)}>
+                <CircleSlash className="size-4 text-amber-700 dark:text-amber-300" aria-hidden /> {guardandoNoEsta ? 'Guardando…' : 'Confirmar: no está'}
+              </Boton>
+              <Boton variante="fantasma" onClick={() => { setNoEsta(null); setErrorNoEsta(null) }}>Cancelar</Boton>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-3 flex gap-2">
+            {estado?.noEstaba ? (
+              <span className="inline-flex flex-1 items-center justify-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-300"><CircleSlash className="size-4" aria-hidden /> No estaba ({fmtSoloHora(estado.hora)})</span>
+            ) : visitado ? (
+              <span className="inline-flex flex-1 items-center justify-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-400"><CheckCircle2 className="size-4" aria-hidden /> Visitado hoy{estado && ` (${fmtSoloHora(estado.hora)})`}</span>
+            ) : (
+              <>
+                <Link href={urlVisitaMedico(lugar.id, m.id, { parada: paradaHoy })} className={claseBoton({ className: 'flex-1' })}>Registrar visita</Link>
+                {orden && <Boton variante="secundario" onClick={() => { setNoEsta(m.id); setObsNoEsta(''); setErrorNoEsta(null) }}><CircleSlash className="size-4 text-amber-700 dark:text-amber-300" aria-hidden /> No está</Boton>}
+              </>
+            )}
+            {!orden && tel && <a href={tel} aria-label={`Llamar a ${m.nombre}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" aria-hidden /></a>}
+            {!orden && wa && <a href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp a ${m.nombre}`} className="grid size-10 place-items-center rounded-lg border border-borde"><MessageCircle className="size-4" aria-hidden /></a>}
+            <Link href={`/medicos/nuevo?id=${m.id}`} aria-label={`Editar a ${m.nombre}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Pencil className="size-4" aria-hidden /></Link>
+          </div>
+        )}
+      </Tarjeta>
+    )
   }
 
   if (error) return <Aviso tipo="error">{error} <Link href="/hoy" className="underline">Volver</Link></Aviso>
@@ -235,43 +342,22 @@ export default function PaginaLugar() {
         </Tarjeta>
       )}
 
-      <h2 className="text-lg font-semibold">Médicos ({deAca.length})</h2>
+      {paraHoy.length > 0 && (
+        <section className="flex flex-col gap-3" aria-labelledby="para-hoy">
+          <div>
+            <h2 id="para-hoy" className="text-lg font-semibold">Para ver hoy ({paraHoy.length})</h2>
+            <p className="text-sm text-tenue">En este orden. Si un médico no está, tocá «No está» y seguí con el próximo.</p>
+          </div>
+          <ol className="flex flex-col gap-3">{paraHoy.map((m, i) => <li key={m.id}>{tarjeta(m, i + 1)}</li>)}</ol>
+        </section>
+      )}
+
+      {(!paraHoy.length || otrosDeAca.length > 0) && <h2 className="text-lg font-semibold">{paraHoy.length ? `Otros médicos de este lugar (${otrosDeAca.length})` : `Médicos (${deAca.length})`}</h2>}
       {medicos && deAca.length === 0 && (
         <Vacio titulo="Todavía no cargaste médicos en este lugar">Tocá «Agregar médico acá» para cargar al primero.</Vacio>
       )}
       <ul className="flex flex-col gap-3">
-        {deAca.map((m) => {
-          const visitado = hoyVisitados.has(m.id)
-          const toca = tocaVisitar(m)
-          const horario = m.lugares.find((l) => l.lugar_id === lugarId)?.horario
-          const tel = linkTel(m.telefono)
-          const wa = linkWhatsApp(m.telefono_norm)
-          return (
-            <li key={m.id}>
-              <Tarjeta>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-semibold leading-snug">{m.nombre}</p>
-                    <p className="text-sm text-tenue">{[m.especialidad, horario].filter(Boolean).join(' · ') || 'Sin especialidad'}</p>
-                  </div>
-                  {objetivoIds.has(m.id) && <span className="shrink-0 rounded-full bg-marca px-2 py-0.5 text-xs font-medium text-sobre-marca"><Stethoscope className="-mt-0.5 mr-0.5 inline size-3" aria-hidden />hoy</span>}
-                  {!visitado && toca && !objetivoIds.has(m.id) && <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">toca visita</span>}
-                </div>
-                <p className="mt-1 text-xs text-tenue">Última visita: {m.ultima_visita ? hace(m.ultima_visita) : 'nunca'} · cada {m.frecuencia_dias} días</p>
-                <div className="mt-3 flex gap-2">
-                  {visitado ? (
-                    <span className="inline-flex flex-1 items-center justify-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-400"><CheckCircle2 className="size-4" aria-hidden /> Visitado hoy</span>
-                  ) : (
-                    <Link href={urlVisitaMedico(lugar.id, m.id, { parada })} className={claseBoton({ className: 'flex-1' })}>Registrar visita</Link>
-                  )}
-                  {tel && <a href={tel} aria-label={`Llamar a ${m.nombre}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" aria-hidden /></a>}
-                  {wa && <a href={wa} target="_blank" rel="noreferrer" aria-label={`WhatsApp a ${m.nombre}`} className="grid size-10 place-items-center rounded-lg border border-borde"><MessageCircle className="size-4" aria-hidden /></a>}
-                  <Link href={`/medicos/nuevo?id=${m.id}`} aria-label={`Editar a ${m.nombre}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Pencil className="size-4" aria-hidden /></Link>
-                </div>
-              </Tarjeta>
-            </li>
-          )
-        })}
+        {otrosDeAca.map((m) => <li key={m.id}>{tarjeta(m)}</li>)}
       </ul>
 
       {errorQuitar && <Aviso tipo="error">{errorQuitar}</Aviso>}

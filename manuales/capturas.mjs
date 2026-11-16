@@ -171,7 +171,23 @@ async function medicoAusente() {
   })
 }
 
-const grupos = { 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita, 'medico-ausente': medicoAusente }
-for (const g of grupo === 'todos' ? Object.keys(grupos).filter((x) => !['no-visita', 'medico-ausente'].includes(x)) : [grupo]) await grupos[g]()
+async function paraHoy() {
+  await conMock('noe', true, async () => {
+    const p = await contexto(true)
+    await p.context().setGeolocation({ latitude: -25.3011, longitude: -57.5961, accuracy: 9 })
+    await ir(p, '/lugar?c=l1&parada=q1', 3500)
+    await p.getByText('Para ver hoy').first().evaluate((e) => e.scrollIntoView({ block: 'start' })); await p.evaluate(() => window.scrollBy(0, -110)); await espera(300); await foto(p, 'p-para-hoy')
+    await p.getByRole('button', { name: 'No está' }).first().click(); await espera(300)
+    await p.getByLabel('¿Querés anotar algo? (opcional)').fill('De vacaciones hasta el lunes.'); await espera(200); await foto(p, 'p-no-esta')
+    await p.getByRole('button', { name: /Confirmar: no está/ }).click(); await p.getByText('No estaba (').first().waitFor({ timeout: 20000 }); await espera(400); await foto(p, 'p-no-estaba')
+  })
+  await conMock('ser', false, async () => {
+    const p = await contexto(false)
+    await ir(p, '/medica/armar', 4000); await foto(p, 't-armar'); await foto(p, 't-armar-completa', { completa: true })
+  })
+}
+
+const grupos = { 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita, 'medico-ausente': medicoAusente, 'para-hoy': paraHoy }
+for (const g of grupo === 'todos' ? Object.keys(grupos).filter((x) => !['no-visita', 'medico-ausente', 'para-hoy'].includes(x)) : [grupo]) await grupos[g]()
 await browser.close()
 if (errores.length) console.log('ERRORES:\n' + [...new Set(errores)].join('\n'))

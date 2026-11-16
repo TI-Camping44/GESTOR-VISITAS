@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart3, Route, Radio, Users, MapPinned, UserCog, RefreshCw, Smartphone, FileBarChart, ShieldAlert, Stethoscope, ClipboardList, Building2, Tags, Pill, CalendarRange } from 'lucide-react'
+import { BarChart3, Route, Radio, Users, MapPinned, UserCog, RefreshCw, Smartphone, FileBarChart, ShieldAlert, Stethoscope, ClipboardList, Building2, Tags, Pill, CalendarRange, ListOrdered } from 'lucide-react'
 import { usePanel } from './PanelModo'
 import { cn } from '@/lib/utils'
 import type { Rol } from '@/lib/database.types'
@@ -15,6 +15,7 @@ export function NavAdmin({ rol, altas = 0 }: { rol: Rol; altas?: number }) {
   ]
   const items = modo === 'medica' ? [
     { href: '/medica', texto: 'Actividad', Icono: ClipboardList },
+    { href: '/medica/armar', texto: 'Armar el día', Icono: ListOrdered },
     { href: '/medica/medicos', texto: 'Médicos', Icono: Stethoscope },
     { href: '/medica/lugares', texto: 'Consultorios y lugares', Icono: Building2 },
     { href: '/medica/especialidades', texto: 'Especialidades', Icono: Tags },
