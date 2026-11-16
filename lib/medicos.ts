@@ -68,4 +68,13 @@ export const MOTIVOS_NO_VISITA: { valor: MotivoNoVisita; texto: string }[] = [
   { valor: 'licencia', texto: 'Médico de vacaciones o con licencia' },
   { valor: 'otro', texto: 'Otro motivo' },
 ]
-export const textoMotivo = (m: string | null | undefined) => MOTIVOS_NO_VISITA.find((x) => x.valor === m)?.texto ?? 'Otro motivo'
+/** Motivos de «No pude visitar» en la venta (parada de la ruta del vendedor). Mismo texto que vis_texto_motivo_no_visita. */
+export const MOTIVOS_NO_VISITA_VENTA: { valor: MotivoNoVisita; texto: string }[] = [
+  { valor: 'cerrado', texto: 'Estaba cerrado' },
+  { valor: 'encargado_ausente', texto: 'No estaba el encargado o comprador' },
+  { valor: 'reprogramado', texto: 'El cliente pidió que vuelva otro día' },
+  { valor: 'sin_tiempo', texto: 'No me dio el tiempo' },
+  { valor: 'otro', texto: 'Otro motivo' },
+]
+export const textoMotivo = (m: string | null | undefined) =>
+  [...MOTIVOS_NO_VISITA, ...MOTIVOS_NO_VISITA_VENTA].find((x) => x.valor === m)?.texto ?? 'Otro motivo'

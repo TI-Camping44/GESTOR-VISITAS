@@ -41,3 +41,9 @@ export const ETIQUETA_ESTADO_RUTA: Record<EstadoRuta, string> = {
 /** Cambia el "Sem NN" del nombre al copiar una ruta a otra semana. */
 export const renombrarSemana = (nombre: string, semana: number) =>
   /Sem\s*\d+/i.test(nombre) ? nombre.replace(/Sem\s*\d+/i, `Sem ${semana}`) : `${nombre} – Sem ${semana}`
+
+/** Semana del ciclo (1..n) del lunes dado; null antes del inicio. Igual que vis_ciclo_semana (0034). */
+export function semanaDelCiclo(inicio: string, semanas: number, lunes: string): number | null {
+  const dias = Math.round((Date.parse(`${lunes}T12:00:00Z`) - Date.parse(`${inicio}T12:00:00Z`)) / 86400000)
+  return dias < 0 ? null : (Math.floor(dias / 7) % semanas) + 1
+}

@@ -76,9 +76,15 @@ export type Database = {
         Relationships: Rel[]
       }
       vis_rutas: {
-        Row: { creado_por: string | null; created_at: string; estado: Database['public']['Enums']['vis_estado_ruta']; id: string; nombre: string; notas: string | null; semana_inicio: string; vendedor_id: string; zona_id: string | null }
-        Insert: { creado_por?: string | null; created_at?: string; estado?: Database['public']['Enums']['vis_estado_ruta']; id?: string; nombre: string; notas?: string | null; semana_inicio: string; vendedor_id: string; zona_id?: string | null }
+        Row: { creado_por: string | null; created_at: string; estado: Database['public']['Enums']['vis_estado_ruta']; id: string; nombre: string; notas: string | null; semana_inicio: string; vendedor_id: string; zona_id: string | null; ciclo_id: string | null; ciclo_semana: number | null; ciclo_modelo_id: string | null }
+        Insert: { creado_por?: string | null; created_at?: string; estado?: Database['public']['Enums']['vis_estado_ruta']; id?: string; nombre: string; notas?: string | null; semana_inicio: string; vendedor_id: string; zona_id?: string | null; ciclo_id?: string | null; ciclo_semana?: number | null; ciclo_modelo_id?: string | null }
         Update: Partial<Database['public']['Tables']['vis_rutas']['Insert']>
+        Relationships: Rel[]
+      }
+      vis_ciclos: {
+        Row: { id: string; vendedor_id: string; nombre: string; inicio: string; semanas: number; activo: boolean; creado_por: string | null; created_at: string }
+        Insert: { id?: string; vendedor_id: string; nombre: string; inicio: string; semanas?: number; activo?: boolean; creado_por?: string | null; created_at?: string }
+        Update: Partial<Database['public']['Tables']['vis_ciclos']['Insert']>
         Relationships: Rel[]
       }
       vis_sync_log: {
@@ -266,6 +272,8 @@ export type Database = {
         Args: { p_semana: string; p_vendedor?: string }
         Returns: FilaTablero[]
       }
+      vis_tablero_rutas: { Args: { p_semana: string }; Returns: FilaTableroRuta[] }
+      vis_generar_ciclo: { Args: { p_ciclo: string; p_semanas_adelante?: number; p_rehacer?: boolean }; Returns: Json }
       vis_terminar_jornada: {
         Args: { p_bateria?: number; p_lat?: number; p_lng?: number; p_precision?: number }
         Returns: Database['public']['Tables']['vis_jornadas']['Row']
@@ -307,6 +315,7 @@ export type Zona = T['vis_zonas']['Row']
 export type Cliente = T['vis_clientes']['Row']
 export type ClienteV = Database['public']['Views']['vis_clientes_v']['Row']
 export type Ruta = T['vis_rutas']['Row']
+export type Ciclo = T['vis_ciclos']['Row']
 export type Parada = T['vis_ruta_paradas']['Row']
 export type Visita = T['vis_visitas']['Row']
 export type Resultado = T['vis_resultados']['Row']
@@ -333,7 +342,7 @@ export type FilaRuteoSemana = {
 }
 export type LugarDeMedico = { lugar_id: string; nombre: string; horario: string | null }
 /** Por qué no pudo visitar un lugar (visita médica, 0032). */
-export type MotivoNoVisita = 'sin_medicos' | 'sin_acceso' | 'cerrado' | 'licencia' | 'otro'
+export type MotivoNoVisita = 'sin_medicos' | 'sin_acceso' | 'cerrado' | 'licencia' | 'otro' | 'encargado_ausente' | 'sin_tiempo' | 'reprogramado'
 export type ProductoVisita = { producto: string; muestras: number }
 
 export type Duplicado = { id: string; razon_social: string; telefono: string | null; ruc: string | null; ciudad: string | null; motivo: string; distancia_m: number | null }
@@ -347,7 +356,14 @@ export type ParadaDia = {
 
 export type FilaTablero = {
   vendedor_id: string; vendedor: string; meta_diaria: number; meta_semanal: number; dia: string
-  planificadas: number; realizadas: number; en_ruta: number; fuera_de_ruta: number; con_pedido: number
+  planificadas: number; realizadas: number; en_ruta: number; fuera_de_ruta: number; con_pedido: number; no_concretadas: number
+}
+
+/** Cumplimiento de cada ruta de la semana (vis_tablero_rutas): zona y semana del ciclo. */
+export type FilaTableroRuta = {
+  ruta_id: string; ruta: string; vendedor_id: string; vendedor: string; zona: string | null
+  ciclo: string | null; ciclo_semana: number | null; ciclo_semanas: number | null
+  planificadas: number; realizadas: number; no_concretadas: number; pendientes: number; vencidas: number
 }
 
 export type HistorialZona = {
