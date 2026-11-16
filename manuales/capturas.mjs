@@ -206,13 +206,13 @@ async function ciclos() {
     const p = await contexto(true)
     await ir(p, '/hoy', 3500)
     const b = p.getByRole('button', { name: 'No pude visitarlo' }).last()
-    await b.evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'c-hoy')
+    await b.evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'c-hoy'); await foto(p, 'h-no-pude')
     await b.click(); await espera(400)
     await p.getByText('No estaba el encargado').first().click(); await espera(200)
     await p.locator('textarea').last().fill('El encargado vuelve el jueves.'); await espera(300)
-    await p.getByText('¿Por qué no pudiste visitar').first().evaluate((e) => e.scrollIntoView({ block: 'start' })); await p.evaluate(() => window.scrollBy(0, -120)); await espera(300); await foto(p, 'c-motivo')
+    await p.getByText('¿Por qué no pudiste visitar').first().evaluate((e) => e.scrollIntoView({ block: 'start' })); await p.evaluate(() => window.scrollBy(0, -120)); await espera(300); await foto(p, 'c-motivo'); await foto(p, 'h-no-pude-motivo')
     await p.getByRole('button', { name: /^Guardar|Confirmar/ }).last().click(); await p.getByText('Tu supervisor ya lo ve.').first().waitFor({ timeout: 20000 }); await espera(400)
-    await p.getByText('Tu supervisor ya lo ve.').first().evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'c-guardado')
+    await p.getByText('Tu supervisor ya lo ve.').first().evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'c-guardado'); await foto(p, 'h-no-pude-guardado')
   })
 }
 
