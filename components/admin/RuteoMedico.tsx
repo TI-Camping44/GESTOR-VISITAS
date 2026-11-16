@@ -12,12 +12,13 @@ import { cn, mensajeError } from '@/lib/utils'
 import { textoMotivo } from '@/lib/medicos'
 import type { FilaRuteoSemana } from '@/lib/database.types'
 
-type Estado = 'Pendiente' | 'Llegó' | 'Visitado' | 'Reprogramado' | 'Sin acceso' | 'No atendió' | 'No visitado' | 'No pudo visitar'
+type Estado = 'Pendiente' | 'Llegó' | 'Visitado' | 'Reprogramado' | 'Sin acceso' | 'No atendió' | 'No visitado' | 'No pudo visitar' | 'Ya no atiende acá'
 const COLOR: Record<Estado, string> = {
   Pendiente: 'bg-fondo text-tenue', 'Llegó': 'bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200', 'No visitado': 'bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200',
   Visitado: 'bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-200', Reprogramado: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
   'Sin acceso': 'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200', 'No atendió': 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
   'No pudo visitar': 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200',
+  'Ya no atiende acá': 'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200',
 }
 // «No pude visitar este lugar» del día (motivo y observación), si lo marcó.
 const textoNoVisitado = (f: FilaRuteoSemana) => (f.no_visitado ?? []).map((n) => `${fmtSoloHora(n.hora)} · ${textoMotivo(n.motivo)}${n.observaciones ? ` («${n.observaciones}»)` : ''}`).join(' / ')
@@ -28,6 +29,7 @@ function estado(f: FilaRuteoSemana, hoy: string): Estado {
   if (!f.visita_id) return f.no_visitado?.length ? 'No pudo visitar' : f.llegada ? 'Llegó' : f.dia < hoy ? 'No visitado' : 'Pendiente'
   if (f.resultado === 'Pidió volver otro día') return 'Reprogramado'
   if (f.resultado === 'Sin acceso') return 'Sin acceso'
+  if (f.resultado === 'Ya no atiende acá') return 'Ya no atiende acá'
   if (f.resultado === 'No estaba / no atendió') return 'No atendió'
   return 'Visitado'
 }

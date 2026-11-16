@@ -1124,4 +1124,18 @@ do $$ begin
 end $$;
 reset role;
 
+-- «Ya no atiende acá» (0033): el médico sale de ese lugar y queda en los demás.
+select pg_temp.como('vale@vitalica.com.py') \gset
+set role authenticated;
+do $$ declare v_l1 uuid := (select id from vis_clientes where razon_social = 'Consultorio Sin Ruta'); v_l2 uuid := (select id from vis_clientes where razon_social = 'Lugar Visita Suelta'); v_m uuid; begin
+  insert into vis_medicos (nombre, especialidad, visitadora_id, creado_por, empresa_id) values ('Dr. Se Mudó', 'Pediatría', vis_mi_id(), vis_mi_id(), vis_mi_empresa()) returning id into v_m;
+  insert into vis_medico_lugares (medico_id, lugar_id) values (v_m, v_l1), (v_m, v_l2);
+  perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_l1, 'medico_id', v_m,
+    'resultado_id', (select id from vis_resultados where nombre = 'Ya no atiende acá'), 'observaciones', 'Se fue al otro consultorio'));
+  assert not exists (select 1 from vis_medico_lugares where medico_id = v_m and lugar_id = v_l1), 'sale del lugar';
+  assert exists (select 1 from vis_medico_lugares where medico_id = v_m and lugar_id = v_l2), 'queda en el otro';
+  assert (select activo from vis_medicos where id = v_m), 'el médico no se borra';
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;

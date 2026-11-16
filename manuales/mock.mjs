@@ -59,7 +59,7 @@ const medicos = M.map(([id, nombre, esp, ls, uv, f]) => ({ id, nombre, especiali
 const med = (id) => { const m = medicos.find((x) => x.id === id); return { nombre: m.nombre, especialidad: m.especialidad } }
 const resultados = [
   ...['Pedido', 'Cotización', 'Volver otro día', 'Cobranza', 'Cerrado', 'Cliente nuevo', 'No le interesa'].map((n, i) => ({ id: i + 1, nombre: n, es_venta: n === 'Pedido', orden: i + 1, tipo: 'ventas', activo: true })),
-  ...['Presentó productos', 'Dejó muestras', 'Pidió volver otro día', 'No atendió', 'Sin acceso'].map((n, i) => ({ id: 20 + i, nombre: n, es_venta: false, orden: i + 1, tipo: 'medica', activo: true })),
+  ...['Presentó productos', 'Dejó muestras', 'No estaba / no atendió', 'Pidió volver otro día', 'Sin acceso', 'Ya no atiende acá', 'Otro motivo'].map((n, i) => ({ id: 20 + i, nombre: n, es_venta: false, orden: i + 1, tipo: 'medica', activo: true })),
 ]
 const productos = ['Artrodol 50 mg', 'Gastrovit', 'Pedifer gotas', 'Vitalcal D', 'Omegavit 1000'].map((n, i) => ({ id: i + 1, nombre: n, codigo: null, activo: true, orden: i + 1, empresa_id: E2 }))
 // ── Visitas ──
@@ -179,6 +179,7 @@ const RPC = {
   vis_mi_gps: () => ({ codigo: 'c44a7f3e91b20d4c', ultima_recibida_el: new Date(Date.now() - 2 * 60000).toISOString(), ultima_posicion_el: new Date(Date.now() - 2 * 60000).toISOString() }),
   vis_vecinos_de_otros: () => [], vis_clientes_cercanos: () => [], vis_zona_historial: () => [], vis_sugerir_paradas: () => [],
   vis_marcar_llegada: () => ({ id: 'a9', parada_id: 'q3' }),
+  vis_registrar_visita: () => ({ id: 'vnueva', alerta_distancia: false, distancia_cliente_m: 10 }),
   vis_marcar_no_visitado: (a) => { const p = a.p ?? {}; const n = { id: `nv${noVisitados.length + 1}`, vendedor_id: P, lugar_id: p.lugar_id, parada_id: null, fecha_hora: new Date().toISOString(), created_at: new Date().toISOString(), motivo: p.motivo, observaciones: p.observaciones ?? null, lat: p.lat, lng: p.lng, lugar: { razon_social: (lugares.find((l) => l.id === p.lugar_id) ?? {}).razon_social } }; noVisitados.push(n); return { id: n.id, parada_id: null, duplicada: false } },
   vis_quitar_no_visitado: (a) => { const i = noVisitados.findIndex((n) => n.id === a.p_id); if (i >= 0) noVisitados.splice(i, 1); return { ok: true } }, vis_iniciar_jornada: () => ({ id: 'j1', inicio: new Date().toISOString() }),
 }
