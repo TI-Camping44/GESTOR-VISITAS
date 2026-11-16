@@ -108,9 +108,14 @@ const rutas = [
   { id: 'r1', nombre: `Asunción Centro – Sem ${hoy}`, estado: 'publicada', vendedor_id: 'hum', zona_id: 'z1', semana_inicio: lunes, notas: null, creado_por: 'jor', created_at: lunes, paradas: [{ count: 24 }] },
   { id: 'r2', nombre: 'Central Sur – Sem', estado: 'publicada', vendedor_id: 'dan', zona_id: 'z3', semana_inicio: lunes, notas: null, creado_por: 'jor', created_at: lunes, paradas: [{ count: 18 }] },
   { id: 'r3', nombre: 'Central Este – Sem', estado: 'borrador', vendedor_id: 'ant', zona_id: 'z2', semana_inicio: lunes, notas: null, creado_por: 'jor', created_at: lunes, paradas: [{ count: 9 }] },
+  { id: 'r5', nombre: 'Visita médica – Sem – Noelia', estado: 'publicada', vendedor_id: 'noe', zona_id: null, semana_inicio: lunes, notas: null, creado_por: 'ser', created_at: lunes, paradas: [{ count: 3 }] },
   { id: 'r4', nombre: 'Farmacias Asunción', estado: 'publicada', vendedor_id: 'hug', zona_id: null, semana_inicio: lunes, notas: null, creado_por: 'ser', created_at: lunes, paradas: [{ count: 10 }] },
 ]
 const rutaParadas = ['c1', 'c2', 'c5', 'c3', 'c4', 'c6'].map((c, i) => ({ id: `rp${i}`, ruta_id: 'r1', cliente_id: c, dia: i < 4 ? hoy : sumar(hoy, 1), orden: (i % 4) + 1 }))
+rutaParadas.push(...[['q1', 'l1', hoy, 1], ['q2', 'l2', hoy, 2], ['q3', 'l3', hoy, 3], ['q4', 'l4', sumar(hoy, 1), 1]].map(([id, c, dia, orden]) => ({ id, ruta_id: 'r5', cliente_id: c, dia, orden })))
+// A quién ver en cada lugar (lo arma el supervisor en «Armar el día»).
+const objetivosParada = [['o1', 'q1', 'm1', 1], ['o2', 'q1', 'm2', 2], ['o3', 'q2', 'm3', 1], ['o4', 'q2', 'm6', 2], ['o5', 'q3', 'm5', 1], ['o6', 'q4', 'm4', 1]]
+  .map(([id, parada_id, medico_id, orden]) => ({ id, parada_id, medico_id, especialidad: null, orden, medico: (({ nombre, especialidad }) => ({ id: medico_id, nombre, especialidad }))(M.map(([i, nombre, especialidad]) => ({ i, nombre, especialidad })).find((x) => x.i === medico_id)) }))
 // ── En vivo y recorrido ──
 const posActual = [
   { vendedor_id: 'hum', lat: -25.2925, lng: -57.6140, fecha_hora: new Date(Date.now() - 2 * 60000).toISOString(), en_jornada: true, bateria_pct: 72, jornada_id: 'j1', precision_m: 8 },
@@ -164,7 +169,7 @@ const tablas = {
   vis_visitas: visitas.filter((v) => deEmpresa(v.vendedor_id)), vis_llegadas: llegadas, vis_no_visitados: noVisitados, vis_jornadas: JORNADA || ['jor', 'ser'].includes(P) ? jornadas : [],
   vis_zonas: EMP === E1 ? zonas : [], vis_rutas: rutas.filter((r) => deEmpresa(r.vendedor_id)), vis_ruta_paradas: rutaParadas,
   vis_posicion_actual: posActual.filter((p) => deEmpresa(p.vendedor_id)), vis_posiciones: [...recorrido, ...recorrido.map((r) => ({ ...r, vendedor_id: 'hug', lat: r.lat + 0.004, lng: r.lng + 0.012 }))],
-  vis_alertas_alta: EMP === E1 ? alertas : [], vis_sync_log: [], vis_parada_objetivos: [], vis_medico_lugares: [],
+  vis_alertas_alta: EMP === E1 ? alertas : [], vis_sync_log: [], vis_parada_objetivos: objetivosParada, vis_medico_lugares: [],
   vis_gps_dispositivos: [{ vendedor_id: 'hum', ultima_recibida_el: new Date(Date.now() - 3 * 60000).toISOString() }, { vendedor_id: 'noe', ultima_recibida_el: new Date(Date.now() - 60000).toISOString() }, { vendedor_id: 'dan', ultima_recibida_el: null }],
   vis_config: [{ id: true, base_lat: -25.3060, base_lng: -57.6200 }],
 }
