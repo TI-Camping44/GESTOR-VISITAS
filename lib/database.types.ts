@@ -154,6 +154,14 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['vis_gps_dispositivos']['Insert']>
         Relationships: []
       }
+      vis_no_visitados: {
+        Row: { id: string; client_uuid: string | null; vendedor_id: string; lugar_id: string; parada_id: string | null; fecha_hora: string; motivo: MotivoNoVisita; observaciones: string | null; lat: number | null; lng: number | null; precision_m: number | null; created_at: string }
+        Insert: { id?: string; client_uuid?: string | null; vendedor_id: string; lugar_id: string; motivo: MotivoNoVisita; observaciones?: string | null }
+        Update: Partial<Database['public']['Tables']['vis_no_visitados']['Insert']>
+        Relationships: [
+          { foreignKeyName: 'vis_no_visitados_lugar_id_fkey'; columns: ['lugar_id']; isOneToOne: false; referencedRelation: 'vis_clientes'; referencedColumns: ['id'] },
+        ]
+      }
       vis_llegadas: {
         Row: { id: string; client_uuid: string | null; vendedor_id: string; lugar_id: string; parada_id: string | null; fecha_hora: string; lat: number | null; lng: number | null; precision_m: number | null; created_at: string }
         Insert: { id?: string; client_uuid?: string | null; vendedor_id: string; lugar_id: string; parada_id?: string | null; fecha_hora?: string; lat?: number | null; lng?: number | null; precision_m?: number | null }
@@ -236,6 +244,8 @@ export type Database = {
       vis_cargar_ruteo: { Args: { p: Json }; Returns: Json }
       vis_marcar_llegada: { Args: { p: Json }; Returns: Json }
       vis_quitar_llegada: { Args: { p_llegada: string }; Returns: Json }
+      vis_marcar_no_visitado: { Args: { p: Json }; Returns: Json }
+      vis_quitar_no_visitado: { Args: { p_id: string }; Returns: Json }
       vis_tablero_detalle: { Args: { p_vendedor: string; p_desde: string; p_hasta: string }; Returns: FilaTableroDetalle[] }
       vis_mi_gps: { Args: { p_nuevo?: boolean }; Returns: Json }
       vis_gps_recibir: { Args: { p_codigo: string; p: Json }; Returns: Json }
@@ -319,8 +329,11 @@ export type FilaRuteoSemana = {
   lat: number | null; lng: number | null; objetivo_id: string | null; medico_id: string | null; medico: string | null; especialidad: string | null
   visita_id: string | null; fecha_hora: string | null; resultado: string | null; medico_visitado: string | null; observaciones: string | null
   proxima_visita: string | null; productos: ProductoVisita[] | null; llegada: string | null; llegadas: string[] | null
+  no_visitado: { hora: string; motivo: MotivoNoVisita; observaciones: string | null }[] | null
 }
 export type LugarDeMedico = { lugar_id: string; nombre: string; horario: string | null }
+/** Por qué no pudo visitar un lugar (visita médica, 0032). */
+export type MotivoNoVisita = 'sin_medicos' | 'sin_acceso' | 'cerrado' | 'licencia' | 'otro'
 export type ProductoVisita = { producto: string; muestras: number }
 
 export type Duplicado = { id: string; razon_social: string; telefono: string | null; ruc: string | null; ciudad: string | null; motivo: string; distancia_m: number | null }

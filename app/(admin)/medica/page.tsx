@@ -3,26 +3,28 @@
 // lugares y visitas a médicos con resultado, productos, muestras y observaciones), y los últimos 7 días.
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, LogIn, LogOut, MapPin, Stethoscope } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CircleSlash, LogIn, LogOut, MapPin, Stethoscope } from 'lucide-react'
 import { Aviso, Boton, Entrada, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { descargarCsv } from '@/lib/csv'
 import { fechaIso, fmtDia, fmtFecha, fmtSoloHora, hoyIso, sumarDias } from '@/lib/fechas'
 import { useParamUrl } from '@/lib/useParamUrl'
 import { cn } from '@/lib/utils'
-import { leerLlegadas, leerVisitas, textoProductos, totalMuestras, useVisitadoras, type Llegada, type VisitaMedica } from '@/components/admin/medica/datos'
+import { leerLlegadas, leerNoVisitados, leerVisitas, textoProductos, totalMuestras, useVisitadoras, type Llegada, type NoVisitado, type VisitaMedica } from '@/components/admin/medica/datos'
+import { textoMotivo } from '@/lib/medicos'
 
 type Jornada = { vendedor_id: string; inicio: string; fin: string | null }
 type Evento =
   | { tipo: 'inicio' | 'fin'; hora: string; vendedor_id: string }
   | { tipo: 'llegada'; hora: string; vendedor_id: string; l: Llegada }
+  | { tipo: 'no_visitado'; hora: string; vendedor_id: string; n: NoVisitado }
   | { tipo: 'visita'; hora: string; vendedor_id: string; v: VisitaMedica }
 
 export default function Actividad() {
   const visitadoras = useVisitadoras()
   const [dia, setDia] = useParamUrl('dia', hoyIso())
   const [quien, setQuien] = useParamUrl('visitadora', '')
-  const [datos, setDatos] = useState<{ visitas: VisitaMedica[]; llegadas: Llegada[]; jornadas: Jornada[] } | null>(null)
+  const [datos, setDatos] = useState<{ visitas: VisitaMedica[]; llegadas: Llegada[]; noVisitados: NoVisitado[]; jornadas: Jornada[] } | null>(null)
   const [semana, setSemana] = useState<{ visitas: VisitaMedica[]; llegadas: Llegada[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const ids = useMemo(() => visitadoras.filter((v) => !quien || v.id === quien).map((v) => v.id), [visitadoras, quien])
@@ -35,13 +37,13 @@ export default function Actividad() {
     const ini = new Date(`${dia}T00:00:00-03:00`).toISOString()
     const fin = new Date(new Date(`${dia}T00:00:00-03:00`).getTime() + 86_400_000).toISOString()
     Promise.all([
-      leerVisitas(ids, dia, dia), leerLlegadas(ids, dia, dia),
+      leerVisitas(ids, dia, dia), leerLlegadas(ids, dia, dia), leerNoVisitados(ids, dia, dia),
       supabaseNavegador().from('vis_jornadas').select('vendedor_id, inicio, fin').in('vendedor_id', ids).gte('inicio', ini).lt('inicio', fin),
-    ]).then(([visitas, llegadas, j]) => {
+    ]).then(([visitas, llegadas, noVisitados, j]) => {
       if (!vivo) return
       setError(null)
-      setDatos({ visitas, llegadas, jornadas: (j.data ?? []) as Jornada[] })
-    }).catch((e: Error) => { if (vivo) { setError(e.message); setDatos({ visitas: [], llegadas: [], jornadas: [] }) } })
+      setDatos({ visitas, llegadas, noVisitados, jornadas: (j.data ?? []) as Jornada[] })
+    }).catch((e: Error) => { if (vivo) { setError(e.message); setDatos({ visitas: [], llegadas: [], noVisitados: [], jornadas: [] }) } })
     return () => { vivo = false }
   }, [ids, dia, visitadoras.length])
 
@@ -62,6 +64,7 @@ export default function Actividad() {
         ...(j.fin ? [{ tipo: 'fin' as const, hora: j.fin, vendedor_id: j.vendedor_id }] : []),
       ]),
       ...datos.llegadas.map((l) => ({ tipo: 'llegada' as const, hora: l.fecha_hora, vendedor_id: l.vendedor_id, l })),
+      ...datos.noVisitados.map((n) => ({ tipo: 'no_visitado' as const, hora: n.fecha_hora, vendedor_id: n.vendedor_id, n })),
       ...datos.visitas.map((v) => ({ tipo: 'visita' as const, hora: v.fecha_hora, vendedor_id: v.vendedor_id, v })),
     ]
     return e.sort((a, b) => a.hora.localeCompare(b.hora))
@@ -73,7 +76,8 @@ export default function Actividad() {
   }, [eventos])
 
   const resumen = datos && {
-    lugares: new Set([...datos.llegadas.map((l) => l.lugar_id), ...datos.visitas.map((v) => v.cliente_id)]).size,
+    lugares: new Set([...datos.llegadas.map((l) => l.lugar_id), ...datos.visitas.map((v) => v.cliente_id), ...datos.noVisitados.map((n) => n.lugar_id)]).size,
+    noVisitados: datos.noVisitados.length,
     medicos: new Set(datos.visitas.map((v) => v.medico_id).filter(Boolean)).size,
     visitas: datos.visitas.length,
     muestras: datos.visitas.reduce((s, v) => s + totalMuestras(v), 0),
@@ -86,13 +90,13 @@ export default function Actividad() {
     descargarCsv(`actividad_medica_${dia}`, [
       { titulo: 'Visitadora', valor: (e: Evento) => nombre(e.vendedor_id) },
       { titulo: 'Hora', valor: (e: Evento) => fmtSoloHora(e.hora) },
-      { titulo: 'Qué', valor: (e: Evento) => (e.tipo === 'inicio' ? 'Inició la jornada' : e.tipo === 'fin' ? 'Terminó la jornada' : e.tipo === 'llegada' ? 'Llegó' : 'Visita') },
-      { titulo: 'Lugar', valor: (e: Evento) => (e.tipo === 'llegada' ? e.l.lugar?.razon_social : e.tipo === 'visita' ? e.v.lugar?.razon_social : '') ?? '' },
+      { titulo: 'Qué', valor: (e: Evento) => (e.tipo === 'inicio' ? 'Inició la jornada' : e.tipo === 'fin' ? 'Terminó la jornada' : e.tipo === 'llegada' ? 'Llegó' : e.tipo === 'no_visitado' ? 'No pudo visitar' : 'Visita') },
+      { titulo: 'Lugar', valor: (e: Evento) => (e.tipo === 'llegada' ? e.l.lugar?.razon_social : e.tipo === 'no_visitado' ? e.n.lugar?.razon_social : e.tipo === 'visita' ? e.v.lugar?.razon_social : '') ?? '' },
       { titulo: 'Médico', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.medico?.nombre ?? '' : '') },
       { titulo: 'Especialidad', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.medico?.especialidad ?? '' : '') },
-      { titulo: 'Resultado', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.resultado?.nombre ?? '' : '') },
+      { titulo: 'Resultado', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.resultado?.nombre ?? '' : e.tipo === 'no_visitado' ? textoMotivo(e.n.motivo) : '') },
       { titulo: 'Productos (muestras)', valor: (e: Evento) => (e.tipo === 'visita' ? textoProductos(e.v) : '') },
-      { titulo: 'Observaciones', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.observaciones ?? '' : '') },
+      { titulo: 'Observaciones', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.observaciones ?? '' : e.tipo === 'no_visitado' ? e.n.observaciones ?? '' : '') },
       { titulo: 'Próxima visita', valor: (e: Evento) => (e.tipo === 'visita' && e.v.proxima_visita ? fmtFecha(e.v.proxima_visita) : '') },
     ], eventos)
   }
@@ -121,8 +125,8 @@ export default function Actividad() {
       </div>
       {error && <Aviso tipo="error">{error}</Aviso>}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {[['Lugares', resumen?.lugares], ['Médicos visitados', resumen?.medicos], ['Visitas', resumen?.visitas], ['Muestras entregadas', resumen?.muestras]].map(([t, n]) => (
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        {[['Lugares', resumen?.lugares], ['Médicos visitados', resumen?.medicos], ['Visitas', resumen?.visitas], ['Muestras entregadas', resumen?.muestras], ['No pudo visitar', resumen?.noVisitados]].map(([t, n]) => (
           <Tarjeta key={t as string}><p className="text-xs uppercase tracking-wide text-tenue">{t}</p><p className="text-2xl font-semibold tabular">{n ?? '–'}</p></Tarjeta>
         ))}
       </div>
@@ -182,6 +186,13 @@ function EventoFila({ e }: { e: Evento }) {
   )
   if (e.tipo === 'llegada') return (
     <li className="relative text-sm">{punto(MapPin, 'bg-green-700 text-white')}{hora}Llegó a <b>{e.l.lugar?.razon_social ?? 'un lugar'}</b></li>
+  )
+  if (e.tipo === 'no_visitado') return (
+    <li className="relative text-sm">
+      {punto(CircleSlash, 'bg-amber-600 text-white')}
+      <p>{hora}<b>No pudo visitar</b> {e.n.lugar?.razon_social ?? 'el lugar'}<span className="text-tenue"> · {textoMotivo(e.n.motivo)}</span></p>
+      {e.n.observaciones && <p className="mt-1 rounded-lg bg-fondo px-3 py-2 break-words"><span className="text-tenue">Observación:</span> {e.n.observaciones}</p>}
+    </li>
   )
   if (e.tipo !== 'visita') return null
   const v = e.v

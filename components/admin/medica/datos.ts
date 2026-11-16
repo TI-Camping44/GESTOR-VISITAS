@@ -17,6 +17,7 @@ export type VisitaMedica = {
   observaciones: string | null; proxima_visita: string | null; productos: ProductoVisita[] | null
   resultado: { nombre: string } | null; lugar: { razon_social: string } | null; medico: { nombre: string; especialidad: string | null } | null
 }
+export type NoVisitado = { id: string; vendedor_id: string; lugar_id: string; fecha_hora: string; motivo: string; observaciones: string | null; lugar: { razon_social: string } | null }
 export type Llegada = { id: string; vendedor_id: string; lugar_id: string; fecha_hora: string; lugar: { razon_social: string } | null }
 
 const desdeIso = (dia: string) => new Date(`${dia}T00:00:00-03:00`).toISOString()
@@ -73,6 +74,17 @@ export async function leerLlegadas(ids: string[], desde: string, hasta: string):
     .in('vendedor_id', ids).gte('fecha_hora', desdeIso(desde)).lt('fecha_hora', fin).order('fecha_hora').limit(5000)
   if (error) throw new Error(mensajeError(error))
   return (data ?? []) as unknown as Llegada[]
+}
+
+/** «No pude visitar este lugar» de las visitadoras entre dos días (inclusive). */
+export async function leerNoVisitados(ids: string[], desde: string, hasta: string): Promise<NoVisitado[]> {
+  if (!ids.length) return []
+  const fin = new Date(new Date(`${hasta}T00:00:00-03:00`).getTime() + 86_400_000).toISOString()
+  const { data, error } = await supabaseNavegador().from('vis_no_visitados')
+    .select('id, vendedor_id, lugar_id, fecha_hora, motivo, observaciones, lugar:vis_clientes!vis_no_visitados_lugar_id_fkey(razon_social)')
+    .in('vendedor_id', ids).gte('fecha_hora', desdeIso(desde)).lt('fecha_hora', fin).order('fecha_hora').limit(5000)
+  if (error) throw new Error(mensajeError(error))
+  return (data ?? []) as unknown as NoVisitado[]
 }
 
 /** Visitas de un médico (historial), más nuevas primero. */

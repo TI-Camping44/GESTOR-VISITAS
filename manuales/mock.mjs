@@ -134,6 +134,8 @@ const recorrido = []
   }
   recorrido.push({ fecha_hora: new Date(t0 + 200 * 60000).toISOString(), lat: pts.at(-1)[0], lng: pts.at(-1)[1], precision_m: 10, bateria_pct: 58, velocidad_kmh: 0, origen: 'traccar', jornada_id: 'j1', vendedor_id: 'hum' })
 }
+// «No pude visitar este lugar» (visita médica): uno de ejemplo a las 12:20 en el Centro Médico La Costa.
+const noVisitados = [{ id: 'nv1', vendedor_id: 'noe', lugar_id: 'l3', parada_id: 'q3', fecha_hora: h('12:20'), created_at: h('12:20'), motivo: 'sin_medicos', observaciones: 'Los médicos estaban en un congreso; vuelven el lunes.', lat: -25.2780, lng: -57.6050, lugar: { razon_social: 'Centro Médico La Costa' } }]
 const jornadas = [
   { id: 'j1', vendedor_id: 'hum', inicio: h('08:00'), fin: null, km_actual: 14.2, km_recorridos: null, cierre_auto: false, inicio_lat: null, inicio_lng: null },
   { id: 'j4', vendedor_id: 'hug', inicio: h('08:00'), fin: null, km_actual: 12.6, km_recorridos: null, cierre_auto: false, inicio_lat: null, inicio_lng: null },
@@ -149,9 +151,9 @@ const alertas = [{ id: 1, cliente_id: 'c4', vendedor_id: 'hum', zona_id: 'z2', d
 const ruteo = [
   ...[['q1', 'l1', 'm1', 1], ['q1', 'l1', 'm2', 1], ['q2', 'l2', 'm3', 2], ['q3', 'l3', 'm5', 3]].map(([pid, lid, mid, orden], i) => {
     const m = medicos.find((x) => x.id === mid); const l = lugares.find((x) => x.id === lid); const v = visitas.find((x) => x.medico_id === mid)
-    return { dia: hoy, orden, parada_id: pid, lugar_id: lid, lugar: l.razon_social, tipo_lugar: l.tipo_lugar, direccion: l.direccion, notas: l.notas, lat: l.lat, lng: l.lng, objetivo_id: `o${i}`, medico_id: mid, medico: m.nombre, especialidad: m.especialidad, visita_id: v?.id ?? null, fecha_hora: v?.fecha_hora ?? null, resultado: v?.resultado?.nombre ?? null, medico_visitado: v ? m.nombre : null, observaciones: v?.observaciones ?? null, proxima_visita: null, productos: v?.productos ?? null, llegada: llegadas.find((x) => x.lugar_id === lid)?.fecha_hora ?? null, llegadas: llegadas.filter((x) => x.lugar_id === lid).map((x) => x.fecha_hora) }
+    return { dia: hoy, orden, parada_id: pid, lugar_id: lid, lugar: l.razon_social, tipo_lugar: l.tipo_lugar, direccion: l.direccion, notas: l.notas, lat: l.lat, lng: l.lng, objetivo_id: `o${i}`, medico_id: mid, medico: m.nombre, especialidad: m.especialidad, visita_id: v?.id ?? null, fecha_hora: v?.fecha_hora ?? null, resultado: v?.resultado?.nombre ?? null, medico_visitado: v ? m.nombre : null, observaciones: v?.observaciones ?? null, proxima_visita: null, productos: v?.productos ?? null, llegada: llegadas.find((x) => x.lugar_id === lid)?.fecha_hora ?? null, llegadas: llegadas.filter((x) => x.lugar_id === lid).map((x) => x.fecha_hora), no_visitado: v ? null : (noVisitados.filter((x) => x.lugar_id === lid).map((x) => ({ hora: x.fecha_hora, motivo: x.motivo, observaciones: x.observaciones })) || null) }
   }),
-  { dia: sumar(hoy, 1), orden: 1, parada_id: 'q4', lugar_id: 'l4', lugar: lnom('l4'), tipo_lugar: 'Consultorio', direccion: 'Brasilia 1240', notas: null, lat: null, lng: null, objetivo_id: 'o9', medico_id: 'm4', medico: 'Dra. Ana Benítez', especialidad: 'Clínica médica', visita_id: null, fecha_hora: null, resultado: null, medico_visitado: null, observaciones: null, proxima_visita: null, productos: null, llegada: null, llegadas: null },
+  { dia: sumar(hoy, 1), orden: 1, parada_id: 'q4', lugar_id: 'l4', lugar: lnom('l4'), tipo_lugar: 'Consultorio', direccion: 'Brasilia 1240', notas: null, lat: null, lng: null, objetivo_id: 'o9', medico_id: 'm4', medico: 'Dra. Ana Benítez', especialidad: 'Clínica médica', visita_id: null, fecha_hora: null, resultado: null, medico_visitado: null, observaciones: null, proxima_visita: null, productos: null, llegada: null, llegadas: null, no_visitado: null },
 ]
 const tablas = {
   vis_vendedores: vendedores.filter((v) => v.empresa_id === EMP),
@@ -159,7 +161,7 @@ const tablas = {
   vis_equipos: EMP === E1 ? [{ id: 'eq1', empresa_id: E1, nombre: 'Mayorista' }] : [],
   vis_clientes_v: [...clientes, ...(EMP === E2 ? lugares : [])], vis_clientes: [...clientes, ...lugares],
   vis_medicos_v: EMP === E2 ? medicos : [], vis_resultados: resultados, vis_productos: EMP === E2 ? productos : [],
-  vis_visitas: visitas.filter((v) => deEmpresa(v.vendedor_id)), vis_llegadas: llegadas, vis_jornadas: JORNADA || ['jor', 'ser'].includes(P) ? jornadas : [],
+  vis_visitas: visitas.filter((v) => deEmpresa(v.vendedor_id)), vis_llegadas: llegadas, vis_no_visitados: noVisitados, vis_jornadas: JORNADA || ['jor', 'ser'].includes(P) ? jornadas : [],
   vis_zonas: EMP === E1 ? zonas : [], vis_rutas: rutas.filter((r) => deEmpresa(r.vendedor_id)), vis_ruta_paradas: rutaParadas,
   vis_posicion_actual: posActual.filter((p) => deEmpresa(p.vendedor_id)), vis_posiciones: [...recorrido, ...recorrido.map((r) => ({ ...r, vendedor_id: 'hug', lat: r.lat + 0.004, lng: r.lng + 0.012 }))],
   vis_alertas_alta: EMP === E1 ? alertas : [], vis_sync_log: [], vis_parada_objetivos: [], vis_medico_lugares: [],
@@ -176,7 +178,9 @@ const RPC = {
   vis_para_ver_como: () => vendedores.filter((v) => v.empresa_id === EMP && v.rol === 'vendedor').map((v) => ({ id: v.id, nombre: v.nombre, tipo: v.tipo, empresa_id: EMP, empresa: perfil.empresa, equipo: EMP === E1 ? 'Mayorista' : null })),
   vis_mi_gps: () => ({ codigo: 'c44a7f3e91b20d4c', ultima_recibida_el: new Date(Date.now() - 2 * 60000).toISOString(), ultima_posicion_el: new Date(Date.now() - 2 * 60000).toISOString() }),
   vis_vecinos_de_otros: () => [], vis_clientes_cercanos: () => [], vis_zona_historial: () => [], vis_sugerir_paradas: () => [],
-  vis_marcar_llegada: () => ({ id: 'a9', parada_id: 'q3' }), vis_iniciar_jornada: () => ({ id: 'j1', inicio: new Date().toISOString() }),
+  vis_marcar_llegada: () => ({ id: 'a9', parada_id: 'q3' }),
+  vis_marcar_no_visitado: (a) => { const p = a.p ?? {}; const n = { id: `nv${noVisitados.length + 1}`, vendedor_id: P, lugar_id: p.lugar_id, parada_id: null, fecha_hora: new Date().toISOString(), created_at: new Date().toISOString(), motivo: p.motivo, observaciones: p.observaciones ?? null, lat: p.lat, lng: p.lng, lugar: { razon_social: (lugares.find((l) => l.id === p.lugar_id) ?? {}).razon_social } }; noVisitados.push(n); return { id: n.id, parada_id: null, duplicada: false } },
+  vis_quitar_no_visitado: (a) => { const i = noVisitados.findIndex((n) => n.id === a.p_id); if (i >= 0) noVisitados.splice(i, 1); return { ok: true } }, vis_iniciar_jornada: () => ({ id: 'j1', inicio: new Date().toISOString() }),
 }
 createServer((req, res) => {
   const url = new URL(req.url, 'http://x')

@@ -1096,4 +1096,32 @@ do $$ declare r jsonb; v_l uuid := (select id from vis_clientes where razon_soci
 end $$;
 reset role;
 
+-- «No pude visitar este lugar» (0032): motivo, observación obligatoria con «otro», se suma a la ruta, ruteo y deshacer.
+select pg_temp.como('vale@vitalica.com.py') \gset
+set role authenticated;
+do $$ declare r jsonb; r2 jsonb; u uuid := gen_random_uuid(); v_l uuid := (select id from vis_clientes where razon_social = 'Consultorio Sin Ruta'); begin
+  begin perform vis_marcar_no_visitado(jsonb_build_object('lugar_id', v_l, 'motivo', 'otro')); assert false, 'con «otro» pide qué pasó';
+  exception when raise_exception then null; end;
+  begin perform vis_marcar_no_visitado(jsonb_build_object('lugar_id', v_l, 'motivo', 'cualquiera')); assert false, 'motivo inválido';
+  exception when raise_exception then null; end;
+  r := vis_marcar_no_visitado(jsonb_build_object('client_uuid', u, 'lugar_id', v_l, 'motivo', 'sin_medicos', 'observaciones', 'Estaban en un congreso'));
+  r2 := vis_marcar_no_visitado(jsonb_build_object('client_uuid', u, 'lugar_id', v_l, 'motivo', 'sin_medicos'));
+  assert (r2 ->> 'duplicada')::boolean and r2 ->> 'id' = r ->> 'id', 'reintento no duplica';
+  assert exists (select 1 from vis_paradas_dia(vis_hoy(), vis_mi_id()) where razon_social = 'Consultorio Sin Ruta'), 'el lugar queda en la ruta de hoy';
+  assert (select no_visitado -> 0 ->> 'motivo' from vis_ruteo_semana(vis_mi_id(), vis_hoy()) where lugar = 'Consultorio Sin Ruta' and dia = vis_hoy() limit 1) = 'sin_medicos', 'el ruteo lo muestra';
+  perform vis_quitar_no_visitado((r ->> 'id')::uuid);
+  assert not exists (select 1 from vis_no_visitados where id = (r ->> 'id')::uuid), 'se puede deshacer';
+  r := vis_marcar_no_visitado(jsonb_build_object('lugar_id', v_l, 'motivo', 'cerrado'));
+end $$;
+reset role;
+-- El supervisor lo ve; otro vendedor no puede marcar en un lugar ajeno.
+select pg_temp.como('sergio@camping44.com.py') \gset
+set role authenticated;
+do $$ begin
+  assert (select count(*) from vis_no_visitados) >= 1, 'el supervisor ve los no visitados de su gente';
+  begin perform vis_marcar_no_visitado(jsonb_build_object('lugar_id', (select id from vis_clientes where razon_social = 'Consultorio Sin Ruta'), 'motivo', 'cerrado')); assert false, 'lugar ajeno';
+  exception when raise_exception then null; end;
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;
