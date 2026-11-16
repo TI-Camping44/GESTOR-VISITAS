@@ -187,7 +187,36 @@ async function paraHoy() {
   })
 }
 
-const grupos = { 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita, 'medico-ausente': medicoAusente, 'para-hoy': paraHoy }
-for (const g of grupo === 'todos' ? Object.keys(grupos).filter((x) => !['no-visita', 'medico-ausente', 'para-hoy'].includes(x)) : [grupo]) await grupos[g]()
+// TI-0115: ciclos de rutas, «No pude visitarlo» en la venta y cumplimiento por ruta (Vitalica).
+async function ciclos() {
+  await conMock('ser', false, async () => {
+    const p = await contexto(false)
+    await ir(p, '/rutas', 4000)
+    const ciclo = p.getByRole('heading', { name: 'Ciclos de rutas' })
+    await ciclo.evaluate((e) => e.scrollIntoView({ block: 'start' })); await p.evaluate(() => window.scrollBy(0, -20)); await espera(400); await foto(p, 'c-ciclo')
+    await p.getByRole('button', { name: 'Nuevo ciclo' }).click(); await espera(300)
+    await p.selectOption('#ci-vend', { label: 'Hugo Jara' }); await p.locator('#ci-nombre').fill('Ciclo Mayorista – Hugo'); await p.selectOption('#ci-semanas', '4'); await espera(300)
+    await ciclo.evaluate((e) => e.scrollIntoView({ block: 'start' })); await p.evaluate(() => window.scrollBy(0, -20)); await espera(300); await foto(p, 'c-nuevo')
+    await ir(p, '/rutas/rm1', 5000); await foto(p, 'c-modelo')
+    await ir(p, '/rutas/rg1', 5000); await foto(p, 'c-generada')
+    await ir(p, '/tablero', 4500); await foto(p, 'c-tablero')
+    await p.locator('tbody button').first().click(); await espera(1800); await foto(p, 'c-detalle')
+  })
+  await conMock('hug', true, async () => {
+    const p = await contexto(true)
+    await ir(p, '/hoy', 3500)
+    const b = p.getByRole('button', { name: 'No pude visitarlo' }).last()
+    await b.evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'c-hoy')
+    await b.click(); await espera(400)
+    await p.getByText('No estaba el encargado').first().click(); await espera(200)
+    await p.locator('textarea').last().fill('El encargado vuelve el jueves.'); await espera(300)
+    await p.getByText('¿Por qué no pudiste visitar').first().evaluate((e) => e.scrollIntoView({ block: 'start' })); await p.evaluate(() => window.scrollBy(0, -120)); await espera(300); await foto(p, 'c-motivo')
+    await p.getByRole('button', { name: /^Guardar|Confirmar/ }).last().click(); await p.getByText('Tu supervisor ya lo ve.').first().waitFor({ timeout: 20000 }); await espera(400)
+    await p.getByText('Tu supervisor ya lo ve.').first().evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'c-guardado')
+  })
+}
+
+const grupos = { ciclos, 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita, 'medico-ausente': medicoAusente, 'para-hoy': paraHoy }
+for (const g of grupo === 'todos' ? Object.keys(grupos).filter((x) => !['no-visita', 'medico-ausente', 'para-hoy', 'ciclos'].includes(x)) : [grupo]) await grupos[g]()
 await browser.close()
 if (errores.length) console.log('ERRORES:\n' + [...new Set(errores)].join('\n'))
