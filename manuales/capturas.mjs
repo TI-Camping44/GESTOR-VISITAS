@@ -157,7 +157,21 @@ async function noVisita() {
   })
 }
 
-const grupos = { 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita }
-for (const g of grupo === 'todos' ? Object.keys(grupos).filter((x) => x !== 'no-visita') : [grupo]) await grupos[g]()
+async function medicoAusente() {
+  await conMock('noe', true, async () => {
+    const p = await contexto(true)
+    await p.context().setGeolocation({ latitude: -25.3011, longitude: -57.5961, accuracy: 9 })
+    await ir(p, '/visita?c=l1&m=m2', 3200)
+    await p.selectOption('#resultado', { label: 'No estaba / no atendió' }); await p.locator('#obs').fill('Está de vacaciones hasta el 30. Volver en diciembre.'); await espera(300)
+    await p.locator('#obs').evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'a-no-estaba')
+    await ir(p, '/visita?c=l1&m=m2', 3200)
+    await p.selectOption('#resultado', { label: 'Ya no atiende acá' }); await p.locator('#obs').fill('Se mudó al Sanatorio Italiano, atiende martes y jueves de tarde.'); await espera(300)
+    await p.locator('#resultado').evaluate((e) => e.scrollIntoView({ block: 'start' })); await p.evaluate(() => window.scrollBy(0, -90)); await espera(300); await foto(p, 'a-ya-no-atiende')
+    await p.getByRole('button', { name: 'Guardar visita' }).click(); await p.getByText('ya no figura en').waitFor({ timeout: 20000 }); await espera(500); await foto(p, 'a-guardado')
+  })
+}
+
+const grupos = { 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita, 'medico-ausente': medicoAusente }
+for (const g of grupo === 'todos' ? Object.keys(grupos).filter((x) => !['no-visita', 'medico-ausente'].includes(x)) : [grupo]) await grupos[g]()
 await browser.close()
 if (errores.length) console.log('ERRORES:\n' + [...new Set(errores)].join('\n'))

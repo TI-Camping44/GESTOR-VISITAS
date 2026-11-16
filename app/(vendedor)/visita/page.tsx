@@ -142,6 +142,10 @@ export default function RegistrarVisita() {
   const resultadoElegido = resultados.find((r) => String(r.id) === resultadoId)
   // «No le interesa»: el cliente queda en naranja; el motivo es obligatorio (lo ve el supervisor).
   const noLeInteresa = resultadoElegido?.nombre === 'No le interesa'
+  // «Ya no atiende acá»: el médico sale de este lugar al guardar (no se borra; sus visitas quedan).
+  const yaNoAtiende = resultadoElegido?.nombre === 'Ya no atiende acá'
+  // Sin ver al médico no hay productos que presentar.
+  const sinPresentar = yaNoAtiende || ['No estaba / no atendió', 'Sin acceso'].includes(resultadoElegido?.nombre ?? '')
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault()
@@ -161,7 +165,7 @@ export default function RegistrarVisita() {
       resultado_id: Number(resultadoId), hizo_pedido: hizoPedido || !!resultadoElegido?.es_venta,
       hizo_cobranza: cobranza, monto_cobrado_gs: cobranza ? Math.round(Number(monto)) : null,
       observaciones: obs.trim() || null, proxima_visita: proxima || null, fotos: [] as string[],
-      medico_id: medicoId, productos: Object.entries(muestras).map(([producto, n]): ProductoVisita => ({ producto, muestras: n ?? 0 })),
+      medico_id: medicoId, productos: sinPresentar ? [] : Object.entries(muestras).map(([producto, n]): ProductoVisita => ({ producto, muestras: n ?? 0 })),
     }
     const sinUbicacion = cliente.lat == null && gps.precisionOk
 
@@ -217,6 +221,9 @@ export default function RegistrarVisita() {
           {fin.tipo === 'online' ? `Visita a ${medico ? `${medico.nombre} (${cliente.razon_social})` : cliente.razon_social} registrada.` : 'Sin señal: la visita quedó guardada en el celular y se sube sola cuando vuelva la conexión.'}
           {fin.tipo === 'offline' && foto && ' La foto no se guardó (sin señal).'}
         </Aviso>
+        {yaNoAtiende && medico && (
+          <Aviso tipo="info">{medico.nombre} ya no figura en {cliente.razon_social}{fin.tipo === 'offline' ? ' (cuando se suba la visita)' : ''}. Si sabés dónde atiende ahora, en <b>Médicos</b> → <b>Editar</b> sumale el lugar nuevo.</Aviso>
+        )}
         {preguntar && (
           <Tarjeta className="flex flex-col gap-3">
             <p className="font-medium">
@@ -266,9 +273,12 @@ export default function RegistrarVisita() {
           {opciones.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
         </Selector>
         {errCampo.mensaje('resultado')}
+        {yaNoAtiende && medico && (
+          <Aviso tipo="alerta" className="mt-2">Al guardar, <b>{medico.nombre}</b> sale de <b>{cliente.razon_social}</b>. No se borra: queda en sus otros lugares y con sus visitas. Si sabés a dónde se fue, escribilo en Observaciones.</Aviso>
+        )}
       </div>
 
-      {tipoResultado === 'medica' && productos.length > 0 && (
+      {tipoResultado === 'medica' && !sinPresentar && productos.length > 0 && (
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 text-sm font-medium">Productos presentados y muestras</legend>
           {/* La lista viene de Odoo y es larga: buscador, primero lo marcado, y los primeros si no se busca. */}
@@ -318,7 +328,7 @@ export default function RegistrarVisita() {
 
       <div>
         <Etiqueta htmlFor="obs">{noLeInteresa ? 'Observaciones: ¿por qué no le interesa? *' : 'Observaciones'}</Etiqueta>
-        <AreaTexto id="obs" {...errCampo.campo('obs')} value={obs} onChange={(e) => setObs(e.target.value)} placeholder={noLeInteresa ? 'Ej.: compra a otro proveedor, cerró el rubro, precios…' : 'Qué pasó, qué necesita, a quién ver la próxima vez…'} />
+        <AreaTexto id="obs" {...errCampo.campo('obs')} value={obs} onChange={(e) => setObs(e.target.value)} placeholder={noLeInteresa ? 'Ej.: compra a otro proveedor, cerró el rubro, precios…' : yaNoAtiende ? 'Ej.: se mudó al Sanatorio Italiano, atiende martes y jueves…' : 'Qué pasó, qué necesita, a quién ver la próxima vez…'} />
         {errCampo.mensaje('obs')}
         {noLeInteresa && <p className="mt-1 text-xs text-tenue">El cliente queda en naranja («No le interesa») hasta que una próxima visita tenga otro resultado o vuelva a comprar.</p>}
       </div>
