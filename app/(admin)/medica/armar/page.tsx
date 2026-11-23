@@ -17,7 +17,7 @@ import { useParamUrl } from '@/lib/useParamUrl'
 import { cn, mensajeError } from '@/lib/utils'
 import type { Medico } from '@/lib/database.types'
 
-type Parada = { id: string; ruta_id: string; cliente_id: string; dia: string; orden: number }
+type Parada = { id: string; ruta_id: string; cliente_id: string; dia: string; orden: number; hora_pactada: string | null }
 type Objetivo = { id: string; parada_id: string; medico_id: string | null; especialidad: string | null; orden: number }
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
@@ -46,7 +46,7 @@ export default function ArmarDia() {
     if (e1) return setError(mensajeError(e1))
     const ids = (rutas ?? []).map((r) => r.id)
     if (!ids.length) { setParadas([]); setObjetivos([]); return }
-    const { data: ps, error: e2 } = await sb.from('vis_ruta_paradas').select('id, ruta_id, cliente_id, dia, orden').in('ruta_id', ids).order('dia').order('orden')
+    const { data: ps, error: e2 } = await sb.from('vis_ruta_paradas').select('id, ruta_id, cliente_id, dia, orden, hora_pactada').in('ruta_id', ids).order('dia').order('orden')
     if (e2) return setError(mensajeError(e2))
     setParadas((ps ?? []) as Parada[])
     const pids = (ps ?? []).map((p) => p.id)
@@ -90,10 +90,10 @@ export default function ArmarDia() {
     return nueva.id
   }
 
-  async function agregarLugar(lugarId: string, d = dia, orden?: number) {
+  async function agregarLugar(lugarId: string, d = dia, orden?: number, hora: string | null = null) {
     const ruta = await rutaDeLaSemana()
     const o = orden ?? Math.max(0, ...(paradas ?? []).filter((p) => p.dia === d).map((p) => p.orden)) + 1
-    return sb.from('vis_ruta_paradas').insert({ ruta_id: ruta, cliente_id: lugarId, dia: d, orden: o }).select('id').single()
+    return sb.from('vis_ruta_paradas').insert({ ruta_id: ruta, cliente_id: lugarId, dia: d, orden: o, hora_pactada: hora }).select('id').single()
   }
   // Agrega médicos (o una especialidad a buscar) al final de la lista del lugar, en el orden dado.
   async function agregarObjetivos(paradaId: string, items: { medico_id: string | null; especialidad: string | null }[]) {
@@ -119,7 +119,7 @@ export default function ArmarDia() {
       const ya = (paradas ?? []).find((x) => x.dia === destino && x.cliente_id === p.cliente_id)
       let id = ya?.id
       if (!id) {
-        const r = await agregarLugar(p.cliente_id, destino, ++orden)
+        const r = await agregarLugar(p.cliente_id, destino, ++orden, p.hora_pactada)
         if (r.error) return r
         id = r.data.id
       }
@@ -209,6 +209,7 @@ export default function ArmarDia() {
                     p={p} i={i} total={delDia.length} nombre={nombreLugar(p.cliente_id)} ocupado={ocupado}
                     objetivos={objetivosDe(p.id)} medicosLugar={medicosDe(p.cliente_id)} todos={medicos ?? []} visitadora={quien}
                     onMover={(delta) => void hacer(async () => mover('vis_ruta_paradas', delDia, i, delta))}
+                    onHora={(hora) => { if ((p.hora_pactada?.slice(0, 5) ?? '') !== hora) void hacer(async () => sb.from('vis_ruta_paradas').update({ hora_pactada: hora || null }).eq('id', p.id)) }}
                     onQuitar={() => { if (confirm(`¿Sacar «${nombreLugar(p.cliente_id)}» del ${fmtDia(dia)}?`)) void hacer(() => quitarParada(p)) }}
                     onAgregar={(medicoId, especialidad) => void hacer(async () => agregarObjetivos(p.id, [{ medico_id: medicoId, especialidad }]))}
                     onAgregarTodos={(ids) => void hacer(async () => agregarObjetivos(p.id, ids.map((id) => ({ medico_id: id, especialidad: null }))))}
@@ -234,9 +235,9 @@ export default function ArmarDia() {
   )
 }
 
-function TarjetaParada({ p, i, total, nombre, ocupado, objetivos, medicosLugar, todos, onMover, onQuitar, onAgregar, onAgregarTodos, onMoverObjetivo, onQuitarObjetivo, onCrearMedico }: {
+function TarjetaParada({ p, i, total, nombre, ocupado, objetivos, medicosLugar, todos, onMover, onHora, onQuitar, onAgregar, onAgregarTodos, onMoverObjetivo, onQuitarObjetivo, onCrearMedico }: {
   p: Parada; i: number; total: number; nombre: string; ocupado: boolean; objetivos: Objetivo[]; medicosLugar: Medico[]; todos: Medico[]; visitadora: string
-  onMover: (delta: number) => void; onQuitar: () => void; onAgregar: (medicoId: string | null, especialidad: string | null) => void; onAgregarTodos: (ids: string[]) => void
+  onMover: (delta: number) => void; onHora: (hora: string) => void; onQuitar: () => void; onAgregar: (medicoId: string | null, especialidad: string | null) => void; onAgregarTodos: (ids: string[]) => void
   onMoverObjetivo: (lista: Objetivo[], j: number, delta: number) => void; onQuitarObjetivo: (o: Objetivo) => void
   onCrearMedico: (d: { nombre: string; especialidad: string; horario: string }) => void
 }) {
@@ -256,6 +257,12 @@ function TarjetaParada({ p, i, total, nombre, ocupado, objetivos, medicosLugar, 
           <p className="font-semibold">{nombre}</p>
           <p className="text-xs text-tenue">{objetivos.length ? `${objetivos.length} para ver` : 'Sin médicos elegidos: la visitadora ve todos los del lugar'}</p>
         </div>
+        {/* Hora pactada: la ve la visitadora en Hoy (en vez de la aproximada) y el panel la compara con la llegada. */}
+        <label className="flex shrink-0 flex-col text-xs text-tenue">Hora pactada
+          <input type="time" defaultValue={p.hora_pactada?.slice(0, 5) ?? ''} key={p.hora_pactada ?? ''} disabled={ocupado}
+            onBlur={(e) => onHora(e.target.value)} aria-label={`Hora pactada en ${nombre}`}
+            className="mt-0.5 min-h-8 w-28 rounded-md border border-borde bg-superficie px-1.5 text-sm text-tinta" />
+        </label>
         <button type="button" className={btn} aria-label={`Subir ${nombre}`} disabled={ocupado || i === 0} onClick={() => onMover(-1)}><ArrowUp className="size-4" aria-hidden /></button>
         <button type="button" className={btn} aria-label={`Bajar ${nombre}`} disabled={ocupado || i === total - 1} onClick={() => onMover(1)}><ArrowDown className="size-4" aria-hidden /></button>
         <button type="button" className={cn(btn, 'text-red-600 dark:text-red-400')} aria-label={`Sacar ${nombre} del día`} disabled={ocupado} onClick={onQuitar}><Trash2 className="size-4" aria-hidden /></button>
