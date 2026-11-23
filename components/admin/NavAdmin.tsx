@@ -14,6 +14,7 @@ export function NavAdmin({ rol, altas = 0 }: { rol: Rol; altas?: number }) {
     { href: '/ver-como', texto: 'Ver la app como…', Icono: Smartphone },
   ]
   const items = modo === 'medica' ? [
+    { href: '/medica/tablero', texto: 'Tablero', Icono: BarChart3 },
     { href: '/medica', texto: 'Actividad', Icono: ClipboardList },
     { href: '/medica/armar', texto: 'Armar el día', Icono: ListOrdered },
     { href: '/medica/medicos', texto: 'Médicos', Icono: Stethoscope },

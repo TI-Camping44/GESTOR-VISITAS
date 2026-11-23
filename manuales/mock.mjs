@@ -67,6 +67,8 @@ const vis = (id, vend, cli, hhmm, dia, extra = {}) => ({ id, vendedor_id: vend, 
 const visitas = [
   vis('vh1', 'hum', 'c1', '08:45', hoy, { hizo_pedido: true, lat: -25.2996, lng: -57.6108, observaciones: 'Pidió 2 cajas de linternas y 10 conservadoras.', resultado: { nombre: 'Pedido' }, cliente: { razon_social: 'Ferretería San Roque', ciudad: 'Asunción' }, zona: { nombre: 'Asunción Centro' } }),
   vis('vh2', 'hum', 'c2', '09:40', hoy, { lat: -25.2931, lng: -57.5932, observaciones: 'Quiere cotización de carpas para enero.', resultado: { nombre: 'Cotización' }, cliente: { razon_social: 'Comercial El Sol', ciudad: 'Asunción' }, zona: { nombre: 'Asunción Centro' } }),
+  vis('vu1', 'hug', 'c11', '08:50', hoy, { hizo_pedido: true, ruta_parada_id: 'u1', observaciones: 'Pidió reposición de vitaminas y proteína.', proxima_visita: sumar(hoy, 14), resultado: { nombre: 'Pedido' }, cliente: { razon_social: 'Farmacia Vida', ciudad: 'Asunción' } }),
+  vis('vu2', 'hug', 'c13x', '11:20', hoy, { ruta_parada_id: null, observaciones: 'Prospecto: le interesa la línea deportiva, pidió lista de precios.', resultado: { nombre: 'Cotización' }, cliente: { razon_social: 'Gimnasio Fuerza Total', ciudad: 'Asunción' } }),
   vis('vn1', 'noe', 'l1', '09:35', hoy, { medico_id: 'm1', observaciones: 'Pidió más muestras del antiinflamatorio para la semana que viene.', productos: [{ producto: 'Artrodol 50 mg', muestras: 4 }, { producto: 'Vitalcal D', muestras: 0 }], resultado: { nombre: 'Presentó productos' }, lugar: { razon_social: lnom('l1') }, medico: med('m1'), cliente: { razon_social: lnom('l1') } }),
   vis('vn2', 'noe', 'l2', '11:10', hoy, { medico_id: 'm3', productos: [{ producto: 'Gastrovit', muestras: 6 }], resultado: { nombre: 'Dejó muestras' }, lugar: { razon_social: lnom('l2') }, medico: med('m3'), cliente: { razon_social: lnom('l2') } }),
 ]
@@ -89,7 +91,7 @@ for (const v of vendedores.filter((x) => x.rol === 'vendedor' && x.empresa_id ==
   const d = sumar(lunes, i); if (d > hoy) continue
   const base = { hum: [8, 7, 9, 6, 2], dan: [6, 5, 8, 7, 1], ant: [9, 8, 4, 8, 0], hug: [5, 6, 4, 7, 2], noe: [6, 7, 5, 8, 2] }[v.id] ?? [5, 5, 5, 5, 5]
   const r = d === hoy ? (v.id === 'hum' ? 2 : v.id === 'noe' ? 2 : 1) : base[i] ?? 6
-  tablero.push({ vendedor_id: v.id, vendedor: v.nombre, meta_diaria: 8, meta_semanal: 40, dia: d, planificadas: 8, realizadas: r, en_ruta: r - 1, fuera_de_ruta: r ? 1 : 0, con_pedido: Math.floor(r / 3) })
+  tablero.push({ vendedor_id: v.id, vendedor: v.nombre, meta_diaria: 8, meta_semanal: 40, dia: d, planificadas: 8, realizadas: r, en_ruta: r - 1, fuera_de_ruta: r ? 1 : 0, con_pedido: Math.floor(r / 3), no_concretadas: v.id === 'hug' ? (i === 0 ? 2 : i === 1 ? 1 : 0) : 0 })
 }
 const reporte = vendedores.filter((x) => x.rol === 'vendedor' && x.empresa_id === EMP).map((v, i) => ({ vendedor_id: v.id, vendedor: v.nombre, meta_diaria: 8, meta_semanal: 40, dias_con_jornada: 5, horas_jornada: 38.5 - i * 3, km: 186.4 - i * 22, visitas: 32 - i * 4, dias_con_visitas: 5, clientes_distintos: 28 - i * 3, con_pedido: 11 - i * 2, cobranzas: 4, cobrado_gs: 6800000 - i * 1200000, fuera_de_ruta: 3 + i, planificadas: 40, paradas_visitadas: 29 - i * 4, prospectos_nuevos: 2, inactivos_visitados: 3, primera_visita_prom: '08:12', ultima_visita_prom: '16:40' }))
 const detalle = [
@@ -97,6 +99,11 @@ const detalle = [
   { tipo: 'visita', dia: hoy, fecha_hora: h('09:40'), cliente_id: 'c2', razon_social: 'Comercial El Sol', ciudad: 'Asunción', estado: 'activo', resultado: 'Cotización', observaciones: 'Quiere cotización de carpas para enero.', motivo_no_interesa: null, en_ruta: true, ultima_anterior: h('10:00', sumar(hoy, -22)), zona: 'Asunción Centro' },
   { tipo: 'ruta', dia: hoy, fecha_hora: null, cliente_id: 'c5', razon_social: 'Pinturería Central', ciudad: 'Asunción', estado: 'activo', resultado: null, observaciones: null, motivo_no_interesa: null, en_ruta: true, ultima_anterior: h('10:00', sumar(hoy, -30)), zona: 'Asunción Centro' },
   { tipo: 'zona', dia: null, fecha_hora: null, cliente_id: 'c6', razon_social: 'Supermercado Don Pedro', ciudad: 'Fernando de la Mora', estado: 'no_interesado', resultado: null, observaciones: null, motivo_no_interesa: null, en_ruta: false, ultima_anterior: h('10:00', sumar(hoy, -40)), zona: 'Asunción Centro' },
+]
+const detalleVit = [
+  { tipo: 'visita', dia: hoy, fecha_hora: h('08:50'), cliente_id: 'c11', razon_social: 'Farmacia Vida', ciudad: 'Asunción', estado: 'activo', resultado: 'Pedido', observaciones: 'Pidió reposición de vitaminas.', motivo_no_interesa: null, en_ruta: true, ultima_anterior: h('10:00', sumar(hoy, -28)), zona: 'Z1 - Asunción' },
+  { tipo: 'ruta', dia: hoy, fecha_hora: h('10:05'), cliente_id: 'c12', razon_social: 'Farmacia Central Luque', ciudad: 'Luque', estado: 'activo', resultado: 'No concretada: Encargado ausente', observaciones: 'El encargado vuelve el jueves.', motivo_no_interesa: null, en_ruta: true, ultima_anterior: h('10:00', sumar(hoy, -28)), zona: 'Z1 - Asunción' },
+  { tipo: 'ruta', dia: hoy, fecha_hora: null, cliente_id: 'c13', razon_social: 'Farmacia San Jorge', ciudad: 'Asunción', estado: 'activo', resultado: null, observaciones: null, motivo_no_interesa: null, en_ruta: true, ultima_anterior: h('10:00', sumar(hoy, -28)), zona: 'Z1 - Asunción' },
 ]
 // ── Rutas y zonas ──
 const zonas = [
@@ -110,6 +117,30 @@ const rutas = [
   { id: 'r3', nombre: 'Central Este – Sem', estado: 'borrador', vendedor_id: 'ant', zona_id: 'z2', semana_inicio: lunes, notas: null, creado_por: 'jor', created_at: lunes, paradas: [{ count: 9 }] },
   { id: 'r5', nombre: 'Visita médica – Sem – Noelia', estado: 'publicada', vendedor_id: 'noe', zona_id: null, semana_inicio: lunes, notas: null, creado_por: 'ser', created_at: lunes, paradas: [{ count: 3 }] },
   { id: 'r4', nombre: 'Farmacias Asunción', estado: 'publicada', vendedor_id: 'hug', zona_id: null, semana_inicio: lunes, notas: null, creado_por: 'ser', created_at: lunes, paradas: [{ count: 10 }] },
+]
+// Vitalica, venta mayorista (TI-0115): zonas, un ciclo de 4 semanas de Hugo que empezó hace 4 semanas
+// (las 4 semanas modelo ya pasaron; esta semana y las 2 siguientes están generadas).
+const zonasVit = [
+  { id: 'zv1', nombre: 'Z1 - Asunción', color: '#2563eb', ciudades: ['Asunción'], ciudades_alias: [], semanas_mes: [1, 3], vendedor_id: 'hug', responsable: 'Hugo', frecuencia: 'Quincenal', activo: true, empresa_id: E2, equipo_id: null, created_at: '2026-10-01', poligono: null, clientes: [{ count: 18 }] },
+  { id: 'zv2', nombre: 'Z2 - Central', color: '#16a34a', ciudades: ['Luque', 'San Lorenzo', 'Fernando de la Mora'], ciudades_alias: [], semanas_mes: [2, 4], vendedor_id: 'hug', responsable: 'Hugo', frecuencia: 'Quincenal', activo: true, empresa_id: E2, equipo_id: null, created_at: '2026-10-01', poligono: null, clientes: [{ count: 17 }] },
+]
+const inicioCiclo = sumar(lunes, -28)
+const ciclos = [{ id: 'ci1', vendedor_id: 'hug', nombre: 'Ciclo Mayorista – Hugo', inicio: inicioCiclo, semanas: 4, activo: true, creado_por: 'ser', created_at: inicioCiclo }]
+const semIso = (d) => { const t = new Date(`${d}T12:00:00Z`); t.setUTCDate(t.getUTCDate() + 3 - ((t.getUTCDay() + 6) % 7)); const a = new Date(Date.UTC(t.getUTCFullYear(), 0, 4)); return 1 + Math.round(((t - a) / 86400000 - 3 + ((a.getUTCDay() + 6) % 7)) / 7) }
+const zonaDeSemana = (k) => (k % 2 ? 'zv1' : 'zv2')
+const nomZ = (z) => (z === 'zv1' ? 'Asunción' : 'Central')
+for (let k = 1; k <= 4; k++) {
+  const l = sumar(inicioCiclo, 7 * (k - 1))
+  rutas.push({ id: `rm${k}`, nombre: `Ciclo Mayorista – Hugo · ${nomZ(zonaDeSemana(k))} · S${k} – Sem ${semIso(l)} – Hugo`, estado: 'publicada', vendedor_id: 'hug', zona_id: zonaDeSemana(k), semana_inicio: l, notas: null, creado_por: 'ser', created_at: l, ciclo_id: 'ci1', ciclo_semana: k, ciclo_modelo_id: null, paradas: [{ count: k % 2 ? 12 : 10 }] })
+}
+for (let n = 0; n < 3; n++) {
+  const l = sumar(lunes, 7 * n); const k = n + 1
+  rutas.push({ id: `rg${k}`, nombre: `Ciclo Mayorista – Hugo · ${nomZ(zonaDeSemana(k))} · S${k} – Sem ${semIso(l)} – Hugo`, estado: 'publicada', vendedor_id: 'hug', zona_id: zonaDeSemana(k), semana_inicio: l, notas: null, creado_por: null, created_at: l, ciclo_id: 'ci1', ciclo_semana: k, ciclo_modelo_id: `rm${k}`, paradas: [{ count: k % 2 ? 12 : 10 }] })
+}
+const tableroRutas = [
+  { ruta_id: 'rg1', ruta: rutas.find((r) => r.id === 'rg1').nombre, vendedor_id: 'hug', vendedor: 'Hugo Jara', zona: 'Z1 - Asunción', ciclo: 'Ciclo Mayorista – Hugo', ciclo_semana: 1, ciclo_semanas: 4, planificadas: 12, realizadas: 7, no_concretadas: 2, pendientes: 2, vencidas: 1 },
+  { ruta_id: 'r4', ruta: 'Farmacias Asunción', vendedor_id: 'hug', vendedor: 'Hugo Jara', zona: null, ciclo: null, ciclo_semana: null, ciclo_semanas: null, planificadas: 10, realizadas: 6, no_concretadas: 1, pendientes: 3, vencidas: 0 },
+  { ruta_id: 'r1', ruta: rutas[0].nombre, vendedor_id: 'hum', vendedor: 'Humberto Benítez', zona: 'Asunción Centro', ciclo: null, ciclo_semana: null, ciclo_semanas: null, planificadas: 24, realizadas: 18, no_concretadas: 1, pendientes: 4, vencidas: 1 },
 ]
 const rutaParadas = ['c1', 'c2', 'c5', 'c3', 'c4', 'c6'].map((c, i) => ({ id: `rp${i}`, ruta_id: 'r1', cliente_id: c, dia: i < 4 ? hoy : sumar(hoy, 1), orden: (i % 4) + 1 }))
 rutaParadas.push(...[['q1', 'l1', hoy, 1], ['q2', 'l2', hoy, 2], ['q3', 'l3', hoy, 3], ['q4', 'l4', sumar(hoy, 1), 1]].map(([id, c, dia, orden]) => ({ id, ruta_id: 'r5', cliente_id: c, dia, orden })))
@@ -140,7 +171,7 @@ const recorrido = []
   recorrido.push({ fecha_hora: new Date(t0 + 200 * 60000).toISOString(), lat: pts.at(-1)[0], lng: pts.at(-1)[1], precision_m: 10, bateria_pct: 58, velocidad_kmh: 0, origen: 'traccar', jornada_id: 'j1', vendedor_id: 'hum' })
 }
 // «No pude visitar este lugar» (visita médica): uno de ejemplo a las 12:20 en el Centro Médico La Costa.
-const noVisitados = [{ id: 'nv1', vendedor_id: 'noe', lugar_id: 'l3', parada_id: 'q3', fecha_hora: h('12:20'), created_at: h('12:20'), motivo: 'sin_medicos', observaciones: 'Los médicos estaban en un congreso; vuelven el lunes.', lat: -25.2780, lng: -57.6050, lugar: { razon_social: 'Centro Médico La Costa' } }]
+const noVisitados = [{ id: 'nvh', vendedor_id: 'hug', lugar_id: 'c12', parada_id: 'u2', fecha_hora: h('10:05'), created_at: h('10:05'), motivo: 'encargado_ausente', observaciones: 'El encargado vuelve el jueves.', lat: null, lng: null, cliente: { razon_social: 'Farmacia Central Luque' }, lugar: { razon_social: 'Farmacia Central Luque' } }, { id: 'nv1', vendedor_id: 'noe', lugar_id: 'l3', parada_id: 'q3', fecha_hora: h('12:20'), created_at: h('12:20'), motivo: 'sin_medicos', observaciones: 'Los médicos estaban en un congreso; vuelven el lunes.', lat: -25.2780, lng: -57.6050, lugar: { razon_social: 'Centro Médico La Costa' } }]
 const jornadas = [
   { id: 'j1', vendedor_id: 'hum', inicio: h('08:00'), fin: null, km_actual: 14.2, km_recorridos: null, cierre_auto: false, inicio_lat: null, inicio_lng: null },
   { id: 'j4', vendedor_id: 'hug', inicio: h('08:00'), fin: null, km_actual: 12.6, km_recorridos: null, cierre_auto: false, inicio_lat: null, inicio_lng: null },
@@ -167,7 +198,7 @@ const tablas = {
   vis_clientes_v: [...clientes, ...(EMP === E2 ? lugares : [])], vis_clientes: [...clientes, ...lugares],
   vis_medicos_v: EMP === E2 ? medicos : [], vis_resultados: resultados, vis_productos: EMP === E2 ? productos : [],
   vis_visitas: visitas.filter((v) => deEmpresa(v.vendedor_id)), vis_llegadas: llegadas, vis_no_visitados: noVisitados, vis_jornadas: JORNADA || ['jor', 'ser'].includes(P) ? jornadas : [],
-  vis_zonas: EMP === E1 ? zonas : [], vis_rutas: rutas.filter((r) => deEmpresa(r.vendedor_id)), vis_ruta_paradas: rutaParadas,
+  vis_zonas: EMP === E1 ? zonas : zonasVit, vis_ciclos: EMP === E2 ? ciclos : [], vis_rutas: rutas.filter((r) => deEmpresa(r.vendedor_id)), vis_ruta_paradas: rutaParadas,
   vis_posicion_actual: posActual.filter((p) => deEmpresa(p.vendedor_id)), vis_posiciones: [...recorrido, ...recorrido.map((r) => ({ ...r, vendedor_id: 'hug', lat: r.lat + 0.004, lng: r.lng + 0.012 }))],
   vis_alertas_alta: EMP === E1 ? alertas : [], vis_sync_log: [], vis_parada_objetivos: objetivosParada, vis_medico_lugares: [],
   vis_gps_dispositivos: [{ vendedor_id: 'hum', ultima_recibida_el: new Date(Date.now() - 3 * 60000).toISOString() }, { vendedor_id: 'noe', ultima_recibida_el: new Date(Date.now() - 60000).toISOString() }, { vendedor_id: 'dan', ultima_recibida_el: null }],
@@ -179,7 +210,8 @@ const RPC = {
   vis_reporte_vendedores: () => reporte, vis_reporte_resultados: () => [{ resultado: 'Pedido', es_venta: true, visitas: 41 }, { resultado: 'Cotización', es_venta: false, visitas: 23 }, { resultado: 'Volver otro día', es_venta: false, visitas: 18 }, { resultado: 'No le interesa', es_venta: false, visitas: 5 }],
   vis_reporte_zonas: () => zonas.map((z, i) => ({ zona_id: z.id, zona: z.nombre, color: z.color, responsable: z.responsable, clientes: 60 - i * 15, activos: 38 - i * 9, inactivos: 22 - i * 6, visitados: 30 - i * 7, visitas: 44 - i * 10, con_pedido: 16 - i * 4, sin_visita_60d: 9 + i })),
   vis_clientes_sin_visita: () => clientes.slice(2, 6).map((c) => ({ id: c.id, razon_social: c.razon_social, ciudad: c.ciudad, zona: 'Asunción Centro', vendedor: 'Humberto Benítez', estado: c.estado, ultima_visita: c.ultima_visita, ultima_factura_fecha: c.ultima_factura_fecha, ventas_6m_gs: c.ventas_6m_gs })),
-  vis_tablero_detalle: () => detalle, vis_mis_visitas: () => misVisitas, vis_ruteo_semana: () => ruteo,
+  vis_tablero_detalle: () => (EMP === E2 ? detalleVit : detalle), vis_tablero_rutas: () => tableroRutas.filter((f) => deEmpresa(f.vendedor_id)),
+  vis_generar_ciclo: () => ({ creadas: 0, rehechas: 0 }), vis_mis_visitas: () => misVisitas, vis_ruteo_semana: () => ruteo,
   vis_para_ver_como: () => vendedores.filter((v) => v.empresa_id === EMP && v.rol === 'vendedor').map((v) => ({ id: v.id, nombre: v.nombre, tipo: v.tipo, empresa_id: EMP, empresa: perfil.empresa, equipo: EMP === E1 ? 'Mayorista' : null })),
   vis_mi_gps: () => ({ codigo: 'c44a7f3e91b20d4c', ultima_recibida_el: new Date(Date.now() - 2 * 60000).toISOString(), ultima_posicion_el: new Date(Date.now() - 2 * 60000).toISOString() }),
   vis_vecinos_de_otros: () => [], vis_clientes_cercanos: () => [], vis_zona_historial: () => [], vis_sugerir_paradas: () => [],
