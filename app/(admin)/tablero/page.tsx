@@ -2,7 +2,7 @@
 // Tablero semanal (requerimiento 3): planificado vs. realizado por día y vendedor,
 // cumplimiento contra la meta, agrupado por zona/ciudad y en el mapa con clustering.
 // TI-0115: no concretadas (con motivo) y cumplimiento por ruta, zona y semana del ciclo.
-// Empresas con visitadoras (Vitalica): en Visita médica (/medica/tablero) las visitadoras, con médicos, lugares
+// Empresas con visitadoras (Vitalica): en Visita médica (arriba de la Actividad, /medica) las visitadoras, con médicos, lugares
 // y muestras (cada día lleva a su Actividad); en Ventas, abajo la Actividad del día de cada vendedor.
 import { usePanel } from '@/components/admin/PanelModo'
 import { useRouter } from 'next/navigation'
@@ -74,7 +74,12 @@ export default function Tablero() {
   }, [semana, delModo])
   useEffect(() => { setSel(null) }, [semana])
 
-  const dias = useMemo(() => Array.from({ length: 6 }, (_, i) => sumarDias(semana, i)), [semana])
+  // Lunes a viernes. El sábado aparece solo si esa semana alguien tuvo paradas o visitas ese día (no se esconde trabajo).
+  const dias = useMemo(() => {
+    const sabado = sumarDias(semana, 5)
+    const conSabado = (filas ?? []).some((f) => f.dia === sabado && (Number(f.planificadas) > 0 || Number(f.realizadas) > 0))
+    return Array.from({ length: conSabado ? 6 : 5 }, (_, i) => sumarDias(semana, i))
+  }, [semana, filas])
   const porVendedor = useMemo(() => {
     const m = new Map<string, { nombre: string; metaD: number; metaS: number; dias: Map<string, FilaTablero> }>()
     for (const f of filas ?? []) {
@@ -117,8 +122,12 @@ export default function Tablero() {
     }
     return m
   }, [visitas])
-  const abrirDia = (id: string, nombre: string, desde: string, hasta: string) =>
-    medica ? router.push(`/medica?dia=${hasta}&visitadora=${id}`) : setSel({ vendedorId: id, nombre, desde, hasta })
+  function abrirDia(id: string, nombre: string, desde: string, hasta: string) {
+    if (!medica) return setSel({ vendedorId: id, nombre, desde, hasta })
+    // Visita médica: la Actividad está debajo, en la misma pantalla; se cambia el día y se baja hasta ella.
+    router.push(`/medica?dia=${hasta}&visitadora=${id}`, { scroll: false })
+    setTimeout(() => document.getElementById('actividad')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+  }
   const hoy = hoyIso()
   return (
     <div className="flex flex-col gap-5">
@@ -207,7 +216,7 @@ export default function Tablero() {
         </table>
       </Tarjeta>
       <p className="-mt-3 text-xs text-tenue">{medica
-        ? 'Tocá el número de un día para ver la Actividad de ese día: llegadas, médicos visitados, productos y muestras.'
+        ? 'Tocá el número de un día para ver abajo la Actividad de ese día: llegadas, médicos visitados, productos y muestras.'
         : 'Tocá el número de un día (o el total de la semana) para ver los clientes visitados y los que no visitó.'}</p>
 
       {sel && <DetalleTablero sel={sel} alCerrar={() => setSel(null)} />}
