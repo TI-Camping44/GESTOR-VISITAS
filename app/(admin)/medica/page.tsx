@@ -6,7 +6,7 @@
 import Tablero from '../tablero/page'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, CircleSlash, LogIn, LogOut, MapPin, Stethoscope } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, CircleDashed, CircleSlash, LogIn, LogOut, MapPin, Stethoscope, XCircle } from 'lucide-react'
 import { Aviso, Boton, Entrada, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { descargarCsv } from '@/lib/csv'
@@ -14,9 +14,30 @@ import { fechaIso, fmtDia, fmtFecha, fmtSoloHora, hoyIso, sumarDias } from '@/li
 import { useParamUrl } from '@/lib/useParamUrl'
 import { cn } from '@/lib/utils'
 import { leerLlegadas, leerNoVisitados, leerVisitas, textoProductos, totalMuestras, useVisitadoras, type Llegada, type NoVisitado, type VisitaMedica } from '@/components/admin/medica/datos'
-import { textoMotivo } from '@/lib/medicos'
+import { claveEspecialidad, textoMotivo } from '@/lib/medicos'
 
 type Jornada = { vendedor_id: string; inicio: string; fin: string | null }
+// Plan del día (lo arma el supervisor en «Armar el día»): lugares en orden y, en cada uno, a quién ver.
+type ParadaPlan = { id: string; orden: number; cliente_id: string; vendedor_id: string; lugar: string
+  objetivos: { orden: number; medico_id: string | null; especialidad: string | null; medico: { nombre: string; especialidad: string | null } | null }[] }
+
+async function leerPlan(ids: string[], dia: string): Promise<ParadaPlan[]> {
+  if (!ids.length) return []
+  const sb = supabaseNavegador()
+  const { data: ps, error } = await sb.from('vis_ruta_paradas')
+    .select('id, orden, cliente_id, ruta:vis_rutas!vis_ruta_paradas_ruta_id_fkey!inner(vendedor_id, estado), lugar:vis_clientes!vis_ruta_paradas_cliente_id_fkey(razon_social)')
+    .eq('dia', dia).in('ruta.vendedor_id', ids).in('ruta.estado', ['publicada', 'cerrada']).order('orden')
+  if (error) throw new Error(error.message)
+  const filas = ((ps ?? []) as unknown as { id: string; orden: number; cliente_id: string; ruta: { vendedor_id: string } | null; lugar: { razon_social: string } | null }[])
+    .filter((p) => p.ruta && ids.includes(p.ruta.vendedor_id))
+  const pids = filas.map((p) => p.id)
+  const { data: os } = pids.length
+    ? await sb.from('vis_parada_objetivos').select('parada_id, orden, medico_id, especialidad, medico:vis_medicos!vis_parada_objetivos_medico_id_fkey(nombre, especialidad)').in('parada_id', pids).order('orden')
+    : { data: [] }
+  const objetivos = (os ?? []) as unknown as (ParadaPlan['objetivos'][number] & { parada_id: string })[]
+  return filas.map((p) => ({ id: p.id, orden: p.orden, cliente_id: p.cliente_id, vendedor_id: p.ruta!.vendedor_id, lugar: p.lugar?.razon_social ?? 'Lugar',
+    objetivos: objetivos.filter((o) => o.parada_id === p.id) }))
+}
 type Evento =
   | { tipo: 'inicio' | 'fin'; hora: string; vendedor_id: string }
   | { tipo: 'llegada'; hora: string; vendedor_id: string; l: Llegada }
@@ -27,7 +48,7 @@ export default function Actividad() {
   const visitadoras = useVisitadoras()
   const [dia, setDia] = useParamUrl('dia', hoyIso())
   const [quien, setQuien] = useParamUrl('visitadora', '')
-  const [datos, setDatos] = useState<{ visitas: VisitaMedica[]; llegadas: Llegada[]; noVisitados: NoVisitado[]; jornadas: Jornada[] } | null>(null)
+  const [datos, setDatos] = useState<{ visitas: VisitaMedica[]; llegadas: Llegada[]; noVisitados: NoVisitado[]; jornadas: Jornada[]; plan: ParadaPlan[] } | null>(null)
   const [semana, setSemana] = useState<{ visitas: VisitaMedica[]; llegadas: Llegada[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const ids = useMemo(() => visitadoras.filter((v) => !quien || v.id === quien).map((v) => v.id), [visitadoras, quien])
@@ -42,11 +63,12 @@ export default function Actividad() {
     Promise.all([
       leerVisitas(ids, dia, dia), leerLlegadas(ids, dia, dia), leerNoVisitados(ids, dia, dia),
       supabaseNavegador().from('vis_jornadas').select('vendedor_id, inicio, fin').in('vendedor_id', ids).gte('inicio', ini).lt('inicio', fin),
-    ]).then(([visitas, llegadas, noVisitados, j]) => {
+      leerPlan(ids, dia).catch(() => [] as ParadaPlan[]),
+    ]).then(([visitas, llegadas, noVisitados, j, plan]) => {
       if (!vivo) return
       setError(null)
-      setDatos({ visitas, llegadas, noVisitados, jornadas: (j.data ?? []) as Jornada[] })
-    }).catch((e: Error) => { if (vivo) { setError(e.message); setDatos({ visitas: [], llegadas: [], noVisitados: [], jornadas: [] }) } })
+      setDatos({ visitas, llegadas, noVisitados, jornadas: (j.data ?? []) as Jornada[], plan })
+    }).catch((e: Error) => { if (vivo) { setError(e.message); setDatos({ visitas: [], llegadas: [], noVisitados: [], jornadas: [], plan: [] }) } })
     return () => { vivo = false }
   }, [ids, dia, visitadoras.length])
 
@@ -74,9 +96,10 @@ export default function Actividad() {
   }, [datos])
   const porVisitadora = useMemo(() => {
     const m = new Map<string, Evento[]>()
+    for (const p of datos?.plan ?? []) if (!m.has(p.vendedor_id)) m.set(p.vendedor_id, []) // con plan aunque todavía no haya hecho nada
     for (const e of eventos) m.set(e.vendedor_id, [...(m.get(e.vendedor_id) ?? []), e])
     return [...m]
-  }, [eventos])
+  }, [eventos, datos])
 
   const resumen = datos && {
     lugares: new Set([...datos.llegadas.map((l) => l.lugar_id), ...datos.visitas.map((v) => v.cliente_id), ...datos.noVisitados.map((n) => n.lugar_id)]).size,
@@ -148,9 +171,12 @@ export default function Actividad() {
           {porVisitadora.map(([id, lista]) => (
             <Tarjeta key={id} className="flex flex-col gap-1">
               <h2 className="mb-2 font-semibold">{nombre(id)}</h2>
-              <ol className="relative flex flex-col gap-3 border-l-2 border-borde pl-5">
-                {lista.map((e, i) => <EventoFila key={i} e={e} />)}
-              </ol>
+              {datos && <PlanDelDia plan={datos.plan.filter((p) => p.vendedor_id === id)} datos={datos} vendedorId={id} dia={dia} />}
+              {lista.length > 0 ? (
+                <ol className="relative flex flex-col gap-3 border-l-2 border-borde pl-5">
+                  {lista.map((e, i) => <EventoFila key={i} e={e} />)}
+                </ol>
+              ) : <p className="text-sm text-tenue">Todavía no marcó llegadas ni registró visitas.</p>}
             </Tarjeta>
           ))}
         </div>
@@ -183,6 +209,71 @@ export default function Actividad() {
     </section>
     </div>
   )
+}
+
+// Plan del día de una visitadora: cada lugar en orden con su llegada y, en cada uno, los médicos que tenía que ver
+// (visitado con hora y resultado, no lo vio, o pendiente) y los que vio sin estar en el plan.
+function PlanDelDia({ plan, datos, vendedorId, dia }: {
+  plan: ParadaPlan[]; vendedorId: string; dia: string
+  datos: { visitas: VisitaMedica[]; llegadas: Llegada[]; noVisitados: NoVisitado[] }
+}) {
+  if (!plan.length) return null
+  const pasado = dia < hoyIso()
+  const vistos = plan.reduce((s, p) => s + p.objetivos.filter((o) => datos.visitas.some((v) => v.vendedor_id === vendedorId && v.cliente_id === p.cliente_id && cumple(o, v))).length, 0)
+  const total = plan.reduce((s, p) => s + p.objetivos.length, 0)
+  return (
+    <div className="mb-4 rounded-lg border border-borde p-3">
+      <p className="text-sm font-semibold">Plan del día{total > 0 && <span className="font-normal text-tenue"> · vio {vistos} de {total} médicos del plan</span>}</p>
+      <ol className="mt-2 flex flex-col gap-2.5">
+        {plan.map((p, i) => {
+          const visitas = datos.visitas.filter((v) => v.vendedor_id === vendedorId && v.cliente_id === p.cliente_id)
+          const llegadas = datos.llegadas.filter((l) => l.vendedor_id === vendedorId && l.lugar_id === p.cliente_id)
+          const noPudo = datos.noVisitados.find((n) => n.vendedor_id === vendedorId && n.lugar_id === p.cliente_id)
+          const fuera = visitas.filter((v) => !p.objetivos.some((o) => cumple(o, v)))
+          const estuvo = llegadas.length > 0 || visitas.length > 0 || !!noPudo
+          return (
+            <li key={p.id} className="text-sm">
+              <p><span className="font-semibold tabular">{i + 1}.</span> <b>{p.lugar}</b>
+                <span className="text-tenue"> · {llegadas.length ? `llegó ${llegadas.map((l) => fmtSoloHora(l.fecha_hora)).join(' y ')}` : visitas.length ? 'sin «Llegué acá»' : noPudo ? `no pudo visitar (${textoMotivo(noPudo.motivo)})` : pasado ? 'no fue' : 'todavía no llegó'}</span></p>
+              {(p.objetivos.length > 0 || fuera.length > 0) && (
+                <ul className="mt-1 flex flex-col gap-0.5 pl-4">
+                  {p.objetivos.map((o, j) => {
+                    const v = visitas.find((x) => cumple(o, x))
+                    const quien = o.medico?.nombre ?? `Buscar ${o.especialidad ?? 'médico'}`
+                    const esp = o.medico?.especialidad ?? (o.medico ? null : o.especialidad)
+                    return (
+                      <li key={j} className="flex items-start gap-1.5">
+                        {v ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-700 dark:text-green-400" aria-hidden />
+                          : estuvo || pasado ? <XCircle className="mt-0.5 size-4 shrink-0 text-red-700 dark:text-red-400" aria-hidden />
+                          : <CircleDashed className="mt-0.5 size-4 shrink-0 text-tenue" aria-hidden />}
+                        <span>{quien}{esp && <span className="text-tenue"> · {esp}</span>}
+                          {' '}<span className={cn('text-xs font-medium', v ? 'text-green-800 dark:text-green-300' : estuvo || pasado ? 'text-red-800 dark:text-red-300' : 'text-tenue')}>
+                            {v ? `visitado ${fmtSoloHora(v.fecha_hora)}${v.resultado ? ` · ${v.resultado.nombre}` : ''}${!o.medico_id && v.medico ? ` (${v.medico.nombre})` : ''}` : estuvo || pasado ? 'no lo vio' : 'pendiente'}
+                          </span></span>
+                      </li>
+                    )
+                  })}
+                  {fuera.map((v) => (
+                    <li key={v.id} className="flex items-start gap-1.5">
+                      <Stethoscope className="mt-0.5 size-4 shrink-0 text-marca" aria-hidden />
+                      <span>{v.medico?.nombre ?? 'Visita'}{v.medico?.especialidad && <span className="text-tenue"> · {v.medico.especialidad}</span>}
+                        {' '}<span className="text-xs font-medium text-amber-800 dark:text-amber-300">fuera del plan · {fmtSoloHora(v.fecha_hora)}</span></span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+    </div>
+  )
+}
+
+/** Una visita cumple un objetivo si es a ese médico, o (objetivo por especialidad) a un médico de esa especialidad. */
+function cumple(o: ParadaPlan['objetivos'][number], v: VisitaMedica) {
+  if (o.medico_id) return v.medico_id === o.medico_id
+  return !!o.especialidad && !!v.medico?.especialidad && claveEspecialidad(v.medico.especialidad) === claveEspecialidad(o.especialidad)
 }
 
 function EventoFila({ e }: { e: Evento }) {

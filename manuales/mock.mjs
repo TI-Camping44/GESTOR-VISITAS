@@ -143,7 +143,7 @@ const tableroRutas = [
   { ruta_id: 'r1', ruta: rutas[0].nombre, vendedor_id: 'hum', vendedor: 'Humberto Benítez', zona: 'Asunción Centro', ciclo: null, ciclo_semana: null, ciclo_semanas: null, planificadas: 24, realizadas: 18, no_concretadas: 1, pendientes: 4, vencidas: 1 },
 ]
 const rutaParadas = ['c1', 'c2', 'c5', 'c3', 'c4', 'c6'].map((c, i) => ({ id: `rp${i}`, ruta_id: 'r1', cliente_id: c, dia: i < 4 ? hoy : sumar(hoy, 1), orden: (i % 4) + 1 }))
-rutaParadas.push(...[['q1', 'l1', hoy, 1], ['q2', 'l2', hoy, 2], ['q3', 'l3', hoy, 3], ['q4', 'l4', sumar(hoy, 1), 1]].map(([id, c, dia, orden]) => ({ id, ruta_id: 'r5', cliente_id: c, dia, orden })))
+rutaParadas.push(...[['q1', 'l1', hoy, 1], ['q2', 'l2', hoy, 2], ['q3', 'l3', hoy, 3], ['q4', 'l4', sumar(hoy, 1), 1]].map(([id, c, dia, orden]) => ({ id, ruta_id: 'r5', cliente_id: c, dia, orden, ruta: { vendedor_id: 'noe', estado: 'publicada' }, lugar: { razon_social: lnom(c) } })))
 // A quién ver en cada lugar (lo arma el supervisor en «Armar el día»).
 const objetivosParada = [['o1', 'q1', 'm1', 1], ['o2', 'q1', 'm2', 2], ['o3', 'q2', 'm3', 1], ['o4', 'q2', 'm6', 2], ['o5', 'q3', 'm5', 1], ['o6', 'q4', 'm4', 1]]
   .map(([id, parada_id, medico_id, orden]) => ({ id, parada_id, medico_id, especialidad: null, orden, medico: (({ nombre, especialidad }) => ({ id: medico_id, nombre, especialidad }))(M.map(([i, nombre, especialidad]) => ({ i, nombre, especialidad })).find((x) => x.i === medico_id)) }))
