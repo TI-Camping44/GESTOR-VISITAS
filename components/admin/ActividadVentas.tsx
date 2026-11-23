@@ -1,5 +1,5 @@
 'use client'
-// Tablero de Ventas (Vitalica): qué hizo cada vendedor en el día, hora por hora (jornada, visitas con resultado,
+// Tablero de Ventas (Vitalica): qué hizo cada vendedor en el día o en la semana, hora por hora (jornada, visitas con resultado,
 // pedido, cobranza, observaciones y próxima visita, y los clientes que marcó «No pude visitarlo»), y los
 // últimos 7 días. Igual que la Actividad de visita médica.
 import { useEffect, useMemo, useState } from 'react'
@@ -7,9 +7,10 @@ import { ChevronLeft, ChevronRight, CircleSlash, LogIn, LogOut, Store } from 'lu
 import { Aviso, Boton, Entrada, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { descargarCsv } from '@/lib/csv'
-import { fechaIso, fmtDia, fmtFecha, fmtGuaranies, fmtSoloHora, hoyIso, sumarDias } from '@/lib/fechas'
+import { fechaIso, fmtDia, fmtFecha, fmtGuaranies, fmtSoloHora, sumarDias } from '@/lib/fechas'
 import { textoMotivo } from '@/lib/medicos'
 import { useParamUrl } from '@/lib/useParamUrl'
+import { useSemanaDia } from '@/lib/useSemanaDia'
 import { cn, mensajeError } from '@/lib/utils'
 
 type VisitaVenta = {
@@ -27,6 +28,7 @@ type Evento =
 const CAMPOS = 'id, vendedor_id, cliente_id, fecha_hora, hizo_pedido, hizo_cobranza, monto_cobrado_gs, observaciones, proxima_visita, ruta_parada_id, '
   + 'resultado:vis_resultados!vis_visitas_resultado_id_fkey(nombre), cliente:vis_clientes!vis_visitas_cliente_id_fkey(razon_social, ciudad)'
 const ini = (d: string) => new Date(`${d}T00:00:00-03:00`).toISOString()
+const finde = (d: string) => [0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay())
 
 async function leer(ids: string[], desde: string, hasta: string) {
   const sb = supabaseNavegador()
@@ -43,10 +45,11 @@ async function leer(ids: string[], desde: string, hasta: string) {
 }
 
 export function ActividadVentas({ vendedores }: { vendedores: { id: string; nombre: string }[] }) {
-  const [dia, setDia] = useParamUrl('dia', hoyIso())
+  const { semana, setSemana, dia, setDia, vista, setVista, hoy } = useSemanaDia()
   const [quien, setQuien] = useParamUrl('vendedor', '')
+  const [desde, hasta] = vista === 'semana' ? [semana, sumarDias(semana, 6)] : [dia, dia]
   const [datos, setDatos] = useState<Awaited<ReturnType<typeof leer>> | null>(null)
-  const [semana, setSemana] = useState<Awaited<ReturnType<typeof leer>> | null>(null)
+  const [ultimos, setUltimos] = useState<Awaited<ReturnType<typeof leer>> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const clave = vendedores.map((v) => v.id).join(',')
   const ids = useMemo(() => vendedores.filter((v) => !quien || v.id === quien).map((v) => v.id), [clave, quien]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -56,18 +59,18 @@ export function ActividadVentas({ vendedores }: { vendedores: { id: string; nomb
     if (!ids.length) { setDatos({ visitas: [], noConcretadas: [], jornadas: [] }); return }
     let vivo = true
     setDatos(null)
-    leer(ids, dia, dia).then((d) => { if (vivo) { setError(null); setDatos(d) } })
+    leer(ids, desde, hasta).then((d) => { if (vivo) { setError(null); setDatos(d) } })
       .catch((e: Error) => { if (vivo) { setError(e.message); setDatos({ visitas: [], noConcretadas: [], jornadas: [] }) } })
     return () => { vivo = false }
-  }, [ids, dia])
+  }, [ids, desde, hasta])
 
-  // Últimos 7 días hasta el día elegido.
+  // Vista día: los últimos 7 días hasta el día elegido.
   useEffect(() => {
-    if (!ids.length) return
+    if (!ids.length || vista !== 'dia') return
     let vivo = true
-    leer(ids, sumarDias(dia, -6), dia).then((d) => { if (vivo) setSemana(d) }).catch(() => {})
+    leer(ids, sumarDias(dia, -6), dia).then((d) => { if (vivo) setUltimos(d) }).catch(() => {})
     return () => { vivo = false }
-  }, [ids, dia])
+  }, [ids, dia, vista])
 
   const eventos = useMemo<Evento[]>(() => {
     if (!datos) return []
@@ -80,11 +83,9 @@ export function ActividadVentas({ vendedores }: { vendedores: { id: string; nomb
       ...datos.visitas.map((v) => ({ tipo: 'visita' as const, hora: v.fecha_hora, vendedor_id: v.vendedor_id, v })),
     ].sort((a, b) => a.hora.localeCompare(b.hora))
   }, [datos])
-  const porVendedor = useMemo(() => {
-    const m = new Map<string, Evento[]>()
-    for (const e of eventos) m.set(e.vendedor_id, [...(m.get(e.vendedor_id) ?? []), e])
-    return [...m]
-  }, [eventos])
+  // Vendedores con actividad en el período, y días a mostrar (en la semana, lunes a viernes y el finde si hubo algo).
+  const conAlgo = useMemo(() => [...new Set(eventos.map((e) => e.vendedor_id))].sort((x, y) => nombre(x).localeCompare(nombre(y), 'es')), [eventos]) // eslint-disable-line react-hooks/exhaustive-deps
+  const dias = vista === 'dia' ? [dia] : Array.from({ length: 7 }, (_, i) => sumarDias(semana, i)).filter((d) => !finde(d) || eventos.some((e) => fechaIso(e.hora) === d))
 
   const resumen = datos && {
     clientes: new Set(datos.visitas.map((v) => v.cliente_id)).size,
@@ -93,14 +94,18 @@ export function ActividadVentas({ vendedores }: { vendedores: { id: string; nomb
     fuera: datos.visitas.filter((v) => !v.ruta_parada_id).length,
     noConcretadas: datos.noConcretadas.length,
   }
-  // Sábados y domingos solo si ese día hubo algo.
-  const finde = (d: string) => [0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay())
   const dias7 = Array.from({ length: 7 }, (_, i) => sumarDias(dia, i - 6)).filter((d) => d === dia || !finde(d)
-    || !semana || semana.visitas.some((x) => fechaIso(x.fecha_hora) === d) || semana.noConcretadas.some((x) => fechaIso(x.fecha_hora) === d))
+    || !ultimos || ultimos.visitas.some((x) => fechaIso(x.fecha_hora) === d) || ultimos.noConcretadas.some((x) => fechaIso(x.fecha_hora) === d))
+  // Tabla de la derecha: en la vista día, los últimos 7 días; en la semana, cada día de la semana.
+  const fuenteTabla = vista === 'dia' ? ultimos : datos
+  const filasTabla = vista === 'dia' ? dias7 : dias
+  const verDia = (d: string) => { setVista('dia'); setDia(d) }
+  const boton = 'grid size-10 place-items-center rounded-lg border border-borde hover:bg-fondo disabled:opacity-40'
 
   function excel() {
-    descargarCsv(`actividad_ventas_${dia}`, [
+    descargarCsv(vista === 'dia' ? `actividad_ventas_${dia}` : `actividad_ventas_semana_${semana}`, [
       { titulo: 'Vendedor', valor: (e: Evento) => nombre(e.vendedor_id) },
+      { titulo: 'Día', valor: (e: Evento) => fmtFecha(fechaIso(e.hora)) },
       { titulo: 'Hora', valor: (e: Evento) => fmtSoloHora(e.hora) },
       { titulo: 'Qué', valor: (e: Evento) => (e.tipo === 'inicio' ? 'Inició la jornada' : e.tipo === 'fin' ? 'Terminó la jornada' : e.tipo === 'no_concretada' ? 'No concretada' : 'Visita') },
       { titulo: 'Cliente', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.cliente?.razon_social : e.tipo === 'no_concretada' ? e.n.cliente?.razon_social : '') ?? '' },
@@ -115,25 +120,41 @@ export function ActividadVentas({ vendedores }: { vendedores: { id: string; nomb
   }
 
   return (
-    <section className="flex flex-col gap-4" aria-labelledby="actividad-ventas">
+    <section id="actividad" className="flex scroll-mt-4 flex-col gap-4" aria-labelledby="actividad-ventas">
       <div>
-        <h2 id="actividad-ventas" className="text-lg font-semibold">Actividad del día</h2>
+        <h2 id="actividad-ventas" className="text-lg font-semibold">{vista === 'dia' ? 'Actividad del día' : 'Actividad de la semana'}</h2>
         <p className="text-sm text-tenue">Qué hizo cada vendedor, hora por hora: a qué clientes visitó, qué pasó en cada visita y cuáles no pudo visitar.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1">
-          <button type="button" aria-label="Día anterior" className="grid size-10 place-items-center rounded-lg border border-borde hover:bg-fondo" onClick={() => setDia(sumarDias(dia, -1))}><ChevronLeft className="size-4" aria-hidden /></button>
-          <Entrada type="date" aria-label="Día" value={dia} max={hoyIso()} onChange={(e) => e.target.value && setDia(e.target.value)} className="w-44" />
-          <button type="button" aria-label="Día siguiente" disabled={dia >= hoyIso()} className="grid size-10 place-items-center rounded-lg border border-borde hover:bg-fondo disabled:opacity-40" onClick={() => setDia(sumarDias(dia, 1))}><ChevronRight className="size-4" aria-hidden /></button>
+        <div className="flex rounded-lg border border-borde p-0.5" role="group" aria-label="Ver por">
+          {(['dia', 'semana'] as const).map((v) => (
+            <button key={v} type="button" aria-pressed={vista === v} onClick={() => setVista(v)}
+              className={cn('rounded-md px-3 py-1.5 text-sm font-medium', vista === v ? 'bg-marca text-sobre-marca' : 'text-tinta hover:bg-fondo')}>
+              {v === 'dia' ? 'Día' : 'Semana'}
+            </button>
+          ))}
         </div>
-        {dia !== hoyIso() && <Boton variante="fantasma" onClick={() => setDia(hoyIso())}>Hoy</Boton>}
+        {vista === 'dia' ? (
+          <div className="flex items-center gap-1">
+            <button type="button" aria-label="Día anterior" className={boton} onClick={() => setDia(sumarDias(dia, -1))}><ChevronLeft className="size-4" aria-hidden /></button>
+            <Entrada type="date" aria-label="Día" value={dia} max={hoy} onChange={(e) => e.target.value && setDia(e.target.value)} className="w-44" />
+            <button type="button" aria-label="Día siguiente" disabled={dia >= hoy} className={boton} onClick={() => setDia(sumarDias(dia, 1))}><ChevronRight className="size-4" aria-hidden /></button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1">
+            <button type="button" aria-label="Semana anterior" className={boton} onClick={() => setSemana(sumarDias(semana, -7))}><ChevronLeft className="size-4" aria-hidden /></button>
+            <span className="px-2 text-sm font-medium tabular">{fmtFecha(semana)} al {fmtFecha(sumarDias(semana, 5))}</span>
+            <button type="button" aria-label="Semana siguiente" disabled={sumarDias(semana, 7) > hoy} className={boton} onClick={() => setSemana(sumarDias(semana, 7))}><ChevronRight className="size-4" aria-hidden /></button>
+          </div>
+        )}
+        {vista === 'dia' && dia !== hoy && <Boton variante="fantasma" onClick={() => setDia(hoy)}>Hoy</Boton>}
         {vendedores.length > 1 && (
           <Selector aria-label="Vendedor" value={quien} onChange={(e) => setQuien(e.target.value)} className="w-auto">
             <option value="">Todos los vendedores</option>
             {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nombre}</option>)}
           </Selector>
         )}
-        <Boton variante="secundario" className="ml-auto" disabled={!eventos.length} onClick={excel}>Excel del día</Boton>
+        <Boton variante="secundario" className="ml-auto" disabled={!eventos.length} onClick={excel}>{vista === 'dia' ? 'Excel del día' : 'Excel de la semana'}</Boton>
       </div>
       {error && <Aviso tipo="error">{error}</Aviso>}
 
@@ -146,35 +167,46 @@ export function ActividadVentas({ vendedores }: { vendedores: { id: string; nomb
       <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
         <div className="flex flex-col gap-4">
           {datos === null && <div className="h-40 animate-pulse rounded-xl bg-borde/40" />}
-          {datos && porVendedor.length === 0 && (
-            <Vacio titulo={`Sin actividad el ${fmtFecha(dia)}`}>No inició jornada ni registró visitas ese día.</Vacio>
+          {datos && conAlgo.length === 0 && (
+            <Vacio titulo={vista === 'dia' ? `Sin actividad el ${fmtFecha(dia)}` : 'Sin actividad esta semana'}>No inició jornada ni registró visitas.</Vacio>
           )}
-          {porVendedor.map(([id, lista]) => (
+          {conAlgo.map((id) => (
             <Tarjeta key={id} className="flex flex-col gap-1">
               <h3 className="mb-2 font-semibold">{nombre(id)}</h3>
-              <ol className="relative flex flex-col gap-3 border-l-2 border-borde pl-5">
-                {lista.map((e, i) => <EventoFila key={i} e={e} />)}
-              </ol>
+              {dias.map((d) => {
+                const lista = eventos.filter((e) => e.vendedor_id === id && fechaIso(e.hora) === d)
+                if (vista === 'semana' && !lista.length) return null
+                return (
+                  <div key={d} className={cn(vista === 'semana' && 'border-t border-borde pt-3 first-of-type:border-0 first-of-type:pt-0')}>
+                    {vista === 'semana' && (
+                      <button type="button" onClick={() => verDia(d)} className="mb-2 text-sm font-semibold capitalize text-marca underline-offset-2 hover:underline">{fmtDia(d)}</button>
+                    )}
+                    <ol className="relative mb-2 flex flex-col gap-3 border-l-2 border-borde pl-5">
+                      {lista.map((e, i) => <EventoFila key={i} e={e} />)}
+                    </ol>
+                  </div>
+                )
+              })}
             </Tarjeta>
           ))}
         </div>
 
         <Tarjeta className="flex h-fit flex-col gap-2">
-          <h3 className="font-semibold">Últimos 7 días</h3>
+          <h3 className="font-semibold">{vista === 'dia' ? 'Últimos 7 días' : 'Día por día'}</h3>
           <table className="w-full text-sm tabular">
             <thead><tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-tenue">
               <th className="py-1.5 font-medium">Día</th><th className="py-1.5 text-right font-medium">Clientes</th><th className="py-1.5 text-right font-medium">Pedidos</th><th className="py-1.5 text-right font-medium">No concr.</th>
             </tr></thead>
             <tbody>
-              {dias7.map((d) => {
-                const v = semana ? semana.visitas.filter((x) => fechaIso(x.fecha_hora) === d) : []
-                const n = semana ? semana.noConcretadas.filter((x) => fechaIso(x.fecha_hora) === d) : []
+              {filasTabla.map((d) => {
+                const v = fuenteTabla ? fuenteTabla.visitas.filter((x) => fechaIso(x.fecha_hora) === d) : []
+                const n = fuenteTabla ? fuenteTabla.noConcretadas.filter((x) => fechaIso(x.fecha_hora) === d) : []
                 return (
-                  <tr key={d} className={cn('border-b border-borde last:border-0', d === dia && 'font-semibold')}>
-                    <td className="py-1.5"><button type="button" className="capitalize underline-offset-2 hover:underline" onClick={() => setDia(d)}>{fmtDia(d)}</button></td>
-                    <td className="py-1.5 text-right">{semana ? new Set(v.map((x) => x.cliente_id)).size : '–'}</td>
-                    <td className="py-1.5 text-right">{semana ? v.filter((x) => x.hizo_pedido).length : '–'}</td>
-                    <td className="py-1.5 text-right">{semana ? n.length : '–'}</td>
+                  <tr key={d} className={cn('border-b border-borde last:border-0', vista === 'dia' && d === dia && 'font-semibold')}>
+                    <td className="py-1.5"><button type="button" className="capitalize underline-offset-2 hover:underline" onClick={() => verDia(d)}>{fmtDia(d)}</button></td>
+                    <td className="py-1.5 text-right">{fuenteTabla ? new Set(v.map((x) => x.cliente_id)).size : '–'}</td>
+                    <td className="py-1.5 text-right">{fuenteTabla ? v.filter((x) => x.hizo_pedido).length : '–'}</td>
+                    <td className="py-1.5 text-right">{fuenteTabla ? n.length : '–'}</td>
                   </tr>
                 )
               })}
