@@ -1,7 +1,7 @@
 // Vista del panel (servidor y navegador): «Ventas» o «Visita médica». Ver components/admin/PanelModo.tsx.
 export type ModoPanel = 'ventas' | 'medica'
 export const COOKIE_MODO = 'vis_panel'
-const COMUNES = ['/vendedores', '/ver-como']
+const COMUNES = ['/vendedores', '/ver-como', '/resultados']
 
 /** La vista propia de una dirección: /medica/… es visita médica, Usuarios y Ver la app como… no tienen
  *  (usan la última), y el resto es ventas. */

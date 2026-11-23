@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart3, Route, Radio, Users, MapPinned, UserCog, RefreshCw, Smartphone, FileBarChart, ShieldAlert, Stethoscope, ClipboardList, Building2, Tags, Pill, CalendarRange, ListOrdered } from 'lucide-react'
+import { BarChart3, Route, Radio, Users, MapPinned, UserCog, RefreshCw, Smartphone, FileBarChart, ShieldAlert, Stethoscope, ClipboardList, Building2, Tags, Pill, CalendarRange, ListOrdered, ListChecks } from 'lucide-react'
 import { usePanel } from './PanelModo'
 import { cn } from '@/lib/utils'
 import type { Rol } from '@/lib/database.types'
@@ -11,6 +11,7 @@ export function NavAdmin({ rol, altas = 0 }: { rol: Rol; altas?: number }) {
   const { modo } = usePanel()
   const comunes = [
     { href: '/vendedores', texto: 'Usuarios', Icono: UserCog },
+    ...(rol === 'admin' ? [{ href: '/resultados', texto: 'Resultados de visita', Icono: ListChecks }] : []),
     { href: '/ver-como', texto: 'Ver la app como…', Icono: Smartphone },
   ]
   const items = modo === 'medica' ? [
@@ -31,9 +32,9 @@ export function NavAdmin({ rol, altas = 0 }: { rol: Rol; altas?: number }) {
     { href: '/clientes', texto: 'Clientes', Icono: Users },
     { href: '/altas', texto: 'Altas a revisar', Icono: ShieldAlert, contador: altas },
     { href: '/zonas', texto: 'Zonas', Icono: MapPinned },
-    ...comunes.slice(0, 1),
+    ...comunes.slice(0, -1),
     ...(rol === 'admin' ? [{ href: '/sync', texto: 'Sync Odoo', Icono: RefreshCw }] : []),
-    ...comunes.slice(1),
+    ...comunes.slice(-1),
   ]
   return (
     <nav aria-label="Panel" className="flex gap-1 overflow-x-auto lg:flex-col">
