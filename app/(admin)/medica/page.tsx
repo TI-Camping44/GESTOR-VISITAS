@@ -1,6 +1,9 @@
 'use client'
-// Visita médica → Actividad: qué hizo cada visitadora en el día, hora por hora (jornada, llegadas a
-// lugares y visitas a médicos con resultado, productos, muestras y observaciones), y los últimos 7 días.
+// Visita médica (pantalla de entrada): arriba el tablero semanal de las visitadoras (igual que el de Ventas)
+// y abajo la Actividad: qué hizo cada visitadora en el día, hora por hora (jornada, llegadas a lugares y
+// visitas a médicos con resultado, productos, muestras y observaciones), y los últimos 7 días.
+// Tocar un día del tablero cambia el día de la Actividad (?dia=&visitadora=).
+import Tablero from '../tablero/page'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, CircleSlash, LogIn, LogOut, MapPin, Stethoscope } from 'lucide-react'
@@ -82,7 +85,10 @@ export default function Actividad() {
     visitas: datos.visitas.length,
     muestras: datos.visitas.reduce((s, v) => s + totalMuestras(v), 0),
   }
-  const dias7 = Array.from({ length: 7 }, (_, i) => sumarDias(dia, i - 6))
+  // Sábados y domingos solo si ese día hubo algo.
+  const finde = (d: string) => [0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay())
+  const dias7 = Array.from({ length: 7 }, (_, i) => sumarDias(dia, i - 6)).filter((d) => d === dia || !finde(d)
+    || !semana || semana.visitas.some((x) => fechaIso(x.fecha_hora) === d) || semana.llegadas.some((x) => fechaIso(x.fecha_hora) === d))
   const delDia = (d: string, x: { fecha_hora: string }[]) => x.filter((y) => fechaIso(y.fecha_hora) === d)
 
   function excel() {
@@ -102,9 +108,11 @@ export default function Actividad() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-8">
+    <Tablero />
+    <section id="actividad" className="flex scroll-mt-4 flex-col gap-4" aria-labelledby="actividad-medica">
       <div>
-        <h1 className="text-2xl font-semibold">Actividad de visita médica</h1>
+        <h2 id="actividad-medica" className="text-lg font-semibold">Actividad del día</h2>
         <p className="text-sm text-tenue">Qué hizo cada visitadora en el día: a qué hora llegó a cada lugar, a qué médicos vio y qué dejó.</p>
       </div>
 
@@ -172,6 +180,7 @@ export default function Actividad() {
           <p className="text-xs text-tenue">Tocá un día para ver su detalle. El recorrido en el mapa está en <Link href="/medica/en-vivo" className="underline">En vivo</Link>.</p>
         </Tarjeta>
       </div>
+    </section>
     </div>
   )
 }

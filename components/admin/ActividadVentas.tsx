@@ -93,7 +93,10 @@ export function ActividadVentas({ vendedores }: { vendedores: { id: string; nomb
     fuera: datos.visitas.filter((v) => !v.ruta_parada_id).length,
     noConcretadas: datos.noConcretadas.length,
   }
-  const dias7 = Array.from({ length: 7 }, (_, i) => sumarDias(dia, i - 6))
+  // Sábados y domingos solo si ese día hubo algo.
+  const finde = (d: string) => [0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay())
+  const dias7 = Array.from({ length: 7 }, (_, i) => sumarDias(dia, i - 6)).filter((d) => d === dia || !finde(d)
+    || !semana || semana.visitas.some((x) => fechaIso(x.fecha_hora) === d) || semana.noConcretadas.some((x) => fechaIso(x.fecha_hora) === d))
 
   function excel() {
     descargarCsv(`actividad_ventas_${dia}`, [

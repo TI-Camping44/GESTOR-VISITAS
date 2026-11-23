@@ -1,2 +1,6 @@
-// Visita médica → Tablero: la misma pantalla del tablero semanal, con las visitadoras (la vista sale de la dirección).
-export { default } from '../../tablero/page'
+// El tablero de visita médica está arriba de la Actividad (/medica), igual que en Ventas.
+import { redirect } from 'next/navigation'
+
+export default function TableroMedica() {
+  redirect('/medica')
+}
