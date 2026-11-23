@@ -64,9 +64,15 @@ export type Database = {
         Relationships: Rel[]
       }
       vis_resultados: {
-        Row: { activo: boolean; es_venta: boolean; id: number; nombre: string; orden: number; tipo: TipoUsuario; empresa_id: string | null }
-        Insert: { activo?: boolean; es_venta?: boolean; id?: number; nombre: string; orden?: number; tipo?: TipoUsuario; empresa_id?: string | null }
+        Row: { activo: boolean; es_venta: boolean; id: number; nombre: string; orden: number; tipo: TipoUsuario; empresa_id: string | null; clase: ClaseResultado }
+        Insert: { activo?: boolean; es_venta?: boolean; id?: number; nombre: string; orden?: number; tipo?: TipoUsuario; empresa_id?: string | null; clase?: ClaseResultado }
         Update: Partial<Database['public']['Tables']['vis_resultados']['Insert']>
+        Relationships: []
+      }
+      vis_resultados_ocultos: {
+        Row: { empresa_id: string; resultado_id: number }
+        Insert: { empresa_id: string; resultado_id: number }
+        Update: Partial<Database['public']['Tables']['vis_resultados_ocultos']['Insert']>
         Relationships: []
       }
       vis_ruta_paradas: {
@@ -105,7 +111,7 @@ export type Database = {
           fecha_hora: string; fotos: string[]; hizo_cobranza: boolean; hizo_pedido: boolean; id: string; lat: number | null; lng: number | null
           monto_cobrado_gs: number | null; observaciones: string | null; odoo_visita_id: number | null; origen: Database['public']['Enums']['vis_origen_visita']
           precision_m: number | null; proxima_visita: string | null; resultado_id: number | null; ruta_parada_id: string | null
-          vendedor_id: string | null; zona_id: string | null; medico_id: string | null; productos: ProductoVisita[]
+          vendedor_id: string | null; zona_id: string | null; medico_id: string | null; productos: ProductoVisita[]; detalle_id?: number | null
         }
         Insert: {
           capturada_offline?: boolean; client_uuid?: string | null; cliente_id: string; created_at?: string; distancia_cliente_m?: number | null
@@ -207,6 +213,10 @@ export type Database = {
       }
       vis_medicos_v: {
         Row: Database['public']['Tables']['vis_medicos']['Row'] & { ultima_visita: string | null; lugares: LugarDeMedico[] }
+        Relationships: Rel[]
+      }
+      vis_resultados_v: {
+        Row: Database['public']['Tables']['vis_resultados']['Row'] & { oculto: boolean }
         Relationships: Rel[]
       }
       vis_resumen_diario: {
@@ -319,7 +329,8 @@ export type Ruta = T['vis_rutas']['Row']
 export type Ciclo = T['vis_ciclos']['Row']
 export type Parada = T['vis_ruta_paradas']['Row']
 export type Visita = T['vis_visitas']['Row']
-export type Resultado = T['vis_resultados']['Row']
+export type ClaseResultado = 'resultado' | 'detalle'
+export type Resultado = T['vis_resultados']['Row'] & { oculto?: boolean }
 export type Medico = Database['public']['Views']['vis_medicos_v']['Row']
 export type Producto = T['vis_productos']['Row']
 export type Jornada = T['vis_jornadas']['Row']

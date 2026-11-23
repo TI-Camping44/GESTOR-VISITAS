@@ -55,6 +55,7 @@ export default function RegistrarVisita() {
   const [errorCarga, setErrorCarga] = useState<string | null>(null)
 
   const [resultadoId, setResultadoId] = useState('')
+  const [detalleId, setDetalleId] = useState('')
   const [hizoPedido, setHizoPedido] = useState(false)
   const [cobranza, setCobranza] = useState(false)
   const [monto, setMonto] = useState('')
@@ -92,7 +93,7 @@ export default function RegistrarVisita() {
 
       const [{ data, error }, r] = await Promise.all([
         sb.from('vis_clientes_v').select('id, razon_social, ciudad, direccion, lat, lng, estado, vendedor_id').eq('id', clienteId).maybeSingle(),
-        sb.from('vis_resultados').select('*').eq('activo', true).order('orden'),
+        sb.from('vis_resultados_v').select('*').eq('activo', true).eq('oculto', false).order('orden'),
       ])
       if (!vivo) return
       if (data) setCliente(data as ClienteVisita)
@@ -135,11 +136,16 @@ export default function RegistrarVisita() {
     const resto = productos.filter((p) => !(p.nombre in muestras))
     return [...marcados, ...(q ? resto.filter((p) => q.split(/\s+/).every((w) => sin(p.nombre).includes(w))) : resto.slice(0, Math.max(0, 6 - marcados.length)))]
   }, [productos, muestras, buscarProd])
-  const opciones = resultados.filter((r) => (r.tipo ?? 'ventas') === tipoResultado)
+  // Resultado → Detalle → Observaciones: el detalle aparece si la empresa cargó detalles (Vitalica, venta).
+  const visibles = resultados.filter((r) => (r.tipo ?? 'ventas') === tipoResultado && !r.oculto)
+  const opciones = visibles.filter((r) => (r.clase ?? 'resultado') === 'resultado')
+  const detalles = visibles.filter((r) => r.clase === 'detalle')
   const volver = esMedica ? urlLugar(clienteId, { parada: paradaId }) : '/hoy'
 
   const destino = cliente?.lat != null && cliente.lng != null ? { lat: cliente.lat, lng: cliente.lng } : null
   const resultadoElegido = resultados.find((r) => String(r.id) === resultadoId)
+  const detalleElegido = detalles.find((r) => String(r.id) === detalleId)
+  const esVenta = !!resultadoElegido?.es_venta || !!detalleElegido?.es_venta
   // «No le interesa»: el cliente queda en naranja; el motivo es obligatorio (lo ve el supervisor).
   const noLeInteresa = resultadoElegido?.nombre === 'No le interesa'
   // «Ya no atiende acá»: el médico sale de este lugar al guardar (no se borra; sus visitas quedan).
@@ -162,7 +168,7 @@ export default function RegistrarVisita() {
     const payload: Record<string, unknown> = {
       client_uuid, cliente_id: cliente.id, ruta_parada_id: paradaId, visita_id: altaId, fecha_hora: new Date().toISOString(),
       lat: l?.lat ?? null, lng: l?.lng ?? null, precision_m: l?.precision ?? null,
-      resultado_id: Number(resultadoId), hizo_pedido: hizoPedido || !!resultadoElegido?.es_venta,
+      resultado_id: Number(resultadoId), detalle_id: detalleElegido ? detalleElegido.id : null, hizo_pedido: hizoPedido || esVenta,
       hizo_cobranza: cobranza, monto_cobrado_gs: cobranza ? Math.round(Number(monto)) : null,
       observaciones: obs.trim() || null, proxima_visita: proxima || null, fotos: [] as string[],
       medico_id: medicoId, productos: sinPresentar ? [] : Object.entries(muestras).map(([producto, n]): ProductoVisita => ({ producto, muestras: n ?? 0 })),
@@ -273,6 +279,15 @@ export default function RegistrarVisita() {
           {opciones.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
         </Selector>
         {errCampo.mensaje('resultado')}
+        {detalles.length > 0 && (
+          <div className="mt-3">
+            <Etiqueta htmlFor="detalle">Detalle</Etiqueta>
+            <Selector id="detalle" value={detalleId} onChange={(e) => setDetalleId(e.target.value)}>
+              <option value="">Elegí…</option>
+              {detalles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+            </Selector>
+          </div>
+        )}
         {yaNoAtiende && medico && (
           <Aviso tipo="alerta" className="mt-2">Al guardar, <b>{medico.nombre}</b> sale de <b>{cliente.razon_social}</b>. No se borra: queda en sus otros lugares y con sus visitas. Si sabés a dónde se fue, escribilo en Observaciones.</Aviso>
         )}
@@ -310,7 +325,7 @@ export default function RegistrarVisita() {
 
       {tipoResultado === 'ventas' && <div className="flex flex-col gap-3">
         <label className="flex items-center gap-3 text-base">
-          <input type="checkbox" className="size-5 accent-[var(--c-marca)]" checked={hizoPedido || !!resultadoElegido?.es_venta} disabled={!!resultadoElegido?.es_venta} onChange={(e) => setHizoPedido(e.target.checked)} />
+          <input type="checkbox" className="size-5 accent-[var(--c-marca)]" checked={hizoPedido || esVenta} disabled={esVenta} onChange={(e) => setHizoPedido(e.target.checked)} />
           ¿Hizo pedido?
         </label>
         <label className="flex items-center gap-3 text-base">

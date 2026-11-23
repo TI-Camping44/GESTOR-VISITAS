@@ -100,7 +100,7 @@ export default function PaginaLugar() {
         setEstadoHoy(new Map(vs.filter((v) => v.medico_id).map((v) => [v.medico_id!, { noEstaba: v.resultado?.nombre === NO_ESTABA, hora: v.fecha_hora }])))
       }
       // El resultado «No estaba / no atendió» (para el botón «No está»), de la base o de lo guardado.
-      const rr = await sb.from('vis_resultados').select('id, nombre').eq('nombre', NO_ESTABA).maybeSingle()
+      const rr = await sb.from('vis_resultados').select('id, nombre').eq('nombre', NO_ESTABA).is('empresa_id', null).maybeSingle()
       const id = rr.data?.id ?? (await leerCache<Resultado[]>('resultados').catch(() => null))?.datos.find((r) => r.nombre === NO_ESTABA)?.id ?? null
       if (vivo) setIdNoEstaba(id)
     })()
