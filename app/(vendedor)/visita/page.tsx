@@ -323,7 +323,8 @@ export default function RegistrarVisita() {
         </fieldset>
       )}
 
-      {tipoResultado === 'ventas' && <div className="flex flex-col gap-3">
+      {/* Con «Detalle» (Vitalica) el pedido sale del detalle («Hizo pedido») y no se preguntan pedido ni cobranza (pedido de Sergio). */}
+      {tipoResultado === 'ventas' && detalles.length === 0 && <div className="flex flex-col gap-3">
         <label className="flex items-center gap-3 text-base">
           <input type="checkbox" className="size-5 accent-[var(--c-marca)]" checked={hizoPedido || esVenta} disabled={esVenta} onChange={(e) => setHizoPedido(e.target.checked)} />
           ¿Hizo pedido?
