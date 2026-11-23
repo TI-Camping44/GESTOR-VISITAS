@@ -28,3 +28,12 @@ test('palabras que no son días no cuentan', () => {
   assert.deepEqual(diasDeHorario('Lunes; 07:30 Hs. Martes, 16:30 Hs.'), [1, 2])
   assert.deepEqual(diasDeHorario('Miércoles  Jueves  y Viernes'), [3, 4, 5])
 })
+
+test('claveNombre y mismoMedico: el mismo médico cargado dos veces', async () => {
+  const { claveNombre, mismoMedico } = await import('../lib/medicos')
+  assert.equal(claveNombre('Dra. Yanina  Meza'), 'yanina meza')
+  assert.equal(claveNombre('Dr María González'), 'maria gonzalez')
+  assert.ok(mismoMedico({ id: 'a', nombre: 'Dra. Yanina  Meza' }, { id: 'b', nombre: 'Dra. Yanina Meza' }))
+  assert.ok(!mismoMedico({ id: 'a', nombre: 'Dra. Edith Fernández' }, { id: 'b', nombre: 'Dra. Elayne Fernández' }))
+  assert.ok(mismoMedico({ id: 'x', nombre: null }, { id: 'x', nombre: 'Otro' }))
+})

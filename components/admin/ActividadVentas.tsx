@@ -164,7 +164,7 @@ export function ActividadVentas({ vendedores }: { vendedores: { id: string; nomb
         ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
+      <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
         <div className="flex flex-col gap-4">
           {datos === null && <div className="h-40 animate-pulse rounded-xl bg-borde/40" />}
           {datos && conAlgo.length === 0 && (
@@ -195,7 +195,7 @@ export function ActividadVentas({ vendedores }: { vendedores: { id: string; nomb
           <h3 className="font-semibold">{vista === 'dia' ? 'Últimos 7 días' : 'Día por día'}</h3>
           <table className="w-full text-sm tabular">
             <thead><tr className="border-b border-borde text-left text-xs uppercase tracking-wide text-tenue">
-              <th className="py-1.5 font-medium">Día</th><th className="py-1.5 text-right font-medium">Clientes</th><th className="py-1.5 text-right font-medium">Pedidos</th><th className="py-1.5 text-right font-medium">No concr.</th>
+              <th className="py-1.5 font-medium">Día</th><th className="py-1.5 pl-2 text-right font-medium">Clientes</th><th className="py-1.5 pl-2 text-right font-medium">Pedidos</th><th className="py-1.5 pl-2 text-right font-medium">No concr.</th>
             </tr></thead>
             <tbody>
               {filasTabla.map((d) => {
@@ -203,7 +203,7 @@ export function ActividadVentas({ vendedores }: { vendedores: { id: string; nomb
                 const n = fuenteTabla ? fuenteTabla.noConcretadas.filter((x) => fechaIso(x.fecha_hora) === d) : []
                 return (
                   <tr key={d} className={cn('border-b border-borde last:border-0', vista === 'dia' && d === dia && 'font-semibold')}>
-                    <td className="py-1.5"><button type="button" className="capitalize underline-offset-2 hover:underline" onClick={() => verDia(d)}>{fmtDia(d)}</button></td>
+                    <td className="py-1.5"><button type="button" className="whitespace-nowrap capitalize underline-offset-2 hover:underline" onClick={() => verDia(d)}>{fmtDia(d)}</button></td>
                     <td className="py-1.5 text-right">{fuenteTabla ? new Set(v.map((x) => x.cliente_id)).size : '–'}</td>
                     <td className="py-1.5 text-right">{fuenteTabla ? v.filter((x) => x.hizo_pedido).length : '–'}</td>
                     <td className="py-1.5 text-right">{fuenteTabla ? n.length : '–'}</td>

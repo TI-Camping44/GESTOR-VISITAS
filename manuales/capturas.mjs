@@ -221,6 +221,7 @@ async function tableros() {
   await conMock('ser', false, async () => {
     const p = await contexto(false)
     await ir(p, '/medica', 4500); await foto(p, 'k-tablero-medica', { completa: true })
+    await ir(p, '/medica/ruteo', 4500); await foto(p, 'k-ruteo-pactada')
     await ir(p, '/tablero', 4500); await foto(p, 'k-tablero-ventas')
     await p.getByRole('heading', { name: 'Actividad del día' }).evaluate((e) => e.scrollIntoView({ block: 'start' })); await p.evaluate(() => window.scrollBy(0, -20)); await espera(500); await foto(p, 'k-actividad-ventas')
     await foto(p, 'k-tablero-ventas-completo', { completa: true })
@@ -232,6 +233,7 @@ async function tableros() {
   await conMock('noe', true, async () => {
     const p = await contexto(true)
     await ir(p, '/hoy', 4000); await p.getByText('del plan').first().evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(400); await foto(p, 'k-hoy-plan')
+    await p.getByText('Hora pactada').first().evaluate((e) => e.scrollIntoView({ block: 'center' })).catch(() => {}); await espera(300); await foto(p, 'k-hoy-pactada')
   })
 }
 

@@ -8,7 +8,7 @@ import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, PuntoEstado, Tarjeta, Vacio, claseBoton } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
-import { claveEspecialidad, noLoVio, textoMotivo } from '@/lib/medicos'
+import { claveEspecialidad, mismoMedico, noLoVio, textoMotivo } from '@/lib/medicos'
 import { fmtFecha, fmtHoras, fmtSoloHora, hace, minutosDelDia, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
 import { fmtMin, horasEstimadas } from '@/lib/ruteo'
@@ -25,8 +25,8 @@ type Objetivo = { parada_id: string; especialidad: string | null; orden: number;
 const horasLlegada = (v: string[] | string | undefined) => (Array.isArray(v) ? v : v ? [v] : [])
 
 // Visitas de hoy de la visitadora (para marcar a qué médicos del plan ya vio).
-type VisitaHoy = { cliente_id: string; medico_id: string | null; fecha_hora: string; medico: { especialidad: string | null } | null; resultado: { nombre: string } | null }
-type Datos = { paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[]; objetivos?: Objetivo[]; visitasHoy?: VisitaHoy[]; llegadas?: Record<string, string[]>; noVisitados?: Record<string, { hora: string; motivo: string }>; base?: { lat: number | null; lng: number | null } | null }
+type VisitaHoy = { cliente_id: string; medico_id: string | null; fecha_hora: string; medico: { nombre: string; especialidad: string | null } | null; resultado: { nombre: string } | null }
+type Datos = { pactadas?: Record<string, string>; paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[]; objetivos?: Objetivo[]; visitasHoy?: VisitaHoy[]; llegadas?: Record<string, string[]>; noVisitados?: Record<string, { hora: string; motivo: string }>; base?: { lat: number | null; lng: number | null } | null }
 
 export default function Hoy() {
   const { perfil, pendientes, esMedica, jornada, soloLectura } = useVendedor()
@@ -56,6 +56,7 @@ export default function Hoy() {
       const paradas = (p.data ?? []) as ParadaDia[]
       let objetivos: Objetivo[] = []
       let visitasHoy: VisitaHoy[] = []
+      const pactadas: Record<string, string> = {}
       let base: Datos['base'] = null
       const llegadas: Record<string, string[]> = {}
       const noVisitados: Record<string, { hora: string; motivo: string }> = {}
@@ -64,14 +65,16 @@ export default function Hoy() {
       const nv = await sb.from('vis_no_visitados').select('lugar_id, fecha_hora, motivo').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora')
       for (const x of nv.data ?? []) noVisitados[x.lugar_id] = { hora: x.fecha_hora, motivo: x.motivo } // la última del día
       if (esMedica) {
-        const [o, b, c, ll, vh] = await Promise.all([
+        const [o, b, c, ll, hp, vh] = await Promise.all([
           paradas.length ? sb.from('vis_parada_objetivos').select('parada_id, especialidad, orden, medico:vis_medicos(id, nombre, especialidad)').in('parada_id', paradas.map((x) => x.parada_id)) : Promise.resolve({ data: [] }),
           sb.from('vis_vendedores').select('base_lat, base_lng').eq('id', perfil.id).maybeSingle(),
           sb.from('vis_config').select('base_lat, base_lng').maybeSingle(),
           sb.from('vis_llegadas').select('lugar_id, fecha_hora').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
-          sb.from('vis_visitas').select('cliente_id, medico_id, fecha_hora, medico:vis_medicos!vis_visitas_medico_id_fkey(especialidad), resultado:vis_resultados!vis_visitas_resultado_id_fkey(nombre)').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
+          paradas.length ? sb.from('vis_ruta_paradas').select('id, hora_pactada').in('id', paradas.map((x) => x.parada_id)).not('hora_pactada', 'is', null) : Promise.resolve({ data: [] }),
+          sb.from('vis_visitas').select('cliente_id, medico_id, fecha_hora, medico:vis_medicos!vis_visitas_medico_id_fkey(nombre, especialidad), resultado:vis_resultados!vis_visitas_resultado_id_fkey(nombre)').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
         ])
         visitasHoy = (vh.data ?? []) as unknown as VisitaHoy[]
+        for (const x of (hp.data ?? []) as { id: string; hora_pactada: string | null }[]) if (x.hora_pactada) pactadas[x.id] = x.hora_pactada.slice(0, 5)
         for (const x of ll.data ?? []) (llegadas[x.lugar_id] ??= []).push(x.fecha_hora)
         if (!vivo) return
         objetivos = ((o.data ?? []) as Objetivo[]).sort((a, z) => a.orden - z.orden)
@@ -81,6 +84,7 @@ export default function Hoy() {
         paradas,
         objetivos,
         visitasHoy,
+        pactadas,
         llegadas,
         noVisitados,
         base,
@@ -137,7 +141,7 @@ export default function Hoy() {
   const objetivosDe = (id: string) => (datos?.objetivos ?? []).filter((o) => o.parada_id === id)
   // Visita de hoy que cumple un médico del plan (o, si es «buscar especialidad», a un médico de esa especialidad).
   const vistoEn = (lugarId: string, o: Objetivo) => (datos?.visitasHoy ?? []).find((v) => v.cliente_id === lugarId && (o.medico
-    ? v.medico_id === o.medico.id
+    ? mismoMedico(o.medico, { id: v.medico_id, nombre: v.medico?.nombre })
     : !!o.especialidad && !!v.medico?.especialidad && claveEspecialidad(v.medico.especialidad) === claveEspecialidad(o.especialidad)))
 
   const extra = pendientes.visitas
@@ -234,7 +238,7 @@ export default function Hoy() {
                                   : <>Buscar médico de <b>{o.especialidad}</b></>}
                                 {v && <span className="text-xs font-medium text-green-700 dark:text-green-400"> · lo viste {fmtSoloHora(v.fecha_hora)}</span>}
                                 {falta && <span className="text-xs font-medium text-amber-700 dark:text-amber-300"> · no lo viste</span>}
-                                {noEstaba && <span className="text-xs font-medium text-amber-700 dark:text-amber-300"> · {noEstaba.resultado!.nombre.toLowerCase()} ({fmtSoloHora(noEstaba.fecha_hora)})</span>}
+                                {noEstaba && <span className="text-xs font-medium text-amber-700 dark:text-amber-300"> · no lo viste: {noEstaba.resultado!.nombre.toLowerCase()} ({fmtSoloHora(noEstaba.fecha_hora)})</span>}
                               </span>
                             </li>
                           )
@@ -242,14 +246,14 @@ export default function Hoy() {
                       </ul>
                     )}
                     {esMedica && horasLlegada(datos?.llegadas?.[p.cliente_id]).length > 0 && (
-                      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400"><CheckCircle2 className="size-3.5" aria-hidden /> Llegaste a las {fmtHoras(horasLlegada(datos?.llegadas?.[p.cliente_id]))}</p>
+                      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400"><CheckCircle2 className="size-3.5" aria-hidden /> Llegaste a las {fmtHoras(horasLlegada(datos?.llegadas?.[p.cliente_id]))}{datos?.pactadas?.[p.parada_id] && <span className="font-normal text-tenue"> (pactado {datos.pactadas[p.parada_id]})</span>}</p>
                     )}
                     {datos?.noVisitados?.[p.cliente_id] && (
                       <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300"><CircleSlash className="size-3.5" aria-hidden /> {esMedica || p.visitada ? 'No pudiste visitar' : 'No concretada'} ({fmtSoloHora(datos.noVisitados[p.cliente_id]!.hora)}): {textoMotivo(datos.noVisitados[p.cliente_id]!.motivo)}</p>
                     )}
-                    {esMedica && !p.visitada && !datos?.noVisitados?.[p.cliente_id] && horasLlegada(datos?.llegadas?.[p.cliente_id]).length === 0 && horas.get(p.parada_id) && (
-                      <p className="mt-1 flex items-center gap-1 text-xs text-tenue"><Clock className="size-3.5" aria-hidden /> Llegada aprox. {horas.get(p.parada_id)}</p>
-                    )}
+                    {esMedica && !p.visitada && !datos?.noVisitados?.[p.cliente_id] && horasLlegada(datos?.llegadas?.[p.cliente_id]).length === 0 && (datos?.pactadas?.[p.parada_id]
+                      ? <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-tinta"><Clock className="size-3.5 text-marca" aria-hidden /> Hora pactada {datos.pactadas[p.parada_id]}</p>
+                      : horas.get(p.parada_id) && <p className="mt-1 flex items-center gap-1 text-xs text-tenue"><Clock className="size-3.5" aria-hidden /> Llegada aprox. {horas.get(p.parada_id)}</p>)}
                     {p.lat == null && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Sin ubicación cargada: al registrar la visita se puede guardar.</p>}
                     {salteada && <p className="mt-1 text-xs font-medium text-tenue">Salteada hoy: no está en el recorrido.</p>}
                   </div>

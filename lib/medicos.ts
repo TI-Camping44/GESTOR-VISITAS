@@ -80,5 +80,13 @@ export const textoMotivo = (m: string | null | undefined) =>
   [...MOTIVOS_NO_VISITA, ...MOTIVOS_NO_VISITA_VENTA].find((x) => x.valor === m)?.texto ?? 'Otro motivo'
 
 /** Resultados de visita médica en los que el médico no fue atendido (no cuenta como «visto» en el plan del día). */
-export const RESULTADOS_NO_VISTO = ['No estaba / no atendió', 'Sin acceso', 'Ya no atiende acá']
+// «Otro motivo» y «Pidió volver otro día» también: la visitadora los usa cuando no pudo presentar (congreso, canceló…).
+export const RESULTADOS_NO_VISTO = ['No estaba / no atendió', 'Sin acceso', 'Ya no atiende acá', 'Pidió volver otro día', 'Otro motivo']
 export const noLoVio = (resultado: string | null | undefined) => !!resultado && RESULTADOS_NO_VISTO.includes(resultado)
+
+/** Nombre para comparar médicos cargados dos veces («Dra. Yanina  Meza» = «Dra. Yanina Meza»): sin título, tildes ni espacios de más. */
+export const claveNombre = (n: string | null | undefined) => (n ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  .replace(/\b(dr|dra|lic|doctor|doctora|licenciada?)\b\.?/g, ' ').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim()
+/** ¿Es el mismo médico? Por id o, si hay dos fichas, por el nombre. */
+export const mismoMedico = (a: { id?: string | null; nombre?: string | null } | null | undefined, b: { id?: string | null; nombre?: string | null } | null | undefined) =>
+  !!a && !!b && ((!!a.id && a.id === b.id) || (!!claveNombre(a.nombre) && claveNombre(a.nombre) === claveNombre(b.nombre)))

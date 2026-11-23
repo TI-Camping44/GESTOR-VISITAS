@@ -3,7 +3,7 @@ export const TZ = 'America/Asuncion'
 
 const fmtIso = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' })
 const fmtHora = new Intl.DateTimeFormat('es-PY', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false })
-const fmtDiaCorto = new Intl.DateTimeFormat('es-PY', { timeZone: 'UTC', weekday: 'short', day: '2-digit', month: '2-digit' })
+const fmtDiaCorto = new Intl.DateTimeFormat('es-PY', { timeZone: 'UTC', weekday: 'short' })
 const fmtGs = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 })
 
 /** 'YYYY-MM-DD' de un instante, en Asunción. */
@@ -58,7 +58,8 @@ export const fmtHoras = (hs: (string | Date)[]) => {
 }
 
 /** "lun 12/10" */
-export const fmtDia = (iso: string) => fmtDiaCorto.format(aUtc(iso)).replace('.', '')
+/** «vie, 20/11/2026» (día de la semana y dd/MM/yyyy). */
+export const fmtDia = (iso: string) => `${fmtDiaCorto.format(aUtc(iso)).replace('.', '')}, ${fmtFecha(iso)}`
 
 /** Gs. sin decimales */
 export const fmtGuaranies = (n: number | null | undefined) => (n == null ? '—' : `Gs. ${fmtGs.format(Math.round(n))}`)

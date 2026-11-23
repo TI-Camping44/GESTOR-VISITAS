@@ -42,6 +42,9 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
   const [inicio, setInicio] = useState('08:00')
   const [filas, setFilas] = useState<FilaRuteoSemana[] | null>(null)
   const [base, setBase] = useState<{ lat: number | null; lng: number | null } | null>(null)
+  // Hora pactada de cada parada (la carga Sergio acá; la visitadora la ve en Hoy en vez de la aproximada).
+  const [pactadas, setPactadas] = useState<Map<string, string>>(new Map())
+  const [guardando, setGuardando] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const visitadora = vis || visitadoras[0]?.id || ''
 
@@ -54,6 +57,9 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
     ])
     if (r.error) return setError(mensajeError(r.error))
     setFilas(r.data ?? [])
+    const pids = [...new Set((r.data ?? []).map((f: FilaRuteoSemana) => f.parada_id))]
+    const hp = pids.length ? await sb.from('vis_ruta_paradas').select('id, hora_pactada').in('id', pids) : { data: [] }
+    setPactadas(new Map(((hp.data ?? []) as { id: string; hora_pactada: string | null }[]).filter((x) => x.hora_pactada).map((x) => [x.id, x.hora_pactada!.slice(0, 5)])))
     setBase(b.data?.base_lat != null ? { lat: b.data.base_lat, lng: b.data.base_lng } : c.data ? { lat: c.data.base_lat, lng: c.data.base_lng } : null)
   }, [sb, visitadora, lunes])
   useEffect(() => { void cargar() }, [cargar])
@@ -71,6 +77,15 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
     return m
   }, [filas, base, inicio])
   const dias = useMemo(() => [...new Set((filas ?? []).map((f) => f.dia))], [filas])
+
+  async function guardarPactada(paradaId: string, hora: string) {
+    if ((pactadas.get(paradaId) ?? '') === hora) return
+    setGuardando(paradaId); setError(null)
+    const { error: e } = await sb.from('vis_ruta_paradas').update({ hora_pactada: hora || null }).eq('id', paradaId)
+    setGuardando(null)
+    if (e) return setError(mensajeError(e))
+    setPactadas((m) => { const n = new Map(m); if (hora) n.set(paradaId, hora); else n.delete(paradaId); return n })
+  }
   const nombre = visitadoras.find((v) => v.id === visitadora)?.nombre ?? ''
 
   function excel() {
@@ -78,6 +93,7 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
       { titulo: 'Día', valor: (f: FilaRuteoSemana) => fmtDia(f.dia) },
       { titulo: 'Fecha', valor: (f: FilaRuteoSemana) => fmtFecha(f.dia) },
       { titulo: 'Orden', valor: (f: FilaRuteoSemana) => f.orden },
+      { titulo: 'Hora pactada', valor: (f: FilaRuteoSemana) => pactadas.get(f.parada_id) ?? '' },
       { titulo: 'Llegada est.', valor: (f: FilaRuteoSemana) => horas.get(f.parada_id) ?? '' },
       { titulo: 'Llegó (real)', valor: (f: FilaRuteoSemana) => horasReales(f) },
       { titulo: 'Centro médico / Consultorio', valor: (f: FilaRuteoSemana) => f.lugar },
@@ -126,7 +142,7 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 className="font-semibold">Ruteo de la semana</h2>
-            <p className="text-sm text-tenue">Centro médico / Consultorio · Especialidad · Dr · Día de visita, con lo que pasó en cada visita. Llegada: en verde la hora real en que marcó «Llegué acá»; con ≈, la aproximada desde la oficina.</p>
+            <p className="text-sm text-tenue">Centro médico / Consultorio · Especialidad · Dr · Día de visita, con lo que pasó en cada visita. Hora: la <b>pactada</b> se escribe en cada lugar (la visitadora la ve en su app); abajo, en verde, la hora real en que marcó «Llegué acá», o con ≈ la aproximada desde la oficina.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {visitadoras.length > 1 && (
@@ -136,7 +152,7 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
             )}
             <div className="flex items-center gap-1">
               <button type="button" aria-label="Semana anterior" onClick={() => setLunes(sumarDias(lunes, -7))} className="grid size-9 place-items-center rounded-lg border border-borde"><ChevronLeft className="size-4" aria-hidden /></button>
-              <span className="min-w-36 text-center text-sm font-medium">Sem {semanaIso(lunes)} · {fmtFecha(lunes).slice(0, 5)} al {fmtFecha(sumarDias(lunes, 5)).slice(0, 5)}</span>
+              <span className="min-w-36 text-center text-sm font-medium">Sem {semanaIso(lunes)} · {fmtFecha(lunes)} al {fmtFecha(sumarDias(lunes, 5))}</span>
               <button type="button" aria-label="Semana siguiente" onClick={() => setLunes(sumarDias(lunes, 7))} className="grid size-9 place-items-center rounded-lg border border-borde"><ChevronRight className="size-4" aria-hidden /></button>
             </div>
             <label className="flex items-center gap-1 text-sm">Sale
@@ -151,10 +167,10 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
           const hechas = delDia.filter((f) => f.visita_id).length
           return (
             <div key={d} className="overflow-x-auto">
-              <h3 className="mb-1 text-sm font-semibold"><span className="capitalize">{fmtDia(d)}</span>/{d.slice(0, 4)} <span className="font-normal text-tenue">· {new Set(delDia.map((f) => f.parada_id)).size} lugares · {hechas} de {delDia.length} visitados</span></h3>
+              <h3 className="mb-1 text-sm font-semibold"><span className="capitalize">{fmtDia(d)}</span> <span className="font-normal text-tenue">· {new Set(delDia.map((f) => f.parada_id)).size} lugares · {hechas} de {delDia.length} visitados</span></h3>
               <table className="w-full min-w-[860px] text-sm">
                 <thead className="text-left text-xs text-tenue">
-                  <tr className="border-b border-borde [&>th]:px-2 [&>th]:py-1.5"><th className="w-10">#</th><th className="w-16">Llegada</th><th>Centro médico / Consultorio</th><th>Especialidad</th><th>Dr</th><th>Resultado</th><th>Próxima</th><th className="w-28">Estado</th></tr>
+                  <tr className="border-b border-borde [&>th]:px-2 [&>th]:py-1.5"><th className="w-10">#</th><th className="w-28">Pactada / llegó</th><th>Centro médico / Consultorio</th><th>Especialidad</th><th>Dr</th><th>Resultado</th><th>Próxima</th><th className="w-28">Estado</th></tr>
                 </thead>
                 <tbody>
                   {delDia.map((f, i) => {
@@ -163,9 +179,15 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
                     return (
                       <tr key={`${f.parada_id}-${f.objetivo_id ?? i}`} className={cn('align-top [&>td]:px-2 [&>td]:py-1.5', primera && 'border-t border-borde')}>
                         <td className="tabular text-tenue">{primera ? f.orden : ''}</td>
-                        <td className="tabular">{primera && (f.llegada
-                          ? <span title="Hora real en que marcó «Llegué acá» (si volvió en el día, cada llegada)" className="font-semibold text-green-700 dark:text-green-400">{horasReales(f)}</span>
-                          : <span title="Hora aproximada" className="text-tenue">≈ {horas.get(f.parada_id)}</span>)}</td>
+                        <td className="tabular">{primera && <>
+                          <input type="time" aria-label={`Hora pactada en ${f.lugar}`} title="Hora pactada (la ve la visitadora en Hoy). Vacío: sin hora pactada."
+                            defaultValue={pactadas.get(f.parada_id) ?? ''} key={`${f.parada_id}-${pactadas.get(f.parada_id) ?? ''}`}
+                            onBlur={(e) => void guardarPactada(f.parada_id, e.target.value)}
+                            className={cn('min-h-8 w-24 rounded-md border border-borde bg-superficie px-1.5 text-sm', guardando === f.parada_id && 'opacity-50')} />
+                          <p className="mt-0.5 text-xs">{f.llegada
+                            ? <span title="Hora real en que marcó «Llegué acá» (si volvió en el día, cada llegada)" className="font-semibold text-green-700 dark:text-green-400">llegó {horasReales(f)}</span>
+                            : <span title="Hora aproximada desde la oficina" className="text-tenue">≈ {horas.get(f.parada_id)}</span>}</p>
+                        </>}</td>
                         <td>{primera && <><p className="font-medium">{f.lugar}</p>{f.direccion && <p className="text-xs text-tenue">{f.direccion}</p>}</>}</td>
                         <td>{f.especialidad ?? <span className="text-tenue">—</span>}</td>
                         <td>{f.medico ?? (f.medico_visitado ? <span className="text-tenue">visitó a {f.medico_visitado}</span> : <span className="text-tenue">{f.objetivo_id ? 'a buscar' : '—'}</span>)}</td>

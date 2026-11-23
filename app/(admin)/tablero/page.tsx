@@ -7,6 +7,7 @@
 import { usePanel } from '@/components/admin/PanelModo'
 import { ActividadVentas } from '@/components/admin/ActividadVentas'
 import { totalMuestras } from '@/components/admin/medica/datos'
+import { noLoVio } from '@/lib/medicos'
 import type { ProductoVisita } from '@/lib/database.types'
 import { useEffect, useMemo, useState } from 'react'
 import { useParamUrl } from '@/lib/useParamUrl'
@@ -17,13 +18,13 @@ import Link from 'next/link'
 import { Aviso, Boton, Tarjeta, Vacio } from '@/components/ui'
 import { descargarCsv } from '@/lib/csv'
 import { supabaseNavegador } from '@/lib/supabase/client'
-import { fmtDia, fmtFechaHora, hoyIso, lunesDe, sumarDias } from '@/lib/fechas'
+import { fechaIso, fmtDia, fmtFechaHora, hoyIso, lunesDe, sumarDias } from '@/lib/fechas'
 import { cn, mensajeError } from '@/lib/utils'
 import type { FilaTablero, FilaTableroRuta } from '@/lib/database.types'
 
 type VisitaSemana = {
   id: string; vendedor_id: string | null; fecha_hora: string; lat: number | null; lng: number | null; hizo_pedido: boolean
-  ruta_parada_id: string | null; cliente_id: string; medico_id: string | null; productos: ProductoVisita[] | null; cliente: { razon_social: string; ciudad: string | null } | null; zona: { nombre: string } | null
+  ruta_parada_id: string | null; cliente_id: string; medico_id: string | null; productos: ProductoVisita[] | null; resultado: { nombre: string } | null; cliente: { razon_social: string; ciudad: string | null } | null; zona: { nombre: string } | null
 }
 
 // Paraguay está fijo en UTC−3 desde octubre de 2024.
@@ -46,6 +47,7 @@ export default function Tablero() {
   const [filas, setFilas] = useState<FilaTablero[] | null>(null)
   const [porRuta, setPorRuta] = useState<FilaTableroRuta[]>([])
   const [visitas, setVisitas] = useState<VisitaSemana[]>([])
+  const [llegadas, setLlegadas] = useState<{ vendedor_id: string; lugar_id: string; fecha_hora: string }[]>([])
   const [kmHoras, setKmHoras] = useState<Map<string, { km: number; horas: number }>>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [sel, setSel] = useState<Seleccion | null>(null)
@@ -57,12 +59,15 @@ export default function Tablero() {
     Promise.all([
       sb.rpc('vis_tablero', { p_semana: semana }),
       sb.from('vis_visitas')
-        .select('id, vendedor_id, fecha_hora, lat, lng, hizo_pedido, ruta_parada_id, cliente_id, medico_id, productos, cliente:vis_clientes!vis_visitas_cliente_id_fkey(razon_social, ciudad), zona:vis_zonas!vis_visitas_zona_id_fkey(nombre)')
+        .select('id, vendedor_id, fecha_hora, lat, lng, hizo_pedido, ruta_parada_id, cliente_id, medico_id, productos, resultado:vis_resultados!vis_visitas_resultado_id_fkey(nombre), cliente:vis_clientes!vis_visitas_cliente_id_fkey(razon_social, ciudad), zona:vis_zonas!vis_visitas_zona_id_fkey(nombre)')
         .eq('origen', 'app').gte('fecha_hora', inicioDia(semana)).lt('fecha_hora', inicioDia(sumarDias(semana, 7))).limit(5000),
       sb.rpc('vis_reporte_vendedores', { p_desde: semana, p_hasta: sumarDias(semana, 6) }),
       sb.rpc('vis_tablero_rutas', { p_semana: semana }),
-    ]).then(([t, v, r, pr]) => {
+      // Visita médica: las llegadas cuentan como lugar visitado aunque no haya visto a nadie.
+      medica ? sb.from('vis_llegadas').select('vendedor_id, lugar_id, fecha_hora').gte('fecha_hora', inicioDia(semana)).lt('fecha_hora', inicioDia(sumarDias(semana, 7))).limit(5000) : Promise.resolve({ data: [] }),
+    ]).then(([t, v, r, pr, ll]) => {
       if (!vivo) return
+      setLlegadas((ll.data ?? []) as { vendedor_id: string; lugar_id: string; fecha_hora: string }[])
       if (t.error || v.error) setError(mensajeError(t.error ?? v.error))
       else { setError(null); setFilas(((t.data ?? []) as FilaTablero[]).filter((f) => delModo(f.vendedor_id))); setVisitas(((v.data ?? []) as unknown as VisitaSemana[]).filter((x) => delModo(x.vendedor_id))) }
       const filasR = (r.data ?? []) as unknown as { vendedor_id: string; km: number; horas_jornada: number }[]
@@ -73,7 +78,7 @@ export default function Tablero() {
       })))
     })
     return () => { vivo = false }
-  }, [semana, delModo])
+  }, [semana, delModo, medica])
   useEffect(() => { setSel(null) }, [semana])
 
   // Lunes a viernes. El sábado aparece solo si esa semana alguien tuvo paradas o visitas ese día (no se esconde trabajo).
@@ -111,19 +116,33 @@ export default function Tablero() {
     titulo: v.cliente?.razon_social ?? 'Visita', detalle: `${fmtFechaHora(v.fecha_hora)}${v.hizo_pedido ? ' · con pedido' : ''}${v.ruta_parada_id ? '' : ' · fuera de ruta'}`,
   })), [visitas])
 
-  // Visita médica: por visitadora, médicos distintos, lugares y muestras de la semana.
-  const medicaSemana = useMemo(() => {
-    const m = new Map<string, { medicos: Set<string>; lugares: Set<string>; muestras: number }>()
+  // Visita médica, por visitadora y día: médicos atendidos (visitas en que lo vio; «No estaba», sin acceso, etc. no
+  // cuentan), «no lo vio» y lugares visitados (con visita o «Llegué acá»). La meta se compara con los atendidos.
+  const medicaDia = useMemo(() => {
+    const m = new Map<string, { atendidos: number; noVio: number; lugares: Set<string> }>()
+    const de = (vid: string, d: string) => { const k = `${vid}|${d}`; const x = m.get(k) ?? { atendidos: 0, noVio: 0, lugares: new Set<string>() }; m.set(k, x); return x }
     for (const v of visitas) {
       if (!v.vendedor_id) continue
-      const x = m.get(v.vendedor_id) ?? { medicos: new Set<string>(), lugares: new Set<string>(), muestras: 0 }
-      if (v.medico_id) x.medicos.add(v.medico_id)
+      const x = de(v.vendedor_id, fechaIso(v.fecha_hora))
+      if (noLoVio(v.resultado?.nombre)) x.noVio++
+      else x.atendidos++
       x.lugares.add(v.cliente_id)
+    }
+    for (const l of llegadas) de(l.vendedor_id, fechaIso(l.fecha_hora)).lugares.add(l.lugar_id)
+    return m
+  }, [visitas, llegadas])
+  const medicaSemana = useMemo(() => {
+    const m = new Map<string, { medicos: Set<string>; muestras: number }>()
+    for (const v of visitas) {
+      if (!v.vendedor_id) continue
+      const x = m.get(v.vendedor_id) ?? { medicos: new Set<string>(), muestras: 0 }
+      if (v.medico_id && !noLoVio(v.resultado?.nombre)) x.medicos.add(v.medico_id)
       x.muestras += totalMuestras(v)
       m.set(v.vendedor_id, x)
     }
     return m
   }, [visitas])
+  const hechasDe = (vid: string, d: string, f: FilaTablero | undefined) => (medica ? medicaDia.get(`${vid}|${d}`)?.atendidos ?? 0 : Number(f?.realizadas ?? 0))
   function abrirDia(id: string, nombre: string, desde: string, hasta: string) {
     if (!medica) setSel({ vendedorId: id, nombre, desde, hasta })
     if (!medica && !hayMedica) return
@@ -141,7 +160,7 @@ export default function Tablero() {
         <SelectorSemana semana={semana} alCambiar={setSemana} />
       </div>
       <p className="-mt-3 text-sm text-tenue">{medica
-        ? <>Visitas a médicos por día contra la meta y lugares planificados. Tocá un número (por ejemplo <b className="font-semibold text-tinta">7 / 10</b>) para ver ese día hora por hora.</>
+        ? <>Por día: <b className="font-semibold text-tinta">médicos atendidos</b> contra la meta (no cuentan los que no estaban o no la recibieron) y lugares visitados de los del plan. Tocá un número para ver ese día hora por hora.</>
         : <>Tocá un número (por ejemplo <b className="font-semibold text-tinta">7 / 10</b>) para ver qué clientes visitó y cuáles quedaron sin visitar.</>}</p>
       {error && <Aviso tipo="error">{error}</Aviso>}
 
@@ -153,9 +172,9 @@ export default function Tablero() {
               {dias.map((d) => <th key={d} className={cn('px-2 py-3 text-center font-medium', d === hoy && 'text-marca')}>{fmtDia(d)}</th>)}
               <th className="px-3 py-3 text-center font-medium">Semana</th>
               {medica ? <>
-                <th className="px-3 py-3 text-center font-medium">Médicos</th>
-                <th className="px-3 py-3 text-center font-medium">Lugares</th>
-                <th className="px-3 py-3 text-center font-medium">No pudo visitar</th>
+                <th className="px-3 py-3 text-center font-medium" title="Médicos diferentes que atendió en la semana">Médicos distintos</th>
+                <th className="px-3 py-3 text-center font-medium" title="Fue pero no lo vio: no estaba, sin acceso, pidió volver, ya no atiende ahí u otro motivo">No lo vio</th>
+                <th className="px-3 py-3 text-center font-medium" title="Lugares del plan marcados «No pude visitar este lugar»">No pudo visitar</th>
                 <th className="px-3 py-3 text-center font-medium">Muestras</th>
               </> : <>
                 <th className="px-3 py-3 text-center font-medium">Con pedido</th>
@@ -171,7 +190,9 @@ export default function Tablero() {
             {filas && porVendedor.length === 0 && <tr><td colSpan={13} className="px-4 py-6 text-center text-tenue">{medica ? 'No hay visitadoras activas.' : 'No hay vendedores activos. Cargalos en Vendedores.'}</td></tr>}
             {porVendedor.map(([id, v]) => {
               const lista = dias.map((d) => v.dias.get(d))
-              const total = lista.reduce((s, f) => s + Number(f?.realizadas ?? 0), 0)
+              const total = lista.reduce((s, f, i) => s + hechasDe(id, dias[i]!, f), 0)
+              const lugaresHechos = dias.reduce((s, d) => s + (medicaDia.get(`${id}|${d}`)?.lugares.size ?? 0), 0)
+              const noVio = dias.reduce((s, d) => s + (medicaDia.get(`${id}|${d}`)?.noVio ?? 0), 0)
               const plan = lista.reduce((s, f) => s + Number(f?.planificadas ?? 0), 0)
               const pedidos = lista.reduce((s, f) => s + Number(f?.con_pedido ?? 0), 0)
               const fuera = lista.reduce((s, f) => s + Number(f?.fuera_de_ruta ?? 0), 0)
@@ -183,11 +204,11 @@ export default function Tablero() {
                   {lista.map((f, i) => (
                     <td key={dias[i]} className="px-1 py-2 text-center">
                       <button type="button" onClick={() => abrirDia(id, v.nombre, dias[i]!, dias[i]!)}
-                        className={cn('inline-block min-w-16 rounded-md border border-current/15 px-2 py-1 hover:ring-2 hover:ring-marca/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marca', colorCumplimiento(Number(f?.realizadas ?? 0), v.metaD),
+                        className={cn('inline-block min-w-16 rounded-md border border-current/15 px-2 py-1 hover:ring-2 hover:ring-marca/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marca', colorCumplimiento(hechasDe(id, dias[i]!, f), v.metaD),
                           sel?.vendedorId === id && sel.desde === dias[i] && sel.hasta === dias[i] && 'ring-2 ring-marca')}
-                        title={medica ? `${f?.realizadas ?? 0} visitas a médicos · ${f?.planificadas ?? 0} lugares planificados · meta ${v.metaD}. Tocá para ver el día.` : `${f?.realizadas ?? 0} realizadas de ${f?.planificadas ?? 0} planificadas · meta ${v.metaD}. Tocá para ver los clientes.`}>
-                        <strong>{f?.realizadas ?? 0}</strong><span className="text-tenue"> / {v.metaD}</span>
-                        <span className="block text-xs text-tenue">{medica ? `${f?.planificadas ?? 0} lugares` : `plan ${f?.planificadas ?? 0}`}</span>
+                        title={medica ? `${hechasDe(id, dias[i]!, f)} médicos atendidos de una meta de ${v.metaD} · ${medicaDia.get(`${id}|${dias[i]}`)?.lugares.size ?? 0} de ${f?.planificadas ?? 0} lugares del plan visitados. Tocá para ver el día.` : `${f?.realizadas ?? 0} realizadas de ${f?.planificadas ?? 0} planificadas · meta ${v.metaD}. Tocá para ver los clientes.`}>
+                        <strong>{hechasDe(id, dias[i]!, f)}</strong><span className="text-tenue"> / {v.metaD}</span>
+                        <span className="block text-xs text-tenue">{medica ? `${medicaDia.get(`${id}|${dias[i]}`)?.lugares.size ?? 0} de ${f?.planificadas ?? 0} lugares` : `plan ${f?.planificadas ?? 0}`}</span>
                       </button>
                     </td>
                   ))}
@@ -200,11 +221,11 @@ export default function Tablero() {
                     <div className="mx-auto mt-1 h-1.5 w-20 overflow-hidden rounded-full bg-fondo" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, pct)} aria-label={`${pct}% de la meta semanal`}>
                       <div className="h-full rounded-full bg-marca" style={{ width: `${Math.min(100, pct)}%` }} />
                     </div>
-                    <span className="text-xs text-tenue">{pct}% · {medica ? `${plan} lugares` : `plan ${plan}`}</span>
+                    <span className="text-xs text-tenue">{pct}% · {medica ? `${lugaresHechos} de ${plan} lugares` : `plan ${plan}`}</span>
                   </td>
                   {medica ? <>
                     <td className="px-3 py-2 text-center">{medicaSemana.get(id)?.medicos.size ?? 0}</td>
-                    <td className="px-3 py-2 text-center">{medicaSemana.get(id)?.lugares.size ?? 0}</td>
+                    <td className="px-3 py-2 text-center">{noVio > 0 ? <span className="font-medium text-amber-800 dark:text-amber-300">{noVio}</span> : 0}</td>
                     <td className="px-3 py-2 text-center">{noConcretadas > 0 ? <span className="font-medium text-amber-800 dark:text-amber-300">{noConcretadas}</span> : 0}</td>
                     <td className="px-3 py-2 text-center">{medicaSemana.get(id)?.muestras ?? 0}</td>
                   </> : <>
