@@ -202,6 +202,8 @@ async function gestion() {
     await p.getByRole('button', { name: 'Editar' }).click(); await espera(400); await foto(p, 'g-lugar-editar', { completa: true })
     await p.getByRole('button', { name: 'Papelera' }).click(); await espera(800); await foto(p, 'g-lugar-papelera', { completa: true })
     await ir(p, '/resultados', 3000); await foto(p, 'g-resultados', { completa: true })
+    await p.getByRole('tab', { name: 'Visita de venta' }).click(); await espera(300)
+    await p.getByLabel('Agregar resultado').fill('Pide visita del gerente'); await espera(200); await foto(p, 'g-resultados-venta', { completa: true })
     await ir(p, '/medica', 4000); await p.getByText('Plan del día y lo que hizo').first().evaluate((e) => e.scrollIntoView({ block: 'start' })); await espera(300); await foto(p, 'g-plan')
   })
   await conMock('noe', true, async () => {
