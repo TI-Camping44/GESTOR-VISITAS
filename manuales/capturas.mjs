@@ -216,7 +216,22 @@ async function ciclos() {
   })
 }
 
-const grupos = { ciclos, 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita, 'medico-ausente': medicoAusente, 'para-hoy': paraHoy }
-for (const g of grupo === 'todos' ? Object.keys(grupos).filter((x) => !['no-visita', 'medico-ausente', 'para-hoy', 'ciclos'].includes(x)) : [grupo]) await grupos[g]()
+// Tablero de visita médica y Actividad del día en el Tablero de Ventas (Vitalica).
+async function tableros() {
+  await conMock('ser', false, async () => {
+    const p = await contexto(false)
+    await ir(p, '/medica/tablero', 4000); await foto(p, 'k-tablero-medica')
+    await ir(p, '/tablero', 4500); await foto(p, 'k-tablero-ventas')
+    await p.getByRole('heading', { name: 'Actividad del día' }).evaluate((e) => e.scrollIntoView({ block: 'start' })); await p.evaluate(() => window.scrollBy(0, -20)); await espera(500); await foto(p, 'k-actividad-ventas')
+    await foto(p, 'k-tablero-ventas-completo', { completa: true })
+  })
+  await conMock('jor', false, async () => {
+    const p = await contexto(false)
+    await ir(p, '/tablero', 4500); await foto(p, 'k-tablero-c44-completo', { completa: true })
+  })
+}
+
+const grupos = { tableros, ciclos, 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita, 'medico-ausente': medicoAusente, 'para-hoy': paraHoy }
+for (const g of grupo === 'todos' ? Object.keys(grupos).filter((x) => !['no-visita', 'medico-ausente', 'para-hoy', 'ciclos', 'tableros'].includes(x)) : [grupo]) await grupos[g]()
 await browser.close()
 if (errores.length) console.log('ERRORES:\n' + [...new Set(errores)].join('\n'))

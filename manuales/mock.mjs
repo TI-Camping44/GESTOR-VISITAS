@@ -67,6 +67,8 @@ const vis = (id, vend, cli, hhmm, dia, extra = {}) => ({ id, vendedor_id: vend, 
 const visitas = [
   vis('vh1', 'hum', 'c1', '08:45', hoy, { hizo_pedido: true, lat: -25.2996, lng: -57.6108, observaciones: 'Pidió 2 cajas de linternas y 10 conservadoras.', resultado: { nombre: 'Pedido' }, cliente: { razon_social: 'Ferretería San Roque', ciudad: 'Asunción' }, zona: { nombre: 'Asunción Centro' } }),
   vis('vh2', 'hum', 'c2', '09:40', hoy, { lat: -25.2931, lng: -57.5932, observaciones: 'Quiere cotización de carpas para enero.', resultado: { nombre: 'Cotización' }, cliente: { razon_social: 'Comercial El Sol', ciudad: 'Asunción' }, zona: { nombre: 'Asunción Centro' } }),
+  vis('vu1', 'hug', 'c11', '08:50', hoy, { hizo_pedido: true, ruta_parada_id: 'u1', observaciones: 'Pidió reposición de vitaminas y proteína.', proxima_visita: sumar(hoy, 14), resultado: { nombre: 'Pedido' }, cliente: { razon_social: 'Farmacia Vida', ciudad: 'Asunción' } }),
+  vis('vu2', 'hug', 'c13x', '11:20', hoy, { ruta_parada_id: null, observaciones: 'Prospecto: le interesa la línea deportiva, pidió lista de precios.', resultado: { nombre: 'Cotización' }, cliente: { razon_social: 'Gimnasio Fuerza Total', ciudad: 'Asunción' } }),
   vis('vn1', 'noe', 'l1', '09:35', hoy, { medico_id: 'm1', observaciones: 'Pidió más muestras del antiinflamatorio para la semana que viene.', productos: [{ producto: 'Artrodol 50 mg', muestras: 4 }, { producto: 'Vitalcal D', muestras: 0 }], resultado: { nombre: 'Presentó productos' }, lugar: { razon_social: lnom('l1') }, medico: med('m1'), cliente: { razon_social: lnom('l1') } }),
   vis('vn2', 'noe', 'l2', '11:10', hoy, { medico_id: 'm3', productos: [{ producto: 'Gastrovit', muestras: 6 }], resultado: { nombre: 'Dejó muestras' }, lugar: { razon_social: lnom('l2') }, medico: med('m3'), cliente: { razon_social: lnom('l2') } }),
 ]
@@ -169,7 +171,7 @@ const recorrido = []
   recorrido.push({ fecha_hora: new Date(t0 + 200 * 60000).toISOString(), lat: pts.at(-1)[0], lng: pts.at(-1)[1], precision_m: 10, bateria_pct: 58, velocidad_kmh: 0, origen: 'traccar', jornada_id: 'j1', vendedor_id: 'hum' })
 }
 // «No pude visitar este lugar» (visita médica): uno de ejemplo a las 12:20 en el Centro Médico La Costa.
-const noVisitados = [{ id: 'nv1', vendedor_id: 'noe', lugar_id: 'l3', parada_id: 'q3', fecha_hora: h('12:20'), created_at: h('12:20'), motivo: 'sin_medicos', observaciones: 'Los médicos estaban en un congreso; vuelven el lunes.', lat: -25.2780, lng: -57.6050, lugar: { razon_social: 'Centro Médico La Costa' } }]
+const noVisitados = [{ id: 'nvh', vendedor_id: 'hug', lugar_id: 'c12', parada_id: 'u2', fecha_hora: h('10:05'), created_at: h('10:05'), motivo: 'encargado_ausente', observaciones: 'El encargado vuelve el jueves.', lat: null, lng: null, cliente: { razon_social: 'Farmacia Central Luque' }, lugar: { razon_social: 'Farmacia Central Luque' } }, { id: 'nv1', vendedor_id: 'noe', lugar_id: 'l3', parada_id: 'q3', fecha_hora: h('12:20'), created_at: h('12:20'), motivo: 'sin_medicos', observaciones: 'Los médicos estaban en un congreso; vuelven el lunes.', lat: -25.2780, lng: -57.6050, lugar: { razon_social: 'Centro Médico La Costa' } }]
 const jornadas = [
   { id: 'j1', vendedor_id: 'hum', inicio: h('08:00'), fin: null, km_actual: 14.2, km_recorridos: null, cierre_auto: false, inicio_lat: null, inicio_lng: null },
   { id: 'j4', vendedor_id: 'hug', inicio: h('08:00'), fin: null, km_actual: 12.6, km_recorridos: null, cierre_auto: false, inicio_lat: null, inicio_lng: null },
