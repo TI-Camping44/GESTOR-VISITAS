@@ -70,8 +70,8 @@ export type Database = {
         Relationships: []
       }
       vis_ruta_paradas: {
-        Row: { cliente_id: string; dia: string; id: string; orden: number; ruta_id: string }
-        Insert: { cliente_id: string; dia: string; id?: string; orden?: number; ruta_id: string }
+        Row: { cliente_id: string; dia: string; id: string; orden: number; ruta_id: string; hora_pactada: string | null }
+        Insert: { cliente_id: string; dia: string; id?: string; orden?: number; ruta_id: string; hora_pactada?: string | null }
         Update: Partial<Database['public']['Tables']['vis_ruta_paradas']['Insert']>
         Relationships: Rel[]
       }
