@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CheckCircle2, CircleSlash, MapPin, MessageCircle, Navigation, Pencil, Phone, Plus, Search, Stethoscope, Trash2 } from 'lucide-react'
+import { CheckCircle2, CircleMinus, MapPin, MessageCircle, Navigation, Pencil, Phone, Plus, Search, Stethoscope, Trash2 } from 'lucide-react'
 import { leerGps } from '@/lib/gps'
 import { NoPudeVisitar } from '@/components/vendedor/NoPudeVisitar'
 import { distanciaM, fmtDistancia } from '@/lib/geo'
@@ -245,7 +245,7 @@ export default function PaginaLugar() {
             {errorNoEsta && <Aviso tipo="error">{errorNoEsta}</Aviso>}
             <div className="flex gap-2">
               <Boton variante="secundario" className="flex-1" disabled={guardandoNoEsta} onClick={() => void marcarNoEsta(m)}>
-                <CircleSlash className="size-4 text-amber-700 dark:text-amber-300" aria-hidden /> {guardandoNoEsta ? 'Guardando…' : 'Confirmar: no está'}
+                <CircleMinus className="size-4 text-amber-700 dark:text-amber-300" aria-hidden /> {guardandoNoEsta ? 'Guardando…' : 'Confirmar: no está'}
               </Boton>
               <Boton variante="fantasma" onClick={() => { setNoEsta(null); setErrorNoEsta(null) }}>Cancelar</Boton>
             </div>
@@ -253,13 +253,13 @@ export default function PaginaLugar() {
         ) : (
           <div className="mt-3 flex gap-2">
             {estado?.noEstaba ? (
-              <span className="inline-flex flex-1 items-center justify-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-300"><CircleSlash className="size-4" aria-hidden /> No estaba ({fmtSoloHora(estado.hora)})</span>
+              <span className="inline-flex flex-1 items-center justify-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-300"><CircleMinus className="size-4" aria-hidden /> No estaba ({fmtSoloHora(estado.hora)})</span>
             ) : visitado ? (
               <span className="inline-flex flex-1 items-center justify-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-400"><CheckCircle2 className="size-4" aria-hidden /> Visitado hoy{estado && ` (${fmtSoloHora(estado.hora)})`}</span>
             ) : (
               <>
                 <Link href={urlVisitaMedico(lugar.id, m.id, { parada: paradaHoy })} className={claseBoton({ className: 'flex-1' })}>Registrar visita</Link>
-                {orden && <Boton variante="secundario" onClick={() => { setNoEsta(m.id); setObsNoEsta(''); setErrorNoEsta(null) }}><CircleSlash className="size-4 text-amber-700 dark:text-amber-300" aria-hidden /> No está</Boton>}
+                {orden && <Boton variante="secundario" onClick={() => { setNoEsta(m.id); setObsNoEsta(''); setErrorNoEsta(null) }}><CircleMinus className="size-4 text-amber-700 dark:text-amber-300" aria-hidden /> No está</Boton>}
               </>
             )}
             {!orden && tel && <a href={tel} aria-label={`Llamar a ${m.nombre}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" aria-hidden /></a>}

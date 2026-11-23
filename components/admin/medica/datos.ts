@@ -1,7 +1,7 @@
 'use client'
 // Datos de visita médica para el panel (Sergio): visitadoras, médicos, lugares, visitas y llegadas.
 // Todo con el RLS de quien mira: solo su empresa y su gente.
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { claveEspecialidad } from '@/lib/medicos'
 import { mensajeError } from '@/lib/utils'
@@ -35,21 +35,23 @@ export function useVisitadoras() {
 export function useMedicos() {
   const [medicos, setMedicos] = useState<Medico[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [vuelta, setVuelta] = useState(0)
   useEffect(() => {
     void supabaseNavegador().from('vis_medicos_v').select('*').order('nombre').limit(5000)
-      .then(({ data, error: e }) => { if (e) setError(mensajeError(e)); setMedicos((data ?? []) as Medico[]) })
-  }, [])
-  return { medicos, error }
+      .then(({ data, error: e }) => { setError(e ? mensajeError(e) : null); setMedicos((data ?? []) as Medico[]) })
+  }, [vuelta])
+  return { medicos, error, recargar: useCallback(() => setVuelta((v) => v + 1), []) }
 }
 
 export function useLugares() {
   const [lugares, setLugares] = useState<LugarMedico[] | null>(null)
+  const [vuelta, setVuelta] = useState(0)
   useEffect(() => {
     void supabaseNavegador().from('vis_clientes_v').select('id, razon_social, tipo_lugar, direccion, ciudad, lat, lng, notas, vendedor_id, ultima_visita')
       .eq('categoria', 'lugar').order('razon_social').limit(2000)
       .then(({ data }) => setLugares((data ?? []) as LugarMedico[]))
-  }, [])
-  return lugares
+  }, [vuelta])
+  return { lugares, recargar: useCallback(() => setVuelta((v) => v + 1), []) }
 }
 
 const CAMPOS_VISITA = 'id, vendedor_id, cliente_id, medico_id, fecha_hora, observaciones, proxima_visita, productos, '

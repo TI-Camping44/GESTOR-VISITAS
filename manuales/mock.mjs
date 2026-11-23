@@ -54,6 +54,8 @@ const M = [
   ['m4', 'Dra. Ana Benítez', 'Clínica Medica', [['l4', 'Miércoles y Viernes 15:00 a 18:00 Hs.']], null, 30],
   ['m5', 'Dr. Luis Acosta', 'Endocrinología', [['l3', 'Jueves 06:30 Hs. a 12:30 Hs.']], h('10:00', sumar(hoy, -1)), 30],
   ['m6', 'Dra. Sofía Duarte', 'Gastroenterología', [['l2', null]], h('09:00', sumar(hoy, -54)), 30],
+  ['m7', 'Dra. Yanina Meza', 'Endocrinología', [['l1', 'Lunes 14:00 Hs.']], h('10:30', sumar(hoy, -3)), 30],
+  ['m8', 'Dra. Yanina Mesa', 'Endocrinología', [['l2', null]], null, 30],
 ]
 const medicos = M.map(([id, nombre, esp, ls, uv, f]) => ({ id, nombre, especialidad: esp, telefono: id === 'm1' ? '0981 555 123' : null, telefono_norm: id === 'm1' ? '595981555123' : null, email: null, notas: id === 'm2' ? 'Prefiere visitas después de las 17' : null, frecuencia_dias: f, visitadora_id: 'noe', creado_por: 'noe', activo: true, empresa_id: E2, created_at: '2026-11-01', updated_at: '2026-11-01', ultima_visita: uv, lugares: ls.map(([lid, hor]) => ({ lugar_id: lid, nombre: lnom(lid), horario: hor })) }))
 const med = (id) => { const m = medicos.find((x) => x.id === id); return { nombre: m.nombre, especialidad: m.especialidad } }
@@ -196,8 +198,10 @@ const tablas = {
   vis_vendedores: vendedores.filter((v) => v.empresa_id === EMP),
   vis_empresas: [{ id: E1, nombre: 'Camping 44' }, { id: E2, nombre: 'Vitalica' }].filter((e) => e.id === EMP),
   vis_equipos: EMP === E1 ? [{ id: 'eq1', empresa_id: E1, nombre: 'Mayorista' }] : [],
-  vis_clientes_v: [...clientes, ...(EMP === E2 ? lugares : [])], vis_clientes: [...clientes, ...lugares],
-  vis_medicos_v: EMP === E2 ? medicos : [], vis_resultados: resultados, vis_productos: EMP === E2 ? productos : [],
+  vis_clientes_v: [...clientes, ...(EMP === E2 ? lugares : [])], vis_clientes: [...clientes, ...lugares, { ...lugares[0], id: 'lx1', razon_social: 'Sanatorio La Costa (repetido)', activo: false, updated_at: h('15:00', sumar(hoy, -2)), notas: null }],
+  vis_medicos_v: EMP === E2 ? medicos : [],
+  vis_medicos: EMP === E2 ? [...medicos, { ...medicos[6], id: 'mx1', nombre: 'Dra. Yanina  Meza', activo: false, updated_at: h('16:30'), notas: `Unido con «Dra. Yanina Meza» el ${hoy.split('-').reverse().join('/')}: sus visitas, planes y lugares pasaron a ese médico.` }] : [],
+  vis_resultados: resultados, vis_productos: EMP === E2 ? productos : [],
   vis_visitas: visitas.filter((v) => deEmpresa(v.vendedor_id)), vis_llegadas: llegadas, vis_no_visitados: noVisitados, vis_jornadas: JORNADA || ['jor', 'ser'].includes(P) ? jornadas : [],
   vis_zonas: EMP === E1 ? zonas : zonasVit, vis_ciclos: EMP === E2 ? ciclos : [], vis_rutas: rutas.filter((r) => deEmpresa(r.vendedor_id)), vis_ruta_paradas: rutaParadas,
   vis_posicion_actual: posActual.filter((p) => deEmpresa(p.vendedor_id)), vis_posiciones: [...recorrido, ...recorrido.map((r) => ({ ...r, vendedor_id: 'hug', lat: r.lat + 0.004, lng: r.lng + 0.012 }))],

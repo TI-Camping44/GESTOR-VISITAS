@@ -4,7 +4,7 @@
 // Abajo, «Cargar lugares» para armar la lista antes de que pase la visitadora.
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ChevronDown, ChevronRight, Navigation } from 'lucide-react'
+import { ChevronDown, ChevronRight, Navigation, Pencil, Trash2 } from 'lucide-react'
 import { AreaTexto, Aviso, Boton, Entrada, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { descargarCsv } from '@/lib/csv'
@@ -14,6 +14,7 @@ import { cn, linkComoLlegar, mensajeError } from '@/lib/utils'
 import { useParamUrl } from '@/lib/useParamUrl'
 import { ChipsDias } from '@/components/admin/medica/ChipsDias'
 import { leerLlegadas, useLugares, useMedicos, useVisitadoras, type LugarMedico } from '@/components/admin/medica/datos'
+import { FormLugar, Papelera, borrarLugar } from '@/components/admin/medica/Gestion'
 import type { Medico } from '@/lib/database.types'
 
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -42,8 +43,13 @@ function leerLugaresTexto(texto: string) {
 }
 
 export default function Lugares() {
-  const lugares = useLugares()
-  const { medicos } = useMedicos()
+  const { lugares, recargar } = useLugares()
+  const { medicos, recargar: recargarMedicos } = useMedicos()
+  const [ok, setOk] = useState<string | null>(null)
+  const [errorAccion, setErrorAccion] = useState<string | null>(null)
+  const [editando, setEditando] = useState(false)
+  const [verPapelera, setVerPapelera] = useParamUrl('papelera', '')
+  const listo = (msg: string) => { setOk(msg); setErrorAccion(null); setEditando(false); recargar(); recargarMedicos() }
   const visitadoras = useVisitadoras()
   const [buscar, setBuscar] = useState('')
   const [tipo, setTipo] = useParamUrl('tipo', '')
@@ -88,8 +94,10 @@ export default function Lugares() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold">Consultorios y lugares</h1>
-        <p className="text-sm text-tenue">Hospitales, sanatorios y consultorios que visita la visitadora, con sus médicos y horarios. Tocá un lugar para ver sus médicos.</p>
+        <p className="text-sm text-tenue">Hospitales, sanatorios y consultorios que visita la visitadora, con sus médicos y horarios. Tocá un lugar para ver sus médicos, editarlo o borrarlo.</p>
       </div>
+      {errorAccion && <Aviso tipo="error">{errorAccion}</Aviso>}
+      {ok && <Aviso tipo="ok">{ok}</Aviso>}
 
       <div className="flex flex-wrap items-center gap-2">
         <Entrada aria-label="Buscar lugar" placeholder="Buscar por nombre, dirección o ciudad…" value={buscar} onChange={(e) => setBuscar(e.target.value)} className="w-72" />
@@ -99,7 +107,9 @@ export default function Lugares() {
         </Selector>
         <span className="text-sm text-tenue tabular">{lugares ? `${lista.length} lugares` : ''}</span>
         <Boton variante="secundario" className="ml-auto" disabled={!lista.length} onClick={excel}>Excel</Boton>
+        <Boton variante="secundario" aria-pressed={!!verPapelera} onClick={() => setVerPapelera(verPapelera ? '' : '1')}><Trash2 className="size-4" aria-hidden /> Papelera</Boton>
       </div>
+      {verPapelera && <Papelera que="lugares" alListo={listo} />}
 
       <Tarjeta className="overflow-x-auto p-0">
         {lugares === null ? <div className="m-4 h-40 animate-pulse rounded-xl bg-borde/40" /> : lista.length === 0 ? (
@@ -121,11 +131,11 @@ export default function Lugares() {
                   <Fragment key={l.id}>
                     <tr className={cn('border-b border-borde align-top', abiertoEste && 'bg-fondo/60')}>
                       <td className="py-2 pl-2">
-                        <button type="button" aria-expanded={abiertoEste} aria-label={`${abiertoEste ? 'Ocultar' : 'Ver'} médicos de ${l.razon_social}`} onClick={() => setAbierto(abiertoEste ? null : l.id)}
+                        <button type="button" aria-expanded={abiertoEste} aria-label={`${abiertoEste ? 'Ocultar' : 'Ver'} médicos de ${l.razon_social}`} onClick={() => { setEditando(false); setAbierto(abiertoEste ? null : l.id) }}
                           className="grid size-8 place-items-center rounded-lg hover:bg-fondo">{abiertoEste ? <ChevronDown className="size-4" aria-hidden /> : <ChevronRight className="size-4" aria-hidden />}</button>
                       </td>
                       <td className="px-2 py-2">
-                        <button type="button" className="text-left font-medium hover:text-marca" onClick={() => setAbierto(abiertoEste ? null : l.id)}>{l.razon_social}</button>
+                        <button type="button" className="text-left font-medium hover:text-marca" onClick={() => { setEditando(false); setAbierto(abiertoEste ? null : l.id) }}>{l.razon_social}</button>
                         <p className="text-xs text-tenue">{[l.tipo_lugar, l.direccion, l.ciudad].filter(Boolean).join(' · ') || 'Sin dirección'}</p>
                         {l.lat == null && <p className="text-xs text-amber-700 dark:text-amber-300">Sin ubicación: se toma cuando la visitadora llega</p>}
                       </td>
@@ -145,6 +155,12 @@ export default function Lugares() {
                         <td />
                         <td colSpan={5} className="px-2 pb-3">
                           <div className="flex flex-col gap-2">
+                            <div className="flex flex-wrap gap-2">
+                              <Boton variante={editando ? 'primario' : 'secundario'} className="min-h-9 px-2.5 text-sm" onClick={() => setEditando(!editando)}><Pencil className="size-4" aria-hidden /> Editar</Boton>
+                              <Boton variante="secundario" className="min-h-9 px-2.5 text-sm text-red-700 dark:text-red-300"
+                                onClick={() => void borrarLugar(l).then((msg) => { if (msg) { setAbierto(null); listo(msg) } }).catch((e: Error) => setErrorAccion(e.message))}><Trash2 className="size-4" aria-hidden /> Borrar</Boton>
+                            </div>
+                            {editando && <FormLugar lugar={l} alListo={listo} alCancelar={() => setEditando(false)} />}
                             <div className="flex flex-wrap gap-2 text-sm">
                               {comoLlegar && <a href={comoLlegar} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 underline"><Navigation className="size-4" aria-hidden /> Ver en Google Maps</a>}
                               <Link href={`/medica/medicos?lugar=${l.id}`} className="underline">Ver estos médicos con sus visitas</Link>

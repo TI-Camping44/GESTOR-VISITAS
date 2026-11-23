@@ -12,7 +12,7 @@ import { ChipsDias } from '@/components/admin/medica/ChipsDias'
 import { useLugares, useMedicos, useVisitadoras } from '@/components/admin/medica/datos'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { fmtDia, hoyIso, lunesDe, semanaIso, sumarDias } from '@/lib/fechas'
-import { DIAS_SEMANA, diasDeHorario, tocaVisitar } from '@/lib/medicos'
+import { DIAS_SEMANA, MEDICO_REPETIDO, claveNombre, diasDeHorario, esMedicoRepetido, tocaVisitar } from '@/lib/medicos'
 import { useParamUrl } from '@/lib/useParamUrl'
 import { cn, mensajeError } from '@/lib/utils'
 import type { Medico } from '@/lib/database.types'
@@ -24,8 +24,8 @@ const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLower
 export default function ArmarDia() {
   const sb = supabaseNavegador()
   const visitadoras = useVisitadoras()
-  const lugares = useLugares()
-  const { medicos } = useMedicos()
+  const { lugares } = useLugares()
+  const { medicos, recargar: recargarMedicos } = useMedicos()
   const [semana, setSemana] = useParamUrl('semana', lunesDe(hoyIso()))
   const [quienUrl, setQuien] = useParamUrl('visitadora', '')
   const activas = visitadoras.filter((v) => v.activo)
@@ -61,7 +61,7 @@ export default function ArmarDia() {
       const r = await fn()
       if (r && r.error) throw r.error
       if (ok) setAviso(ok)
-    } catch (e) { setError(mensajeError(e)) } finally { setOcupado(false); void cargar() }
+    } catch (e) { setError(mensajeError(e)) } finally { setOcupado(false); void cargar(); recargarMedicos() }
   }
 
   const deLaVisitadora = useMemo(() => (lugares ?? []).filter((l) => l.vendedor_id === quien), [lugares, quien])
@@ -217,13 +217,19 @@ export default function ArmarDia() {
                     onQuitarObjetivo={(o) => void hacer(async () => sb.from('vis_parada_objetivos').delete().eq('id', o.id))}
                     onHoraObjetivo={(o, hora) => { if ((o.hora_pactada?.slice(0, 5) ?? '') !== hora) void hacer(async () => sb.from('vis_parada_objetivos').update({ hora_pactada: hora || null }).eq('id', o.id)) }}
                     onCrearMedico={(datos) => void hacer(async () => {
-                      const { data: yo } = await sb.rpc('vis_mi_id')
-                      const { data: emp } = await sb.rpc('vis_mi_empresa')
-                      const { data: m, error } = await sb.from('vis_medicos').insert({ empresa_id: emp as string, nombre: datos.nombre, especialidad: datos.especialidad || null, visitadora_id: quien, creado_por: yo as string }).select('id').single()
-                      if (error) return { error }
-                      const r = await sb.from('vis_medico_lugares').insert({ medico_id: m.id, lugar_id: p.cliente_id, horario: datos.horario || null })
+                      // Si ya está cargado (mismo nombre sin títulos ni tildes), se usa ese: no se carga dos veces.
+                      const ya = (medicos ?? []).find((x) => claveNombre(x.nombre) === claveNombre(datos.nombre))
+                      let medicoId = ya?.id
+                      if (!medicoId) {
+                        const { data: yo } = await sb.rpc('vis_mi_id')
+                        const { data: emp } = await sb.rpc('vis_mi_empresa')
+                        const { data: m, error } = await sb.from('vis_medicos').insert({ empresa_id: emp as string, nombre: datos.nombre, especialidad: datos.especialidad || null, visitadora_id: quien, creado_por: yo as string }).select('id').single()
+                        if (error) return { error: esMedicoRepetido(error) ? { message: MEDICO_REPETIDO } : error }
+                        medicoId = m.id
+                      }
+                      const r = await sb.from('vis_medico_lugares').upsert({ medico_id: medicoId, lugar_id: p.cliente_id, horario: datos.horario || null }, { onConflict: 'medico_id,lugar_id' })
                       if (r.error) return r
-                      return agregarObjetivos(p.id, [{ medico_id: m.id, especialidad: null }])
+                      return agregarObjetivos(p.id, [{ medico_id: medicoId, especialidad: null }])
                     }, `${datos.nombre} quedó cargado en ${nombreLugar(p.cliente_id)}.`)}
                   />
                 </li>
