@@ -16,7 +16,7 @@ import { cn, mensajeError } from '@/lib/utils'
 type VisitaVenta = {
   id: string; vendedor_id: string; cliente_id: string; fecha_hora: string; hizo_pedido: boolean; hizo_cobranza: boolean
   monto_cobrado_gs: number | null; observaciones: string | null; proxima_visita: string | null; ruta_parada_id: string | null
-  resultado: { nombre: string } | null; cliente: { razon_social: string; ciudad: string | null } | null
+  resultado: { nombre: string } | null; detalle: { nombre: string } | null; cliente: { razon_social: string; ciudad: string | null } | null
 }
 type NoConcretada = { id: string; vendedor_id: string; lugar_id: string; fecha_hora: string; motivo: string; observaciones: string | null; cliente: { razon_social: string } | null }
 type Jornada = { vendedor_id: string; inicio: string; fin: string | null }
@@ -26,7 +26,7 @@ type Evento =
   | { tipo: 'visita'; hora: string; vendedor_id: string; v: VisitaVenta }
 
 const CAMPOS = 'id, vendedor_id, cliente_id, fecha_hora, hizo_pedido, hizo_cobranza, monto_cobrado_gs, observaciones, proxima_visita, ruta_parada_id, '
-  + 'resultado:vis_resultados!vis_visitas_resultado_id_fkey(nombre), cliente:vis_clientes!vis_visitas_cliente_id_fkey(razon_social, ciudad)'
+  + 'resultado:vis_resultados!vis_visitas_resultado_id_fkey(nombre), detalle:vis_resultados!vis_visitas_detalle_id_fkey(nombre), cliente:vis_clientes!vis_visitas_cliente_id_fkey(razon_social, ciudad)'
 const ini = (d: string) => new Date(`${d}T00:00:00-03:00`).toISOString()
 const finde = (d: string) => [0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay())
 
@@ -111,6 +111,7 @@ export function ActividadVentas({ vendedores }: { vendedores: { id: string; nomb
       { titulo: 'Cliente', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.cliente?.razon_social : e.tipo === 'no_concretada' ? e.n.cliente?.razon_social : '') ?? '' },
       { titulo: 'Ciudad', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.cliente?.ciudad ?? '' : '') },
       { titulo: 'Resultado', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.resultado?.nombre ?? '' : e.tipo === 'no_concretada' ? textoMotivo(e.n.motivo) : '') },
+      { titulo: 'Detalle', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.detalle?.nombre ?? '' : '') },
       { titulo: 'Pedido', valor: (e: Evento) => (e.tipo === 'visita' ? (e.v.hizo_pedido ? 'Sí' : 'No') : '') },
       { titulo: 'Cobrado (Gs.)', valor: (e: Evento) => (e.tipo === 'visita' && e.v.hizo_cobranza ? Math.round(Number(e.v.monto_cobrado_gs ?? 0)) : '') },
       { titulo: 'Fuera de ruta', valor: (e: Evento) => (e.tipo === 'visita' ? (e.v.ruta_parada_id ? 'No' : 'Sí') : '') },
@@ -241,7 +242,7 @@ function EventoFila({ e }: { e: Evento }) {
       {punto(Store, v.hizo_pedido ? 'bg-green-700 text-white' : 'bg-marca text-sobre-marca')}
       <p>{hora}<b>{v.cliente?.razon_social ?? 'Visita'}</b>{v.cliente?.ciudad && <span className="text-tenue"> · {v.cliente.ciudad}</span>}{!v.ruta_parada_id && <span className="text-tenue"> · fuera de ruta</span>}</p>
       <div className="mt-1 flex flex-col gap-0.5 rounded-lg bg-fondo px-3 py-2">
-        {v.resultado && <p><span className="text-tenue">Resultado:</span> {v.resultado.nombre}{v.hizo_pedido && <b className="text-green-800 dark:text-green-300"> · con pedido</b>}</p>}
+        {v.resultado && <p><span className="text-tenue">Resultado:</span> {v.resultado.nombre}{v.detalle && <> → {v.detalle.nombre}</>}{v.hizo_pedido && <b className="text-green-800 dark:text-green-300"> · con pedido</b>}</p>}
         {v.hizo_cobranza && <p><span className="text-tenue">Cobranza:</span> {fmtGuaranies(v.monto_cobrado_gs)}</p>}
         {v.observaciones && <p className="break-words"><span className="text-tenue">Observaciones:</span> {v.observaciones}</p>}
         {v.proxima_visita && <p><span className="text-tenue">Próxima visita:</span> {fmtFecha(v.proxima_visita)}</p>}

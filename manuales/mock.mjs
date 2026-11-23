@@ -60,9 +60,10 @@ const M = [
 const medicos = M.map(([id, nombre, esp, ls, uv, f]) => ({ id, nombre, especialidad: esp, telefono: id === 'm1' ? '0981 555 123' : null, telefono_norm: id === 'm1' ? '595981555123' : null, email: null, notas: id === 'm2' ? 'Prefiere visitas después de las 17' : null, frecuencia_dias: f, visitadora_id: 'noe', creado_por: 'noe', activo: true, empresa_id: E2, created_at: '2026-11-01', updated_at: '2026-11-01', ultima_visita: uv, lugares: ls.map(([lid, hor]) => ({ lugar_id: lid, nombre: lnom(lid), horario: hor })) }))
 const med = (id) => { const m = medicos.find((x) => x.id === id); return { nombre: m.nombre, especialidad: m.especialidad } }
 const resultados = [
-  ...['Pedido', 'Cotización', 'Volver otro día', 'Cobranza', 'Cerrado', 'Cliente nuevo', 'No le interesa'].map((n, i) => ({ id: i + 1, nombre: n, es_venta: n === 'Pedido', orden: i + 1, tipo: 'ventas', activo: true, empresa_id: null })),
-  ...(EMP === E2 ? [{ id: 40, nombre: 'Pidió catálogo', es_venta: false, orden: 8, tipo: 'ventas', activo: true, empresa_id: E2 }] : []),
-  ...['Presentó productos', 'Dejó muestras', 'No estaba / no atendió', 'Pidió volver otro día', 'Sin acceso', 'Ya no atiende acá', 'Otro motivo'].map((n, i) => ({ id: 20 + i, nombre: n, es_venta: false, orden: i + 1, tipo: 'medica', activo: true })),
+  ...['Pedido', 'Cotización', 'Volver otro día', 'Cobranza', 'Cerrado', 'Cliente nuevo', 'No le interesa'].map((n, i) => ({ id: i + 1, nombre: n, es_venta: n === 'Pedido', orden: i + 1, tipo: 'ventas', clase: 'resultado', activo: true, empresa_id: null, oculto: EMP === E2 && n !== 'No le interesa' })),
+  ...(EMP === E2 ? [['Rutina: Promoción | Exhibición | Capacitación', 1], ['Nuevo prospecto', 2], ['No califica', 8], ['Seguimiento', 9]].map(([n, o], i) => ({ id: 40 + i, nombre: n, es_venta: false, orden: o, tipo: 'ventas', clase: 'resultado', activo: true, empresa_id: E2, oculto: false })) : []),
+  ...(EMP === E2 ? ['Volver a contactar', 'Tiene stock', 'Propuesta enviada', 'No califica', 'Hizo pedido', 'Sugerencia / Reposición de stock', 'Promociones'].map((n, i) => ({ id: 50 + i, nombre: n, es_venta: n === 'Hizo pedido', orden: i + 1, tipo: 'ventas', clase: 'detalle', activo: true, empresa_id: E2, oculto: false })) : []),
+  ...['Presentó productos', 'Dejó muestras', 'No estaba / no atendió', 'Pidió volver otro día', 'Sin acceso', 'Ya no atiende acá', 'Otro motivo'].map((n, i) => ({ id: 20 + i, nombre: n, es_venta: false, orden: i + 1, tipo: 'medica', clase: 'resultado', activo: true, empresa_id: null, oculto: false })),
 ]
 const productos = ['Artrodol 50 mg', 'Gastrovit', 'Pedifer gotas', 'Vitalcal D', 'Omegavit 1000'].map((n, i) => ({ id: i + 1, nombre: n, codigo: null, activo: true, orden: i + 1, empresa_id: E2 }))
 // ── Visitas ──
@@ -202,7 +203,7 @@ const tablas = {
   vis_clientes_v: [...clientes, ...(EMP === E2 ? lugares : [])], vis_clientes: [...clientes, ...lugares, { ...lugares[0], id: 'lx1', razon_social: 'Sanatorio La Costa (repetido)', activo: false, updated_at: h('15:00', sumar(hoy, -2)), notas: null }],
   vis_medicos_v: EMP === E2 ? medicos : [],
   vis_medicos: EMP === E2 ? [...medicos, { ...medicos[6], id: 'mx1', nombre: 'Dra. Yanina  Meza', activo: false, updated_at: h('16:30'), notas: `Unido con «Dra. Yanina Meza» el ${hoy.split('-').reverse().join('/')}: sus visitas, planes y lugares pasaron a ese médico.` }] : [],
-  vis_resultados: resultados, vis_productos: EMP === E2 ? productos : [],
+  vis_resultados: resultados, vis_resultados_v: resultados, vis_productos: EMP === E2 ? productos : [],
   vis_visitas: visitas.filter((v) => deEmpresa(v.vendedor_id)), vis_llegadas: llegadas, vis_no_visitados: noVisitados, vis_jornadas: JORNADA || ['jor', 'ser'].includes(P) ? jornadas : [],
   vis_zonas: EMP === E1 ? zonas : zonasVit, vis_ciclos: EMP === E2 ? ciclos : [], vis_rutas: rutas.filter((r) => deEmpresa(r.vendedor_id)), vis_ruta_paradas: rutaParadas,
   vis_posicion_actual: posActual.filter((p) => deEmpresa(p.vendedor_id)), vis_posiciones: [...recorrido, ...recorrido.map((r) => ({ ...r, vendedor_id: 'hug', lat: r.lat + 0.004, lng: r.lng + 0.012 }))],

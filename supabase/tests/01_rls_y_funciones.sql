@@ -136,7 +136,7 @@ do $$ declare r jsonb; begin
   assert (select r2.nombre from vis_visitas v join vis_resultados r2 on r2.id = v.resultado_id
           where v.id = (r ->> 'visita_id')::uuid and v.cliente_id = (r ->> 'id')::uuid) = 'Cliente nuevo', 'el alta deja una visita';
   perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', r ->> 'id',
-    'visita_id', r ->> 'visita_id', 'resultado_id', (select id from vis_resultados where nombre = 'Tiene stock'),
+    'visita_id', r ->> 'visita_id', 'resultado_id', (select id from vis_resultados where nombre = 'Tiene stock' and empresa_id is null),
     'observaciones', 'Vuelvo en noviembre'));
   assert (select count(*) from vis_visitas where cliente_id = (r ->> 'id')::uuid) = 1, 'completar el formulario no duplica la visita';
   assert (select observaciones from vis_visitas where id = (r ->> 'visita_id')::uuid) = 'Vuelvo en noviembre', 'el formulario completa la visita del alta';
@@ -697,7 +697,7 @@ do $$ declare r jsonb; v_lugar uuid; v_med uuid; begin
   insert into vis_medico_lugares (medico_id, lugar_id) values ((select id from vis_medicos where nombre = 'Dr. Ruiz'), v_lugar);
   assert (select jsonb_array_length(lugares) from vis_medicos_v where id = v_med) = 1, 'el médico con su lugar';
   r := vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_lugar, 'medico_id', v_med,
-    'resultado_id', (select id from vis_resultados where nombre = 'Dejó muestras'),
+    'resultado_id', (select id from vis_resultados where nombre = 'Dejó muestras' and empresa_id is null),
     'productos', jsonb_build_array(jsonb_build_object('producto', 'Vitamina C', 'muestras', 3)),
     'lat', -25.2901, 'lng', -57.6201, 'precision_m', 10));
   assert (select productos -> 0 ->> 'muestras' from vis_visitas where id = (r ->> 'id')::uuid) = '3', 'la visita guarda las muestras';
@@ -968,12 +968,25 @@ select pg_temp.como('hugo@vitalica.com.py') \gset
 set role authenticated;
 do $$ declare v_cli uuid := (select id from vis_clientes where razon_social = 'Cliente de Hugo'); begin
   perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_cli, 'fecha_hora', now() - interval '2 minutes',
-    'resultado_id', (select id from vis_resultados where nombre = 'No le interesa'), 'observaciones', 'Compra a otro proveedor'));
+    'resultado_id', (select id from vis_resultados where nombre = 'No le interesa' and empresa_id is null), 'observaciones', 'Compra a otro proveedor'));
   assert (select estado from vis_clientes_v where id = v_cli) = 'no_interesado', 'queda «no le interesa»';
   assert (select motivo from vis_cliente_no_interesa where cliente_id = v_cli) = 'Compra a otro proveedor', 'con el motivo';
   perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_cli, 'fecha_hora', now() - interval '2 days',
-    'resultado_id', (select id from vis_resultados where nombre = 'Tiene stock')));
+    'resultado_id', (select id from vis_resultados where nombre = 'Tiene stock' and empresa_id is null)));
   assert (select estado from vis_clientes_v where id = v_cli) = 'no_interesado', 'una visita vieja que se sube tarde no lo desmarca';
+end $$;
+reset role;
+
+-- ── Resultado → Detalle (0044): Vitalica ve su lista, oculta los compartidos y el detalle «Hizo pedido» marca pedido ──
+set role authenticated;
+do $$ declare v_cli uuid := (select id from vis_clientes where razon_social = 'Cliente de Hugo'); v_id uuid; begin
+  assert exists (select 1 from vis_resultados_v where clase = 'detalle' and nombre = 'Hizo pedido' and not oculto), 'Hugo ve los detalles de Vitalica';
+  assert (select oculto from vis_resultados_v where nombre = 'Tiene stock' and empresa_id is null), 'el compartido «Tiene stock» está oculto para Vitalica';
+  assert not (select oculto from vis_resultados_v where nombre = 'No le interesa' and empresa_id is null), '«No le interesa» sigue';
+  v_id := (vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_cli, 'fecha_hora', now() - interval '1 minute',
+    'resultado_id', (select id from vis_resultados where nombre = 'Seguimiento' and empresa_id is not null and clase = 'resultado'),
+    'detalle_id', (select id from vis_resultados where nombre = 'Hizo pedido' and clase = 'detalle')))->>'id')::uuid;
+  assert (select hizo_pedido and detalle_id is not null from vis_visitas where id = v_id), 'el detalle queda guardado y cuenta como pedido';
 end $$;
 reset role;
 select pg_temp.como('sergio@camping44.com.py') \gset
@@ -988,7 +1001,7 @@ select pg_temp.como('hugo@vitalica.com.py') \gset
 set role authenticated;
 do $$ declare v_cli uuid := (select id from vis_clientes where razon_social = 'Cliente de Hugo'); begin
   perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_cli,
-    'resultado_id', (select id from vis_resultados where nombre = 'Hizo pedido')));
+    'resultado_id', (select id from vis_resultados where nombre = 'Hizo pedido' and empresa_id is null)));
   assert (select estado from vis_clientes_v where id = v_cli) <> 'no_interesado', 'una visita nueva con otro resultado lo desmarca';
 end $$;
 reset role;
@@ -1009,7 +1022,7 @@ do $$ declare r jsonb; r2 jsonb; u uuid := gen_random_uuid(); v_l uuid := (selec
   r2 := vis_marcar_llegada(jsonb_build_object('client_uuid', u, 'lugar_id', v_l));
   assert (r2 ->> 'duplicada')::boolean and r2 ->> 'id' = r ->> 'id', 'reintento no duplica';
   r := vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', (select id from vis_clientes where razon_social = 'Lugar Visita Suelta'),
-    'resultado_id', (select id from vis_resultados where nombre = 'Presentó productos')));
+    'resultado_id', (select id from vis_resultados where nombre = 'Presentó productos' and empresa_id is null)));
   assert (select ruta_parada_id from vis_visitas where id = (r ->> 'id')::uuid) is not null, 'una visita a un lugar fuera de la ruta lo suma solo';
 end $$;
 reset role;
@@ -1087,7 +1100,7 @@ do $$ declare r jsonb; v_l uuid := (select id from vis_clientes where razon_soci
   assert (select array_length(llegadas, 1) from vis_ruteo_semana(vis_mi_id(), vis_hoy()) where lugar = 'Lugar Visita Suelta' limit 1) = 2, 'el ruteo muestra las dos';
   -- Dos visitas del día en un lugar sin objetivos: dos filas en el ruteo.
   perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_l,
-    'fecha_hora', now() - interval '30 minutes', 'resultado_id', (select id from vis_resultados where nombre = 'Presentó productos')));
+    'fecha_hora', now() - interval '30 minutes', 'resultado_id', (select id from vis_resultados where nombre = 'Presentó productos' and empresa_id is null)));
   assert (select count(*) from vis_ruteo_semana(vis_mi_id(), vis_hoy()) where lugar = 'Lugar Visita Suelta' and dia = vis_hoy()) =
          (select count(*) from vis_visitas where cliente_id = v_l and (fecha_hora at time zone 'America/Asuncion')::date = vis_hoy()), 'una fila por visita del día';
   perform vis_quitar_llegada((r ->> 'id')::uuid);
@@ -1131,7 +1144,7 @@ do $$ declare v_l1 uuid := (select id from vis_clientes where razon_social = 'Co
   insert into vis_medicos (nombre, especialidad, visitadora_id, creado_por, empresa_id) values ('Dr. Se Mudó', 'Pediatría', vis_mi_id(), vis_mi_id(), vis_mi_empresa()) returning id into v_m;
   insert into vis_medico_lugares (medico_id, lugar_id) values (v_m, v_l1), (v_m, v_l2);
   perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_l1, 'medico_id', v_m,
-    'resultado_id', (select id from vis_resultados where nombre = 'Ya no atiende acá'), 'observaciones', 'Se fue al otro consultorio'));
+    'resultado_id', (select id from vis_resultados where nombre = 'Ya no atiende acá' and empresa_id is null), 'observaciones', 'Se fue al otro consultorio'));
   assert not exists (select 1 from vis_medico_lugares where medico_id = v_m and lugar_id = v_l1), 'sale del lugar';
   assert exists (select 1 from vis_medico_lugares where medico_id = v_m and lugar_id = v_l2), 'queda en el otro';
   assert (select activo from vis_medicos where id = v_m), 'el médico no se borra';
@@ -1214,7 +1227,7 @@ do $$ declare r jsonb; v_k uuid := (select id from vis_clientes where razon_soci
   assert (select resultado from vis_tablero_detalle(vis_mi_id(), vis_hoy(), vis_hoy()) where tipo = 'ruta' and razon_social = 'Kiosco No Concretada')
          = 'No concretada: El cliente pidió que vuelva otro día', 'el detalle muestra el motivo';
   -- Si al final la visita se hace, deja de contar como no concretada.
-  perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_k, 'resultado_id', (select id from vis_resultados where nombre = 'Otro')));
+  perform vis_registrar_visita(jsonb_build_object('client_uuid', gen_random_uuid(), 'cliente_id', v_k, 'resultado_id', (select id from vis_resultados where nombre = 'Otro' and empresa_id is null)));
   assert (select no_concretadas from vis_tablero(date_trunc('week', vis_hoy())::date, vis_mi_id()) where dia = vis_hoy()) = 0, 'con visita ya no es no concretada';
 end $$;
 reset role;
