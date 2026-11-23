@@ -2,7 +2,7 @@
 // Visita médica → Médicos: quién es cada médico, su especialidad, dónde y qué días atiende, cada cuánto
 // se lo visita, cuándo fue la última vez y el historial de visitas (resultado, productos, observaciones).
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, Combine, Pencil, Trash2 } from 'lucide-react'
 import { Aviso, Boton, Entrada, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { descargarCsv } from '@/lib/csv'
 import { fmtFecha, fmtSoloHora, hoyIso } from '@/lib/fechas'
@@ -10,15 +10,22 @@ import { DIAS_SEMANA, claveEspecialidad, diasDeHorario, diasSinVisita, tocaVisit
 import { useParamUrl } from '@/lib/useParamUrl'
 import { cn } from '@/lib/utils'
 import { ChipsDias } from '@/components/admin/medica/ChipsDias'
-import { agruparEspecialidades, leerVisitasDeMedico, textoProductos, useMedicos, useVisitadoras, type VisitaMedica } from '@/components/admin/medica/datos'
+import { agruparEspecialidades, leerVisitasDeMedico, textoProductos, useLugares, useMedicos, useVisitadoras, type VisitaMedica } from '@/components/admin/medica/datos'
+import { FormMedico, Papelera, PosiblesRepetidos, UnirMedico, borrarMedico } from '@/components/admin/medica/Gestion'
 import type { Medico } from '@/lib/database.types'
 
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 const diasDeMedico = (m: Medico) => new Set(m.lugares.flatMap((l) => diasDeHorario(l.horario)))
 
 export default function Medicos() {
-  const { medicos, error } = useMedicos()
+  const { medicos, error, recargar } = useMedicos()
+  const { lugares: todosLugares } = useLugares()
   const visitadoras = useVisitadoras()
+  const [ok, setOk] = useState<string | null>(null)
+  const [errorAccion, setErrorAccion] = useState<string | null>(null)
+  const [verPapelera, setVerPapelera] = useParamUrl('papelera', '')
+  const [modo, setModo] = useState<'ver' | 'editar' | 'unir'>('ver')
+  const listo = (msg: string) => { setOk(msg); setErrorAccion(null); setModo('ver'); recargar() }
   const [q, setQUrl] = useParamUrl('q', '')
   const [buscar, setBuscar] = useState(q)
   const [esp, setEsp] = useParamUrl('esp', '')
@@ -69,9 +76,12 @@ export default function Medicos() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold">Médicos</h1>
-        <p className="text-sm text-tenue">Los médicos que carga la visitadora: especialidad, dónde y qué días atienden, y cuándo se los visitó. Tocá un médico para ver sus visitas.</p>
+        <p className="text-sm text-tenue">Los médicos que carga la visitadora: especialidad, dónde y qué días atienden, y cuándo se los visitó. Tocá un médico para ver sus visitas, editarlo, unirlo con otro o borrarlo.</p>
       </div>
       {error && <Aviso tipo="error">{error}</Aviso>}
+      {errorAccion && <Aviso tipo="error">{errorAccion}</Aviso>}
+      {ok && <Aviso tipo="ok">{ok}</Aviso>}
+      {medicos && <PosiblesRepetidos medicos={medicos} alListo={listo} />}
 
       <Tarjeta className="flex flex-col gap-3">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -104,8 +114,10 @@ export default function Medicos() {
           <label className="ml-2 flex items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-[var(--c-marca)]" checked={!!toca} onChange={(e) => setToca(e.target.checked ? '1' : '')} /> Solo a los que les toca visita</label>
           {hayFiltro && <Boton variante="fantasma" onClick={() => { setBuscar(''); setQUrl(''); setEsp(''); setLugar(''); setDia(''); setToca(''); setQuien('') }}>Limpiar filtros</Boton>}
           <Boton variante="secundario" className="ml-auto" disabled={!lista.length} onClick={excel}>Excel</Boton>
+          <Boton variante="secundario" aria-pressed={!!verPapelera} onClick={() => setVerPapelera(verPapelera ? '' : '1')}><Trash2 className="size-4" aria-hidden /> Papelera</Boton>
         </div>
       </Tarjeta>
+      {verPapelera && <Papelera que="medicos" alListo={listo} />}
 
       <div className="grid grid-cols-3 gap-3">
         <Tarjeta><p className="text-xs uppercase tracking-wide text-tenue">Médicos</p><p className="text-2xl font-semibold tabular">{medicos ? lista.length : '–'}</p></Tarjeta>
@@ -131,11 +143,11 @@ export default function Medicos() {
                   <Fragment key={m.id}>
                     <tr className={cn('border-b border-borde align-top', abiertoEste && 'bg-fondo/60')}>
                       <td className="py-2 pl-2">
-                        <button type="button" aria-expanded={abiertoEste} aria-label={`${abiertoEste ? 'Ocultar' : 'Ver'} visitas de ${m.nombre}`} onClick={() => setAbierto(abiertoEste ? null : m.id)}
+                        <button type="button" aria-expanded={abiertoEste} aria-label={`${abiertoEste ? 'Ocultar' : 'Ver'} visitas de ${m.nombre}`} onClick={() => { setModo('ver'); setAbierto(abiertoEste ? null : m.id) }}
                           className="grid size-8 place-items-center rounded-lg hover:bg-fondo">{abiertoEste ? <ChevronDown className="size-4" aria-hidden /> : <ChevronRight className="size-4" aria-hidden />}</button>
                       </td>
                       <td className="px-2 py-2">
-                        <button type="button" className="text-left font-medium hover:text-marca" onClick={() => setAbierto(abiertoEste ? null : m.id)}>{m.nombre}</button>
+                        <button type="button" className="text-left font-medium hover:text-marca" onClick={() => { setModo('ver'); setAbierto(abiertoEste ? null : m.id) }}>{m.nombre}</button>
                         <p className="text-xs text-tenue">{m.especialidad ?? 'Sin especialidad'}{m.telefono && ` · ${m.telefono}`}</p>
                       </td>
                       <td className="px-2 py-2">
@@ -159,7 +171,17 @@ export default function Medicos() {
                       {visitadoras.length > 1 && <td className="px-2 py-2">{nombreVisitadora(m.visitadora_id)}</td>}
                     </tr>
                     {abiertoEste && (
-                      <tr className="border-b border-borde bg-fondo/60"><td /><td colSpan={visitadoras.length > 1 ? 5 : 4} className="px-2 pb-3"><Historial medico={m} /></td></tr>
+                      <tr className="border-b border-borde bg-fondo/60"><td /><td colSpan={visitadoras.length > 1 ? 5 : 4} className="px-2 pb-3">
+                        <div className="mb-2 flex flex-wrap gap-2">
+                          <Boton variante={modo === 'editar' ? 'primario' : 'secundario'} className="min-h-9 px-2.5 text-sm" onClick={() => setModo(modo === 'editar' ? 'ver' : 'editar')}><Pencil className="size-4" aria-hidden /> Editar</Boton>
+                          <Boton variante={modo === 'unir' ? 'primario' : 'secundario'} className="min-h-9 px-2.5 text-sm" onClick={() => setModo(modo === 'unir' ? 'ver' : 'unir')}><Combine className="size-4" aria-hidden /> Unir con…</Boton>
+                          <Boton variante="secundario" className="min-h-9 px-2.5 text-sm text-red-700 dark:text-red-300"
+                            onClick={() => void borrarMedico(m).then((msg) => { if (msg) { setAbierto(null); listo(msg) } }).catch((e: Error) => setErrorAccion(e.message))}><Trash2 className="size-4" aria-hidden /> Borrar</Boton>
+                        </div>
+                        {modo === 'editar' && <FormMedico medico={m} lugares={todosLugares ?? []} visitadoras={visitadoras} alListo={listo} alCancelar={() => setModo('ver')} />}
+                        {modo === 'unir' && <UnirMedico medico={m} todos={todos} alListo={(msg) => { setAbierto(null); listo(msg) }} alCancelar={() => setModo('ver')} />}
+                        {modo === 'ver' && <Historial medico={m} />}
+                      </td></tr>
                     )}
                   </Fragment>
                 )

@@ -187,6 +187,28 @@ async function paraHoy() {
   })
 }
 
+// Panel editable de visita médica: posibles repetidos, editar, unir, papelera (médicos y lugares) y el plan del día.
+async function gestion() {
+  await conMock('ser', false, async () => {
+    const p = await contexto(false)
+    await ir(p, '/medica/medicos', 3000)
+    await p.getByRole('button', { name: 'Revisar' }).click(); await espera(300); await foto(p, 'g-repetidos')
+    await p.getByRole('button', { name: 'Dra. Yanina Meza', exact: true }).click(); await espera(800)
+    await p.getByRole('button', { name: 'Editar' }).click(); await espera(400); await foto(p, 'g-editar', { completa: true })
+    await p.getByRole('button', { name: 'Unir con…' }).click(); await espera(400); await foto(p, 'g-unir')
+    await p.getByRole('button', { name: 'Papelera' }).click(); await espera(800); await foto(p, 'g-papelera', { completa: true })
+    await ir(p, '/medica/lugares', 3000)
+    await p.getByRole('button', { name: 'Sanatorio San Sebastián' }).first().click(); await espera(500)
+    await p.getByRole('button', { name: 'Editar' }).click(); await espera(400); await foto(p, 'g-lugar-editar', { completa: true })
+    await p.getByRole('button', { name: 'Papelera' }).click(); await espera(800); await foto(p, 'g-lugar-papelera', { completa: true })
+    await ir(p, '/medica', 4000); await p.getByText('Plan del día y lo que hizo').first().evaluate((e) => e.scrollIntoView({ block: 'start' })); await espera(300); await foto(p, 'g-plan')
+  })
+  await conMock('noe', true, async () => {
+    const p = await contexto(true)
+    await ir(p, '/hoy', 3000); await foto(p, 'g-hoy-noe', { completa: true })
+  })
+}
+
 // TI-0115: ciclos de rutas, «No pude visitarlo» en la venta y cumplimiento por ruta (Vitalica).
 async function ciclos() {
   await conMock('ser', false, async () => {
@@ -237,7 +259,7 @@ async function tableros() {
   })
 }
 
-const grupos = { tableros, ciclos, 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita, 'medico-ausente': medicoAusente, 'para-hoy': paraHoy }
-for (const g of grupo === 'todos' ? Object.keys(grupos).filter((x) => !['no-visita', 'medico-ausente', 'para-hoy', 'ciclos', 'tableros'].includes(x)) : [grupo]) await grupos[g]()
+const grupos = { tableros, ciclos, 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita, 'medico-ausente': medicoAusente, 'para-hoy': paraHoy, gestion }
+for (const g of grupo === 'todos' ? Object.keys(grupos).filter((x) => !['no-visita', 'medico-ausente', 'para-hoy', 'ciclos', 'tableros', 'gestion'].includes(x)) : [grupo]) await grupos[g]()
 await browser.close()
 if (errores.length) console.log('ERRORES:\n' + [...new Set(errores)].join('\n'))

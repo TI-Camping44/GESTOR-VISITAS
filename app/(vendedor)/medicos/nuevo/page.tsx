@@ -10,7 +10,8 @@ import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
 import { mensajeError } from '@/lib/utils'
 import { urlLugar } from '@/lib/rutas'
-import { ESPECIALIDADES } from '@/lib/medicos'
+import { ESPECIALIDADES, MEDICO_REPETIDO, claveNombre, esMedicoRepetido, parecidos } from '@/lib/medicos'
+import type { Medico } from '@/lib/database.types'
 import { useErrorCampo } from '@/components/ErrorCampo'
 import { puedeSalir, useAvisoSinGuardar } from '@/lib/sinGuardar'
 
@@ -30,6 +31,7 @@ export default function EditarMedico() {
   const [cargando, setCargando] = useState(!!id)
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [existentes, setExistentes] = useState<Medico[]>([])
   const errCampo = useErrorCampo()
   const [tocado, setTocado] = useState(false)
   useAvisoSinGuardar(tocado && !enviando && !soloLectura)
@@ -41,6 +43,30 @@ export default function EditarMedico() {
       .then(({ data }) => { if (data && vivo) setLugares(data as LugarOpcion[]) })
     return () => { vivo = false }
   }, [perfil.id])
+
+  // Médicos ya cargados, para avisar «¿Es este?» antes de cargar uno repetido.
+  useEffect(() => {
+    if (id) return
+    let vivo = true
+    void leerCache<Medico[]>(`medicos:${perfil.id}`).then((c) => { if (c && vivo) setExistentes(c.datos) }).catch(() => {})
+    void supabaseNavegador().from('vis_medicos_v').select('*').order('nombre').limit(3000)
+      .then(({ data }) => { if (data && vivo) setExistentes(data as Medico[]) })
+    return () => { vivo = false }
+  }, [id, perfil.id])
+  const quizas = !id && claveNombre(f.nombre).length >= 5 ? existentes.filter((m) => parecidos(m.nombre, f.nombre)).slice(0, 3) : []
+
+  async function usarExistente(m: Medico) {
+    if (soloLectura) return setError(AVISO_SOLO_LECTURA)
+    if (!lugarInicial) return router.push(`/medicos/nuevo?id=${m.id}`)
+    if (!navigator.onLine) return setError('Necesitás señal para guardar.')
+    setEnviando(true)
+    const { error: e } = await supabaseNavegador().from('vis_medico_lugares')
+      .upsert({ medico_id: m.id, lugar_id: lugarInicial, horario: elegidos[lugarInicial]?.trim() || null }, { onConflict: 'medico_id,lugar_id' })
+    setEnviando(false)
+    if (e) return setError(mensajeError(e))
+    await refrescarCache()
+    salir()
+  }
 
   useEffect(() => {
     if (!id) return
@@ -103,7 +129,7 @@ export default function EditarMedico() {
       await refrescarCache()
       salir()
     } catch (err) {
-      setError(mensajeError(err))
+      setError(esMedicoRepetido(err as { code?: string; message?: string }) ? MEDICO_REPETIDO : mensajeError(err))
     } finally {
       setEnviando(false)
     }
@@ -128,6 +154,21 @@ export default function EditarMedico() {
         <Etiqueta htmlFor="nombre">Nombre *</Etiqueta>
         <Entrada id="nombre" value={f.nombre} onChange={cambiar('nombre')} placeholder="Dra. Ana Gómez" autoComplete="off" {...errCampo.campo('nombre')} />
         {errCampo.mensaje('nombre')}
+        {quizas.length > 0 && (
+          <Aviso tipo="alerta" className="mt-2">
+            <p className="font-medium">¿Es alguno de estos? Ya está cargado:</p>
+            <ul className="mt-1 flex flex-col gap-1.5">
+              {quizas.map((m) => (
+                <li key={m.id} className="flex flex-wrap items-center gap-2">
+                  <span className="min-w-0 flex-1"><b>{m.nombre}</b>{m.especialidad && ` · ${m.especialidad}`}{m.lugares.length > 0 && <span className="text-sm"> · {m.lugares.map((l) => l.nombre).join(', ')}</span>}</span>
+                  <Boton type="button" variante="secundario" className="min-h-9 px-2.5 text-sm" disabled={enviando} onClick={() => void usarExistente(m)}>
+                    {lugarInicial ? 'Es este: sumarlo acá' : 'Es este: abrirlo'}
+                  </Boton>
+                </li>
+              ))}
+            </ul>
+          </Aviso>
+        )}
       </div>
       <div>
         <Etiqueta htmlFor="especialidad">Especialidad</Etiqueta>

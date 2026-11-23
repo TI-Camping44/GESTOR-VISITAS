@@ -3,7 +3,7 @@
 // pedido, cobranza, observaciones y próxima visita, y los clientes que marcó «No pude visitarlo»), y los
 // últimos 7 días. Igual que la Actividad de visita médica.
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, CircleSlash, LogIn, LogOut, Store } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CircleMinus, LogIn, LogOut, Store } from 'lucide-react'
 import { Aviso, Boton, Entrada, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { descargarCsv } from '@/lib/csv'
@@ -229,7 +229,7 @@ function EventoFila({ e }: { e: Evento }) {
   )
   if (e.tipo === 'no_concretada') return (
     <li className="relative text-sm">
-      {punto(CircleSlash, 'bg-amber-600 text-white')}
+      {punto(CircleMinus, 'bg-amber-600 text-white')}
       <p>{hora}<b>No pudo visitar</b> {e.n.cliente?.razon_social ?? 'al cliente'}<span className="text-tenue"> · {textoMotivo(e.n.motivo)}</span></p>
       {e.n.observaciones && <p className="mt-1 rounded-lg bg-fondo px-3 py-2 break-words"><span className="text-tenue">Observación:</span> {e.n.observaciones}</p>}
     </li>

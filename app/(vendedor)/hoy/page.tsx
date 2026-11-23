@@ -2,13 +2,13 @@
 // Hoy: la ruta del día con contador, mapa y acciones por parada (BRIEF §6 vendedor 1).
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Phone, MessageCircle, Navigation, CheckCircle2, SkipForward, Undo2, Stethoscope, Clock, CircleSlash, XCircle } from 'lucide-react'
+import { Phone, MessageCircle, Navigation, CheckCircle2, SkipForward, Undo2, Stethoscope, Clock, CircleMinus, XCircle } from 'lucide-react'
 import { useVendedor } from '@/components/vendedor/Proveedor'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, PuntoEstado, Tarjeta, Vacio, claseBoton } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
-import { claveEspecialidad, mismoMedico, noLoVio, textoMotivo } from '@/lib/medicos'
+import { claveEspecialidad, mismoMedico, noLoVio, quePaso, textoMotivo } from '@/lib/medicos'
 import { fmtFecha, fmtHoras, fmtSoloHora, hace, minutosDelDia, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
 import { fmtMin, horasEstimadas } from '@/lib/ruteo'
@@ -231,15 +231,16 @@ export default function Hoy() {
                           return (
                             <li key={k} className="flex items-start gap-1.5">
                               {v ? <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-green-700 dark:text-green-400" aria-hidden />
-                                : falta || noEstaba ? <XCircle className="mt-0.5 size-3.5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden />
+                                : noEstaba ? <CircleMinus className="mt-0.5 size-3.5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden />
+                                : falta ? <XCircle className="mt-0.5 size-3.5 shrink-0 text-red-700 dark:text-red-400" aria-hidden />
                                 : <Stethoscope className="mt-0.5 size-3.5 shrink-0 text-marca" aria-hidden />}
                               <span>
                                 {o.hora_pactada && <span className="tabular text-tenue">{o.hora_pactada.slice(0, 5)} · </span>}
                                 {o.medico ? <><b>{o.medico.nombre}</b>{(o.especialidad ?? o.medico.especialidad) && <span className="text-tenue"> · {o.especialidad ?? o.medico.especialidad}</span>}</>
                                   : <>Buscar médico de <b>{o.especialidad}</b></>}
                                 {v && <span className="text-xs font-medium text-green-700 dark:text-green-400"> · lo viste {fmtSoloHora(v.fecha_hora)}</span>}
-                                {falta && <span className="text-xs font-medium text-amber-700 dark:text-amber-300"> · no lo viste</span>}
-                                {noEstaba && <span className="text-xs font-medium text-amber-700 dark:text-amber-300"> · no lo viste: {noEstaba.resultado!.nombre.toLowerCase()} ({fmtSoloHora(noEstaba.fecha_hora)})</span>}
+                                {falta && <span className="text-xs font-medium text-red-700 dark:text-red-400"> · no lo visitaste</span>}
+                                {noEstaba && <span className="text-xs font-medium text-amber-700 dark:text-amber-300"> · visita no realizada ({fmtSoloHora(noEstaba.fecha_hora)}): {quePaso(noEstaba.resultado?.nombre)}</span>}
                               </span>
                             </li>
                           )
@@ -263,7 +264,7 @@ export default function Hoy() {
                       <p className="mt-1 flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400"><CheckCircle2 className="size-3.5" aria-hidden /> Llegaste a las {fmtHoras(horasLlegada(datos?.llegadas?.[p.cliente_id]))}{datos?.pactadas?.[p.parada_id] && <span className="font-normal text-tenue"> (pactado {datos.pactadas[p.parada_id]})</span>}</p>
                     )}
                     {datos?.noVisitados?.[p.cliente_id] && (
-                      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300"><CircleSlash className="size-3.5" aria-hidden /> {esMedica || p.visitada ? 'No pudiste visitar' : 'No concretada'} ({fmtSoloHora(datos.noVisitados[p.cliente_id]!.hora)}): {textoMotivo(datos.noVisitados[p.cliente_id]!.motivo)}</p>
+                      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300"><CircleMinus className="size-3.5" aria-hidden /> {esMedica || p.visitada ? 'No pudiste visitar' : 'No concretada'} ({fmtSoloHora(datos.noVisitados[p.cliente_id]!.hora)}): {textoMotivo(datos.noVisitados[p.cliente_id]!.motivo)}</p>
                     )}
                     {esMedica && !p.visitada && !datos?.noVisitados?.[p.cliente_id] && horasLlegada(datos?.llegadas?.[p.cliente_id]).length === 0 && (datos?.pactadas?.[p.parada_id]
                       ? <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-tinta"><Clock className="size-3.5 text-marca" aria-hidden /> Hora pactada {datos.pactadas[p.parada_id]}</p>
@@ -293,7 +294,7 @@ export default function Hoy() {
                     const completo = vistos === plan.length
                     return <>
                       <span className={`inline-flex flex-1 items-center justify-center gap-1.5 text-sm font-medium ${completo ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-300'}`}>
-                        {completo ? <CheckCircle2 className="size-4" aria-hidden /> : <CircleSlash className="size-4" aria-hidden />}
+                        {completo ? <CheckCircle2 className="size-4" aria-hidden /> : <CircleMinus className="size-4" aria-hidden />}
                         {visitas} visita{visitas === 1 ? '' : 's'} · {vistos} de {plan.length} del plan
                       </span>
                       {!completo && <Link href={urlParaVisitar(esMedica, p.cliente_id, { parada: p.parada_id })} className={claseBoton({ variante: 'secundario', className: 'flex-1' })}>Ver médicos</Link>}

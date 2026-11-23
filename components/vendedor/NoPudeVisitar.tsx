@@ -5,7 +5,7 @@
 // En la venta (`venta`, TI-0115): en Hoy, sobre una parada de su ruta, con motivos de venta; el supervisor la ve
 // en el tablero como «no concretada».
 import { useEffect, useState } from 'react'
-import { CircleSlash } from 'lucide-react'
+import { CircleMinus } from 'lucide-react'
 import { AreaTexto, Aviso, Boton, Tarjeta } from '@/components/ui'
 import { AVISO_SOLO_LECTURA } from '@/components/vendedor/Proveedor'
 import { leerGps } from '@/lib/gps'
@@ -72,7 +72,7 @@ export function NoPudeVisitar({ lugarId, vendedorId, soloLectura, venta = false,
     <div className="flex flex-col gap-2">
       {registros.map((r) => (
         <Aviso key={r.id} tipo="alerta">
-          <p><CircleSlash className="-mt-0.5 mr-1 inline size-4" aria-hidden /><b>{venta ? 'No concretada' : 'No pudiste visitar'}</b> ({fmtSoloHora(r.hora)}): {textoMotivo(r.motivo)}.{r.observaciones && <> «{r.observaciones}»</>} Tu supervisor ya lo ve.</p>
+          <p><CircleMinus className="-mt-0.5 mr-1 inline size-4" aria-hidden /><b>{venta ? 'No concretada' : 'No pudiste visitar'}</b> ({fmtSoloHora(r.hora)}): {textoMotivo(r.motivo)}.{r.observaciones && <> «{r.observaciones}»</>} Tu supervisor ya lo ve.</p>
           {Date.now() - Date.parse(r.creado) < 30 * 60000 && (
             <button type="button" onClick={() => void deshacer(r)} className="mt-1 text-sm font-medium underline">Deshacer (si al final pudiste visitar)</button>
           )}
@@ -81,7 +81,7 @@ export function NoPudeVisitar({ lugarId, vendedorId, soloLectura, venta = false,
       {!abierto ? (
         <button type="button" onClick={() => { setAbierto(true); setError(null) }}
           className="inline-flex items-center gap-1.5 self-start rounded-lg border border-borde px-3 py-2 text-sm font-medium text-tinta hover:bg-fondo">
-          <CircleSlash className="size-4 text-amber-700 dark:text-amber-300" aria-hidden /> {venta ? 'No pude visitarlo' : 'No pude visitar este lugar'}
+          <CircleMinus className="size-4 text-amber-700 dark:text-amber-300" aria-hidden /> {venta ? 'No pude visitarlo' : 'No pude visitar este lugar'}
         </button>
       ) : (
         <Tarjeta className="flex flex-col gap-3">

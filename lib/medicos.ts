@@ -84,9 +84,53 @@ export const textoMotivo = (m: string | null | undefined) =>
 export const RESULTADOS_NO_VISTO = ['No estaba / no atendió', 'Sin acceso', 'Ya no atiende acá', 'Pidió volver otro día', 'Otro motivo']
 export const noLoVio = (resultado: string | null | undefined) => !!resultado && RESULTADOS_NO_VISTO.includes(resultado)
 
+/** Qué pasó con una visita que no se hizo, en palabras («Sin acceso» → «no dejaron pasar»). */
+const QUE_PASO: Record<string, string> = {
+  'No estaba / no atendió': 'el médico no estaba o no atendió',
+  'Sin acceso': 'no dejaron pasar (sin acceso)',
+  'Ya no atiende acá': 'el médico ya no atiende en este lugar',
+  'Pidió volver otro día': 'reprogramada: el médico pidió volver otro día',
+  'Otro motivo': 'otro motivo',
+}
+export const quePaso = (resultado: string | null | undefined) => (resultado && QUE_PASO[resultado]) ?? (resultado ?? 'sin motivo').toLowerCase()
+
 /** Nombre para comparar médicos cargados dos veces («Dra. Yanina  Meza» = «Dra. Yanina Meza»): sin título, tildes ni espacios de más. */
 export const claveNombre = (n: string | null | undefined) => (n ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
   .replace(/\b(dr|dra|lic|doctor|doctora|licenciada?)\b\.?/g, ' ').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim()
 /** ¿Es el mismo médico? Por id o, si hay dos fichas, por el nombre. */
 export const mismoMedico = (a: { id?: string | null; nombre?: string | null } | null | undefined, b: { id?: string | null; nombre?: string | null } | null | undefined) =>
   !!a && !!b && ((!!a.id && a.id === b.id) || (!!claveNombre(a.nombre) && claveNombre(a.nombre) === claveNombre(b.nombre)))
+
+/** Cambios de letra entre dos textos (Levenshtein). */
+export function distancia(a: string, b: string) {
+  if (a === b) return 0
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i]
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j]! + 1, cur[j - 1]! + 1, prev[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1))
+    prev = cur
+  }
+  return prev[b.length]!
+}
+
+/** Dos nombres que pueden ser el mismo médico escrito distinto («Yanina Meza» / «Yanina Mesa», «Ana Santillán» /
+ *  «Ana Cecilia Santilla»): mismo primer nombre (o casi) y otro nombre o apellido casi igual. Igual clave también cuenta. */
+export function parecidos(a: string, b: string) {
+  const x = claveNombre(a), y = claveNombre(b)
+  if (!x || !y) return false
+  if (x === y) return true
+  const ta = x.split(' '), tb = y.split(' ')
+  if (ta.length < 2 || tb.length < 2 || distancia(ta[0]!, tb[0]!) > 1) return false
+  return ta.slice(1).some((p) => p.length >= 4 && tb.slice(1).some((q) => q.length >= 4 && distancia(p, q) <= (Math.min(p.length, q.length) >= 7 ? 2 : 1)))
+}
+
+/** Pares de médicos que pueden estar cargados dos veces, para revisar y unir. */
+export function paresParecidos<T extends { id: string; nombre: string }>(medicos: T[]) {
+  const pares: [T, T][] = []
+  for (let i = 0; i < medicos.length; i++) for (let j = i + 1; j < medicos.length; j++) if (parecidos(medicos[i]!.nombre, medicos[j]!.nombre)) pares.push([medicos[i]!, medicos[j]!])
+  return pares
+}
+
+/** Error al guardar un médico: el índice único de nombres (0042) quiere decir «ya está cargado». */
+export const MEDICO_REPETIDO = 'Ya hay un médico cargado con ese nombre. Buscalo en la lista y usá ese (o, si es otro médico, agregale el segundo nombre).'
+export const esMedicoRepetido = (e: { code?: string; message?: string } | null | undefined) => e?.code === '23505' && /vis_medicos_nombre_unico/.test(e.message ?? '')

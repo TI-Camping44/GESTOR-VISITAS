@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { claveEspecialidad, diasDeHorario } from '../lib/medicos'
+import { claveEspecialidad, diasDeHorario, parecidos } from '../lib/medicos'
 
 test('días del horario escrito a mano', () => {
   assert.deepEqual(diasDeHorario('Lunes a Viernes 07:00 Hs a 17:00 Hs.'), [1, 2, 3, 4, 5])
@@ -36,4 +36,19 @@ test('claveNombre y mismoMedico: el mismo médico cargado dos veces', async () =
   assert.ok(mismoMedico({ id: 'a', nombre: 'Dra. Yanina  Meza' }, { id: 'b', nombre: 'Dra. Yanina Meza' }))
   assert.ok(!mismoMedico({ id: 'a', nombre: 'Dra. Edith Fernández' }, { id: 'b', nombre: 'Dra. Elayne Fernández' }))
   assert.ok(mismoMedico({ id: 'x', nombre: null }, { id: 'x', nombre: 'Otro' }))
+})
+
+test('médicos parecidos: el mismo escrito distinto', () => {
+  assert.equal(parecidos('Dra. Yanina  Meza', 'Dra. Yanina Mesa'), true)
+  assert.equal(parecidos('Lic. Agostina Olivo', 'Agostina Oliva'), true)
+  assert.equal(parecidos('Dr. Marcos Cinturón', 'Dr. Marcos Centurión'), true)
+  assert.equal(parecidos('Silvana Torres', 'Sylvana Torres'), true)
+  assert.equal(parecidos('Ana Santillán', 'Ana Cecilia Santilla'), true)
+  assert.equal(parecidos('Enrique García Bello', 'Enrique García Colman'), true)
+})
+
+test('médicos parecidos: no junta a distintos', () => {
+  assert.equal(parecidos('María González', 'María Gómez'), false)
+  assert.equal(parecidos('Juan Pérez', 'Pedro Pérez'), false)
+  assert.equal(parecidos('Ana', 'Ana'), true)
 })

@@ -6,7 +6,7 @@
 import Tablero from '../tablero/page'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, ChevronLeft, ChevronRight, CircleDashed, CircleSlash, LogIn, LogOut, MapPin, Stethoscope, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, CircleDashed, CircleMinus, LogIn, LogOut, MapPin, Stethoscope, XCircle } from 'lucide-react'
 import { Aviso, Boton, Entrada, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { descargarCsv } from '@/lib/csv'
@@ -15,7 +15,7 @@ import { useParamUrl } from '@/lib/useParamUrl'
 import { useSemanaDia } from '@/lib/useSemanaDia'
 import { cn } from '@/lib/utils'
 import { leerLlegadas, leerNoVisitados, leerVisitas, textoProductos, totalMuestras, useVisitadoras, type Llegada, type NoVisitado, type VisitaMedica } from '@/components/admin/medica/datos'
-import { claveEspecialidad, mismoMedico, noLoVio, textoMotivo } from '@/lib/medicos'
+import { claveEspecialidad, mismoMedico, noLoVio, quePaso, textoMotivo } from '@/lib/medicos'
 import { minDeHora } from '@/lib/ruteo'
 
 type Jornada = { vendedor_id: string; inicio: string; fin: string | null }
@@ -324,8 +324,8 @@ function PlanDelDia({ plan, datos, vendedorId, dia }: {
                       return (
                         <li key={j} className="flex items-start gap-1.5">
                           {v ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-700 dark:text-green-400" aria-label="Lo vio" />
-                            : noEstaba || noPudo ? <CircleSlash className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" aria-label="No lo vio, con motivo" />
-                            : estuvo || pasado ? <XCircle className="mt-0.5 size-4 shrink-0 text-red-700 dark:text-red-400" aria-label="No lo vio" />
+                            : noEstaba || noPudo ? <CircleMinus className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" aria-label="Visita no realizada, con motivo" />
+                            : estuvo || pasado ? <XCircle className="mt-0.5 size-4 shrink-0 text-red-700 dark:text-red-400" aria-label="No lo visitó, sin motivo" />
                             : <CircleDashed className="mt-0.5 size-4 shrink-0 text-tenue" aria-label="Pendiente" />}
                           <span>
                             {hMed && <span className="tabular text-tenue">{hMed} · </span>}
@@ -333,12 +333,12 @@ function PlanDelDia({ plan, datos, vendedorId, dia }: {
                             {(o.medico?.especialidad ?? (o.medico ? null : o.especialidad)) && <span className="text-tenue"> · {o.medico?.especialidad ?? o.especialidad}</span>}
                             {' '}<span className={cn('text-xs font-medium', v ? 'text-green-800 dark:text-green-300' : noEstaba || noPudo ? 'text-amber-800 dark:text-amber-300' : estuvo || pasado ? 'text-red-800 dark:text-red-300' : 'text-tenue')}>
                               {v ? `visitado ${fmtSoloHora(v.fecha_hora)} · ${v.resultado?.nombre ?? 'Visitado'}${!o.medico_id && v.medico ? ` (${v.medico.nombre})` : ''}`
-                                : noEstaba ? `no lo vio · ${noEstaba.resultado?.nombre ?? 'sin motivo'} (${fmtSoloHora(noEstaba.fecha_hora)})`
-                                : noPudo ? 'no pudo visitar el lugar'
-                                : estuvo || pasado ? 'no lo vio (sin motivo cargado)' : 'pendiente'}
+                                : noEstaba ? `Visita no realizada (${fmtSoloHora(noEstaba.fecha_hora)}): ${quePaso(noEstaba.resultado?.nombre)}`
+                                : noPudo ? 'Visita no realizada: no pudo visitar el lugar'
+                                : estuvo || pasado ? 'No lo visitó y no cargó el motivo' : 'pendiente'}
                             </span>
                             {dif != null && Math.abs(dif) >= 5 && <span className={cn('text-xs', dif > 15 ? 'text-red-800 dark:text-red-300' : 'text-tenue')}> · {dif > 0 ? `${dif} min tarde` : `${-dif} min antes`}</span>}
-                            {nota && <span className="block text-xs text-tenue">«{nota}»</span>}
+                            {nota && <span className="block text-xs text-tenue">{v ? 'Nota' : 'Motivo'}: «{nota}»</span>}
                           </span>
                         </li>
                       )
@@ -425,7 +425,7 @@ function EventoFila({ e }: { e: Evento }) {
   )
   if (e.tipo === 'no_visitado') return (
     <li className="relative text-sm">
-      {punto(CircleSlash, 'bg-amber-600 text-white')}
+      {punto(CircleMinus, 'bg-amber-600 text-white')}
       <p>{hora}<b>No pudo visitar</b> {e.n.lugar?.razon_social ?? 'el lugar'}<span className="text-tenue"> · {textoMotivo(e.n.motivo)}</span></p>
       {e.n.observaciones && <p className="mt-1 rounded-lg bg-fondo px-3 py-2 break-words"><span className="text-tenue">Observación:</span> {e.n.observaciones}</p>}
     </li>
