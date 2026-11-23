@@ -2,13 +2,13 @@
 // Hoy: la ruta del día con contador, mapa y acciones por parada (BRIEF §6 vendedor 1).
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Phone, MessageCircle, Navigation, CheckCircle2, SkipForward, Undo2, Stethoscope, Clock, CircleSlash } from 'lucide-react'
+import { Phone, MessageCircle, Navigation, CheckCircle2, SkipForward, Undo2, Stethoscope, Clock, CircleSlash, XCircle } from 'lucide-react'
 import { useVendedor } from '@/components/vendedor/Proveedor'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, PuntoEstado, Tarjeta, Vacio, claseBoton } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
-import { textoMotivo } from '@/lib/medicos'
+import { claveEspecialidad, textoMotivo } from '@/lib/medicos'
 import { fmtFecha, fmtHoras, fmtSoloHora, hace, minutosDelDia, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
 import { fmtMin, horasEstimadas } from '@/lib/ruteo'
@@ -24,7 +24,9 @@ type Objetivo = { parada_id: string; especialidad: string | null; orden: number;
 // Llegadas de hoy a un lugar (lo guardado por una versión anterior era una sola hora).
 const horasLlegada = (v: string[] | string | undefined) => (Array.isArray(v) ? v : v ? [v] : [])
 
-type Datos = { paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[]; objetivos?: Objetivo[]; llegadas?: Record<string, string[]>; noVisitados?: Record<string, { hora: string; motivo: string }>; base?: { lat: number | null; lng: number | null } | null }
+// Visitas de hoy de la visitadora (para marcar a qué médicos del plan ya vio).
+type VisitaHoy = { cliente_id: string; medico_id: string | null; fecha_hora: string; medico: { especialidad: string | null } | null }
+type Datos = { paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[]; objetivos?: Objetivo[]; visitasHoy?: VisitaHoy[]; llegadas?: Record<string, string[]>; noVisitados?: Record<string, { hora: string; motivo: string }>; base?: { lat: number | null; lng: number | null } | null }
 
 export default function Hoy() {
   const { perfil, pendientes, esMedica, jornada, soloLectura } = useVendedor()
@@ -53,6 +55,7 @@ export default function Hoy() {
       const filas = (t.data ?? []) as FilaTablero[]
       const paradas = (p.data ?? []) as ParadaDia[]
       let objetivos: Objetivo[] = []
+      let visitasHoy: VisitaHoy[] = []
       let base: Datos['base'] = null
       const llegadas: Record<string, string[]> = {}
       const noVisitados: Record<string, { hora: string; motivo: string }> = {}
@@ -61,12 +64,14 @@ export default function Hoy() {
       const nv = await sb.from('vis_no_visitados').select('lugar_id, fecha_hora, motivo').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora')
       for (const x of nv.data ?? []) noVisitados[x.lugar_id] = { hora: x.fecha_hora, motivo: x.motivo } // la última del día
       if (esMedica) {
-        const [o, b, c, ll] = await Promise.all([
+        const [o, b, c, ll, vh] = await Promise.all([
           paradas.length ? sb.from('vis_parada_objetivos').select('parada_id, especialidad, orden, medico:vis_medicos(id, nombre, especialidad)').in('parada_id', paradas.map((x) => x.parada_id)) : Promise.resolve({ data: [] }),
           sb.from('vis_vendedores').select('base_lat, base_lng').eq('id', perfil.id).maybeSingle(),
           sb.from('vis_config').select('base_lat, base_lng').maybeSingle(),
           sb.from('vis_llegadas').select('lugar_id, fecha_hora').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
+          sb.from('vis_visitas').select('cliente_id, medico_id, fecha_hora, medico:vis_medicos!vis_visitas_medico_id_fkey(especialidad)').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
         ])
+        visitasHoy = (vh.data ?? []) as unknown as VisitaHoy[]
         for (const x of ll.data ?? []) (llegadas[x.lugar_id] ??= []).push(x.fecha_hora)
         if (!vivo) return
         objetivos = ((o.data ?? []) as Objetivo[]).sort((a, z) => a.orden - z.orden)
@@ -75,6 +80,7 @@ export default function Hoy() {
       const nuevo: Datos = {
         paradas,
         objetivos,
+        visitasHoy,
         llegadas,
         noVisitados,
         base,
@@ -129,6 +135,10 @@ export default function Hoy() {
     return new Map(enOrden.map((p, i) => [p.parada_id, fmtMin(h[i]!.llegada)]))
   }, [esMedica, datos, saltadas, jornada])
   const objetivosDe = (id: string) => (datos?.objetivos ?? []).filter((o) => o.parada_id === id)
+  // Visita de hoy que cumple un médico del plan (o, si es «buscar especialidad», a un médico de esa especialidad).
+  const vistoEn = (lugarId: string, o: Objetivo) => (datos?.visitasHoy ?? []).find((v) => v.cliente_id === lugarId && (o.medico
+    ? v.medico_id === o.medico.id
+    : !!o.especialidad && !!v.medico?.especialidad && claveEspecialidad(v.medico.especialidad) === claveEspecialidad(o.especialidad)))
 
   const extra = pendientes.visitas
   const enRuta = new Set((datos?.paradas ?? []).map((p) => p.cliente_id))
@@ -207,13 +217,24 @@ export default function Hoy() {
                     )}
                     {esMedica && objetivosDe(p.parada_id).length > 0 && (
                       <ul className="mt-2 flex flex-col gap-1 rounded-lg bg-fondo px-2.5 py-2 text-sm">
-                        {objetivosDe(p.parada_id).map((o, k) => (
-                          <li key={k} className="flex items-start gap-1.5">
-                            <Stethoscope className="mt-0.5 size-3.5 shrink-0 text-marca" aria-hidden />
-                            {o.medico ? <span><b>{o.medico.nombre}</b>{(o.especialidad ?? o.medico.especialidad) && <span className="text-tenue"> · {o.especialidad ?? o.medico.especialidad}</span>}</span>
-                              : <span>Buscar médico de <b>{o.especialidad}</b></span>}
-                          </li>
-                        ))}
+                        {objetivosDe(p.parada_id).map((o, k) => {
+                          const v = vistoEn(p.cliente_id, o)
+                          // «No lo viste»: ya pasaste por el lugar (visita o llegada) y a este no lo visitaste.
+                          const falta = !v && (p.visitada || horasLlegada(datos?.llegadas?.[p.cliente_id]).length > 0)
+                          return (
+                            <li key={k} className="flex items-start gap-1.5">
+                              {v ? <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-green-700 dark:text-green-400" aria-hidden />
+                                : falta ? <XCircle className="mt-0.5 size-3.5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden />
+                                : <Stethoscope className="mt-0.5 size-3.5 shrink-0 text-marca" aria-hidden />}
+                              <span>
+                                {o.medico ? <><b>{o.medico.nombre}</b>{(o.especialidad ?? o.medico.especialidad) && <span className="text-tenue"> · {o.especialidad ?? o.medico.especialidad}</span>}</>
+                                  : <>Buscar médico de <b>{o.especialidad}</b></>}
+                                {v && <span className="text-xs font-medium text-green-700 dark:text-green-400"> · lo viste {fmtSoloHora(v.fecha_hora)}</span>}
+                                {falta && <span className="text-xs font-medium text-amber-700 dark:text-amber-300"> · no lo viste</span>}
+                              </span>
+                            </li>
+                          )
+                        })}
                       </ul>
                     )}
                     {esMedica && horasLlegada(datos?.llegadas?.[p.cliente_id]).length > 0 && (
@@ -242,7 +263,20 @@ export default function Hoy() {
                   </div>
                 )}
                 <div className="mt-3 flex gap-2">
-                  {p.visitada ? (
+                  {p.visitada && esMedica && objetivosDe(p.parada_id).length > 0 ? (() => {
+                    // Visita médica con plan: cuántos del plan viste; si falta alguno, se puede volver a entrar.
+                    const plan = objetivosDe(p.parada_id)
+                    const vistos = plan.filter((o) => vistoEn(p.cliente_id, o)).length
+                    const visitas = (datos?.visitasHoy ?? []).filter((v) => v.cliente_id === p.cliente_id).length
+                    const completo = vistos === plan.length
+                    return <>
+                      <span className={`inline-flex flex-1 items-center justify-center gap-1.5 text-sm font-medium ${completo ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-300'}`}>
+                        {completo ? <CheckCircle2 className="size-4" aria-hidden /> : <CircleSlash className="size-4" aria-hidden />}
+                        {visitas} visita{visitas === 1 ? '' : 's'} · {vistos} de {plan.length} del plan
+                      </span>
+                      {!completo && <Link href={urlParaVisitar(esMedica, p.cliente_id, { parada: p.parada_id })} className={claseBoton({ variante: 'secundario', className: 'flex-1' })}>Ver médicos</Link>}
+                    </>
+                  })() : p.visitada ? (
                     <span className="inline-flex flex-1 items-center justify-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-400">
                       <CheckCircle2 className="size-4" aria-hidden /> Visitado
                     </span>
