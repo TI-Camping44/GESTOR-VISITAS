@@ -60,7 +60,8 @@ const M = [
 const medicos = M.map(([id, nombre, esp, ls, uv, f]) => ({ id, nombre, especialidad: esp, telefono: id === 'm1' ? '0981 555 123' : null, telefono_norm: id === 'm1' ? '595981555123' : null, email: null, notas: id === 'm2' ? 'Prefiere visitas después de las 17' : null, frecuencia_dias: f, visitadora_id: 'noe', creado_por: 'noe', activo: true, empresa_id: E2, created_at: '2026-11-01', updated_at: '2026-11-01', ultima_visita: uv, lugares: ls.map(([lid, hor]) => ({ lugar_id: lid, nombre: lnom(lid), horario: hor })) }))
 const med = (id) => { const m = medicos.find((x) => x.id === id); return { nombre: m.nombre, especialidad: m.especialidad } }
 const resultados = [
-  ...['Pedido', 'Cotización', 'Volver otro día', 'Cobranza', 'Cerrado', 'Cliente nuevo', 'No le interesa'].map((n, i) => ({ id: i + 1, nombre: n, es_venta: n === 'Pedido', orden: i + 1, tipo: 'ventas', activo: true })),
+  ...['Pedido', 'Cotización', 'Volver otro día', 'Cobranza', 'Cerrado', 'Cliente nuevo', 'No le interesa'].map((n, i) => ({ id: i + 1, nombre: n, es_venta: n === 'Pedido', orden: i + 1, tipo: 'ventas', activo: true, empresa_id: null })),
+  ...(EMP === E2 ? [{ id: 40, nombre: 'Pidió catálogo', es_venta: false, orden: 8, tipo: 'ventas', activo: true, empresa_id: E2 }] : []),
   ...['Presentó productos', 'Dejó muestras', 'No estaba / no atendió', 'Pidió volver otro día', 'Sin acceso', 'Ya no atiende acá', 'Otro motivo'].map((n, i) => ({ id: 20 + i, nombre: n, es_venta: false, orden: i + 1, tipo: 'medica', activo: true })),
 ]
 const productos = ['Artrodol 50 mg', 'Gastrovit', 'Pedifer gotas', 'Vitalcal D', 'Omegavit 1000'].map((n, i) => ({ id: i + 1, nombre: n, codigo: null, activo: true, orden: i + 1, empresa_id: E2 }))
