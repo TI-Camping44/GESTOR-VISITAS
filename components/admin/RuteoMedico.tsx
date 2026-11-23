@@ -44,6 +44,7 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
   const [base, setBase] = useState<{ lat: number | null; lng: number | null } | null>(null)
   // Hora pactada de cada parada (la carga Sergio acá; la visitadora la ve en Hoy en vez de la aproximada).
   const [pactadas, setPactadas] = useState<Map<string, string>>(new Map())
+  const [pactadasMed, setPactadasMed] = useState<Map<string, string>>(new Map()) // por médico (objetivo)
   const [guardando, setGuardando] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const visitadora = vis || visitadoras[0]?.id || ''
@@ -60,6 +61,9 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
     const pids = [...new Set((r.data ?? []).map((f: FilaRuteoSemana) => f.parada_id))]
     const hp = pids.length ? await sb.from('vis_ruta_paradas').select('id, hora_pactada').in('id', pids) : { data: [] }
     setPactadas(new Map(((hp.data ?? []) as { id: string; hora_pactada: string | null }[]).filter((x) => x.hora_pactada).map((x) => [x.id, x.hora_pactada!.slice(0, 5)])))
+    const oids = [...new Set((r.data ?? []).map((f: FilaRuteoSemana) => f.objetivo_id).filter(Boolean) as string[])]
+    const ho = oids.length ? await sb.from('vis_parada_objetivos').select('id, hora_pactada').in('id', oids) : { data: [] }
+    setPactadasMed(new Map(((ho.data ?? []) as { id: string; hora_pactada: string | null }[]).filter((x) => x.hora_pactada).map((x) => [x.id, x.hora_pactada!.slice(0, 5)])))
     setBase(b.data?.base_lat != null ? { lat: b.data.base_lat, lng: b.data.base_lng } : c.data ? { lat: c.data.base_lat, lng: c.data.base_lng } : null)
   }, [sb, visitadora, lunes])
   useEffect(() => { void cargar() }, [cargar])
@@ -77,6 +81,15 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
     return m
   }, [filas, base, inicio])
   const dias = useMemo(() => [...new Set((filas ?? []).map((f) => f.dia))], [filas])
+
+  async function guardarPactadaMedico(objetivoId: string, hora: string) {
+    if ((pactadasMed.get(objetivoId) ?? '') === hora) return
+    setGuardando(objetivoId); setError(null)
+    const { error: e } = await sb.from('vis_parada_objetivos').update({ hora_pactada: hora || null }).eq('id', objetivoId)
+    setGuardando(null)
+    if (e) return setError(mensajeError(e))
+    setPactadasMed((m) => { const n = new Map(m); if (hora) n.set(objetivoId, hora); else n.delete(objetivoId); return n })
+  }
 
   async function guardarPactada(paradaId: string, hora: string) {
     if ((pactadas.get(paradaId) ?? '') === hora) return
@@ -100,6 +113,7 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
       { titulo: 'Dirección', valor: (f: FilaRuteoSemana) => f.direccion ?? '' },
       { titulo: 'Especialidad', valor: (f: FilaRuteoSemana) => f.especialidad ?? '' },
       { titulo: 'Dr', valor: (f: FilaRuteoSemana) => f.medico ?? '' },
+      { titulo: 'Hora pactada con el Dr', valor: (f: FilaRuteoSemana) => (f.objetivo_id ? pactadasMed.get(f.objetivo_id) ?? '' : '') },
       { titulo: 'Médico visitado', valor: (f: FilaRuteoSemana) => f.medico_visitado ?? '' },
       { titulo: 'Hora de la visita', valor: (f: FilaRuteoSemana) => (f.fecha_hora ? new Date(f.fecha_hora).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Asuncion' }) : '') },
       { titulo: 'Resultado', valor: (f: FilaRuteoSemana) => f.resultado ?? '' },
@@ -170,7 +184,7 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
               <h3 className="mb-1 text-sm font-semibold"><span className="capitalize">{fmtDia(d)}</span> <span className="font-normal text-tenue">· {new Set(delDia.map((f) => f.parada_id)).size} lugares · {hechas} de {delDia.length} visitados</span></h3>
               <table className="w-full min-w-[860px] text-sm">
                 <thead className="text-left text-xs text-tenue">
-                  <tr className="border-b border-borde [&>th]:px-2 [&>th]:py-1.5"><th className="w-10">#</th><th className="w-28">Pactada / llegó</th><th>Centro médico / Consultorio</th><th>Especialidad</th><th>Dr</th><th>Resultado</th><th>Próxima</th><th className="w-28">Estado</th></tr>
+                  <tr className="border-b border-borde [&>th]:px-2 [&>th]:py-1.5"><th className="w-10">#</th><th className="w-28">Pactada / llegó</th><th>Centro médico / Consultorio</th><th>Especialidad</th><th>Dr</th><th className="w-24">Hora Dr</th><th>Resultado</th><th>Próxima</th><th className="w-28">Estado</th></tr>
                 </thead>
                 <tbody>
                   {delDia.map((f, i) => {
@@ -191,6 +205,12 @@ export function RuteoMedico({ visitadoras }: { visitadoras: { id: string; nombre
                         <td>{primera && <><p className="font-medium">{f.lugar}</p>{f.direccion && <p className="text-xs text-tenue">{f.direccion}</p>}</>}</td>
                         <td>{f.especialidad ?? <span className="text-tenue">—</span>}</td>
                         <td>{f.medico ?? (f.medico_visitado ? <span className="text-tenue">visitó a {f.medico_visitado}</span> : <span className="text-tenue">{f.objetivo_id ? 'a buscar' : '—'}</span>)}</td>
+                        <td>{f.objetivo_id && (
+                          <input type="time" aria-label={`Hora pactada con ${f.medico ?? f.especialidad ?? 'el médico'}`} title="Hora pactada con este médico (la ve la visitadora en el lugar)"
+                            defaultValue={pactadasMed.get(f.objetivo_id) ?? ''} key={`${f.objetivo_id}-${pactadasMed.get(f.objetivo_id) ?? ''}`}
+                            onBlur={(e) => void guardarPactadaMedico(f.objetivo_id!, e.target.value)}
+                            className={cn('min-h-8 w-24 rounded-md border border-borde bg-superficie px-1.5 text-sm', guardando === f.objetivo_id && 'opacity-50')} />
+                        )}</td>
                         <td>{!f.visita_id && primera && f.no_visitado?.length ? <span className="text-orange-800 dark:text-orange-300">No pudo visitar: {textoNoVisitado(f)}</span> : null}{f.fecha_hora && <span className="tabular text-tenue">{fmtSoloHora(f.fecha_hora)} · </span>}{f.resultado ?? ''}{f.observaciones && <p className="text-xs text-tenue">{f.observaciones}</p>}</td>
                         <td className="tabular">{f.proxima_visita ? fmtFecha(f.proxima_visita) : ''}</td>
                         <td><span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', COLOR[e])}>{e}</span></td>

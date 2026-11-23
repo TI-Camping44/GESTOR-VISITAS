@@ -21,7 +21,7 @@ import { minDeHora } from '@/lib/ruteo'
 type Jornada = { vendedor_id: string; inicio: string; fin: string | null }
 // Plan del día (lo arma el supervisor en «Armar el día»): lugares en orden y, en cada uno, a quién ver.
 type ParadaPlan = { id: string; dia: string; orden: number; cliente_id: string; vendedor_id: string; lugar: string; hora_pactada: string | null
-  objetivos: { orden: number; medico_id: string | null; especialidad: string | null; medico: { nombre: string; especialidad: string | null } | null }[] }
+  objetivos: { orden: number; medico_id: string | null; especialidad: string | null; hora_pactada: string | null; medico: { nombre: string; especialidad: string | null } | null }[] }
 type Datos = { visitas: VisitaMedica[]; llegadas: Llegada[]; noVisitados: NoVisitado[]; jornadas: Jornada[]; plan: ParadaPlan[] }
 
 async function leerPlan(ids: string[], desde: string, hasta: string): Promise<ParadaPlan[]> {
@@ -35,7 +35,7 @@ async function leerPlan(ids: string[], desde: string, hasta: string): Promise<Pa
     .filter((p) => p.ruta && ids.includes(p.ruta.vendedor_id))
   const pids = filas.map((p) => p.id)
   const { data: os } = pids.length
-    ? await sb.from('vis_parada_objetivos').select('parada_id, orden, medico_id, especialidad, medico:vis_medicos!vis_parada_objetivos_medico_id_fkey(nombre, especialidad)').in('parada_id', pids).order('orden')
+    ? await sb.from('vis_parada_objetivos').select('parada_id, orden, medico_id, especialidad, hora_pactada, medico:vis_medicos!vis_parada_objetivos_medico_id_fkey(nombre, especialidad)').in('parada_id', pids).order('orden')
     : { data: [] }
   const objetivos = (os ?? []) as unknown as (ParadaPlan['objetivos'][number] & { parada_id: string })[]
   return filas.map((p) => ({ id: p.id, dia: p.dia, orden: p.orden, cliente_id: p.cliente_id, hora_pactada: p.hora_pactada, vendedor_id: p.ruta!.vendedor_id, lugar: p.lugar?.razon_social ?? 'Lugar',
@@ -295,7 +295,7 @@ function PlanDelDia({ plan, datos, vendedorId, dia }: {
         <span className="text-tenue"> · fue a {lugaresHechos} de {plan.length} lugares{total > 0 && ` · vio ${vistos} de ${total} médicos del plan`}{fueraDelPlan.length > 0 && ` · ${fueraDelPlan.length} lugar${fueraDelPlan.length === 1 ? '' : 'es'} fuera del plan`}</span>
       </p>
       <div className="hidden grid-cols-2 border-b border-borde text-xs font-medium uppercase tracking-wide text-tenue md:grid">
-        <p className="px-3 py-1.5">Plan</p><p className="border-l border-borde px-3 py-1.5">Lo que hizo</p>
+        <p className="px-3 py-1.5">Plan y si lo cumplió</p><p className="border-l border-borde px-3 py-1.5">Llegada y fuera del plan</p>
       </div>
       <ol>
         {plan.map((p, i) => {
@@ -310,21 +310,43 @@ function PlanDelDia({ plan, datos, vendedorId, dia }: {
           const posicion = ordenReal.indexOf(p.cliente_id)
           return (
             <li key={p.id} className="grid border-b border-borde text-sm last:border-0 md:grid-cols-2">
-              {/* Plan */}
+              {/* Plan, médico por médico con lo que pasó al lado (✓ lo vio, naranja con motivo, ✗ no lo vio, pendiente). */}
               <div className="px-3 py-2">
                 <p><span className="font-semibold tabular">{i + 1}.</span> <b>{p.lugar}</b>{pactada && <span className="tabular text-tenue"> · pactado {pactada}</span>}</p>
                 {p.objetivos.length > 0 ? (
-                  <ul className="mt-1 flex flex-col gap-0.5 pl-4">
-                    {p.objetivos.map((o, j) => (
-                      <li key={j} className="flex items-start gap-1.5">
-                        <Stethoscope className="mt-0.5 size-3.5 shrink-0 text-tenue" aria-hidden />
-                        <span>{o.medico?.nombre ?? `Buscar ${o.especialidad ?? 'médico'}`}{(o.medico?.especialidad ?? (o.medico ? null : o.especialidad)) && <span className="text-tenue"> · {o.medico?.especialidad ?? o.especialidad}</span>}</span>
-                      </li>
-                    ))}
+                  <ul className="mt-1 flex flex-col gap-1 pl-4">
+                    {p.objetivos.map((o, j) => {
+                      const v = vs.find((x) => cumple(o, x) && !noLoVio(x.resultado?.nombre))
+                      const noEstaba = v ? undefined : vs.find((x) => cumple(o, x))
+                      const nota = (v ?? noEstaba)?.observaciones
+                      const hMed = o.hora_pactada?.slice(0, 5) ?? null
+                      const dif = hMed && v ? minutosDelDia(v.fecha_hora) - (minDeHora(hMed) ?? minutosDelDia(v.fecha_hora)) : null
+                      return (
+                        <li key={j} className="flex items-start gap-1.5">
+                          {v ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-700 dark:text-green-400" aria-label="Lo vio" />
+                            : noEstaba || noPudo ? <CircleSlash className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" aria-label="No lo vio, con motivo" />
+                            : estuvo || pasado ? <XCircle className="mt-0.5 size-4 shrink-0 text-red-700 dark:text-red-400" aria-label="No lo vio" />
+                            : <CircleDashed className="mt-0.5 size-4 shrink-0 text-tenue" aria-label="Pendiente" />}
+                          <span>
+                            {hMed && <span className="tabular text-tenue">{hMed} · </span>}
+                            {o.medico?.nombre ?? `Buscar ${o.especialidad ?? 'médico'}`}
+                            {(o.medico?.especialidad ?? (o.medico ? null : o.especialidad)) && <span className="text-tenue"> · {o.medico?.especialidad ?? o.especialidad}</span>}
+                            {' '}<span className={cn('text-xs font-medium', v ? 'text-green-800 dark:text-green-300' : noEstaba || noPudo ? 'text-amber-800 dark:text-amber-300' : estuvo || pasado ? 'text-red-800 dark:text-red-300' : 'text-tenue')}>
+                              {v ? `visitado ${fmtSoloHora(v.fecha_hora)} · ${v.resultado?.nombre ?? 'Visitado'}${!o.medico_id && v.medico ? ` (${v.medico.nombre})` : ''}`
+                                : noEstaba ? `no lo vio · ${noEstaba.resultado?.nombre ?? 'sin motivo'} (${fmtSoloHora(noEstaba.fecha_hora)})`
+                                : noPudo ? 'no pudo visitar el lugar'
+                                : estuvo || pasado ? 'no lo vio (sin motivo cargado)' : 'pendiente'}
+                            </span>
+                            {dif != null && Math.abs(dif) >= 5 && <span className={cn('text-xs', dif > 15 ? 'text-red-800 dark:text-red-300' : 'text-tenue')}> · {dif > 0 ? `${dif} min tarde` : `${-dif} min antes`}</span>}
+                            {nota && <span className="block text-xs text-tenue">«{nota}»</span>}
+                          </span>
+                        </li>
+                      )
+                    })}
                   </ul>
                 ) : <p className="mt-1 pl-4 text-xs text-tenue">Sin médicos asignados.</p>}
               </div>
-              {/* Lo que hizo */}
+              {/* Llegada y lo que hizo fuera del plan en ese lugar. */}
               <div className="border-t border-borde bg-fondo/40 px-3 py-2 md:border-l md:border-t-0">
                 <p className={cn('font-medium', estuvo ? 'text-tinta' : pasado ? 'text-red-800 dark:text-red-300' : 'text-tenue')}>
                   {ll.length ? <>Llegó {ll.map((l) => fmtSoloHora(l.fecha_hora)).join(' y ')}</>
@@ -335,41 +357,21 @@ function PlanDelDia({ plan, datos, vendedorId, dia }: {
                   {posicion >= 0 && posicion !== i && <span className="text-xs text-tenue"> · fue el {posicion + 1}.º lugar del día</span>}
                 </p>
                 {noPudo?.observaciones && <p className="text-xs text-tenue">«{noPudo.observaciones}»</p>}
-                {(p.objetivos.length > 0 || fuera.length > 0) && (
-                  <ul className="mt-1 flex flex-col gap-0.5">
-                    {p.objetivos.map((o, j) => {
-                      const v = vs.find((x) => cumple(o, x) && !noLoVio(x.resultado?.nombre))
-                      const noEstaba = v ? undefined : vs.find((x) => cumple(o, x))
-                      const quien = o.medico?.nombre ?? `Buscar ${o.especialidad ?? 'médico'}`
-                      return (
-                        <li key={j} className="flex items-start gap-1.5">
-                          {v ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-700 dark:text-green-400" aria-hidden />
-                            : noEstaba || noPudo ? <CircleSlash className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden />
-                            : estuvo || pasado ? <XCircle className="mt-0.5 size-4 shrink-0 text-red-700 dark:text-red-400" aria-hidden />
-                            : <CircleDashed className="mt-0.5 size-4 shrink-0 text-tenue" aria-hidden />}
-                          <span>
-                            <span className="sr-only">{quien}: </span>
-                            <span className={cn('font-medium', v ? 'text-green-800 dark:text-green-300' : noEstaba || noPudo ? 'text-amber-800 dark:text-amber-300' : estuvo || pasado ? 'text-red-800 dark:text-red-300' : 'text-tenue')}>
-                              {v ? `${fmtSoloHora(v.fecha_hora)} ${v.resultado?.nombre ?? 'Visitado'}${!o.medico_id && v.medico ? ` (${v.medico.nombre})` : ''}`
-                                : noEstaba ? `${fmtSoloHora(noEstaba.fecha_hora)} No lo vio · ${noEstaba.resultado?.nombre ?? 'sin motivo'}`
-                                : noPudo ? 'No pudo visitar el lugar'
-                                : estuvo || pasado ? 'No lo vio (sin motivo cargado)' : 'Pendiente'}
-                            </span>
-                            <span className="text-xs text-tenue md:hidden"> · {quien}</span>
-                            {(v ?? noEstaba)?.observaciones && <span className="block text-xs text-tenue">«{(v ?? noEstaba)!.observaciones}»</span>}
-                          </span>
+                {fuera.length > 0 ? (
+                  <>
+                    <p className="mt-1.5 text-xs font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300">Fuera del plan</p>
+                    <ul className="mt-0.5 flex flex-col gap-1">
+                      {fuera.map((v) => (
+                        <li key={v.id} className="flex items-start gap-1.5">
+                          <Stethoscope className="mt-0.5 size-4 shrink-0 text-marca" aria-hidden />
+                          <span><span className="tabular text-tenue">{fmtSoloHora(v.fecha_hora)}</span> {v.medico?.nombre ?? 'Visita'}{v.medico?.especialidad && <span className="text-tenue"> · {v.medico.especialidad}</span>}
+                            {v.resultado && <span className="text-xs font-medium text-tenue"> · {v.resultado.nombre}</span>}
+                            {v.observaciones && <span className="block text-xs text-tenue">«{v.observaciones}»</span>}</span>
                         </li>
-                      )
-                    })}
-                    {fuera.map((v) => (
-                      <li key={v.id} className="flex items-start gap-1.5">
-                        <Stethoscope className="mt-0.5 size-4 shrink-0 text-marca" aria-hidden />
-                        <span><span className="font-medium">{fmtSoloHora(v.fecha_hora)} {v.medico?.nombre ?? 'Visita'}</span>{v.medico?.especialidad && <span className="text-tenue"> · {v.medico.especialidad}</span>}
-                          {' '}<span className="text-xs font-medium text-amber-800 dark:text-amber-300">fuera del plan{v.resultado ? ` · ${v.resultado.nombre}` : ''}</span></span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                      ))}
+                    </ul>
+                  </>
+                ) : estuvo && <p className="mt-1 text-xs text-tenue">Nada fuera del plan.</p>}
               </div>
             </li>
           )

@@ -20,7 +20,7 @@ import { linkComoLlegar, linkTel, linkWhatsApp, mensajeError } from '@/lib/utils
 import type { FilaTablero, ParadaDia, ProximaVisita } from '@/lib/database.types'
 
 // Visita médica: a qué médico ir o qué especialidad buscar en cada parada (lo arma Sergio en el panel).
-type Objetivo = { parada_id: string; especialidad: string | null; orden: number; medico: { id: string; nombre: string; especialidad: string | null } | null }
+type Objetivo = { parada_id: string; especialidad: string | null; orden: number; hora_pactada?: string | null; medico: { id: string; nombre: string; especialidad: string | null } | null }
 // Llegadas de hoy a un lugar (lo guardado por una versión anterior era una sola hora).
 const horasLlegada = (v: string[] | string | undefined) => (Array.isArray(v) ? v : v ? [v] : [])
 
@@ -66,7 +66,7 @@ export default function Hoy() {
       for (const x of nv.data ?? []) noVisitados[x.lugar_id] = { hora: x.fecha_hora, motivo: x.motivo } // la última del día
       if (esMedica) {
         const [o, b, c, ll, hp, vh] = await Promise.all([
-          paradas.length ? sb.from('vis_parada_objetivos').select('parada_id, especialidad, orden, medico:vis_medicos(id, nombre, especialidad)').in('parada_id', paradas.map((x) => x.parada_id)) : Promise.resolve({ data: [] }),
+          paradas.length ? sb.from('vis_parada_objetivos').select('parada_id, especialidad, orden, hora_pactada, medico:vis_medicos(id, nombre, especialidad)').in('parada_id', paradas.map((x) => x.parada_id)) : Promise.resolve({ data: [] }),
           sb.from('vis_vendedores').select('base_lat, base_lng').eq('id', perfil.id).maybeSingle(),
           sb.from('vis_config').select('base_lat, base_lng').maybeSingle(),
           sb.from('vis_llegadas').select('lugar_id, fecha_hora').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
@@ -234,6 +234,7 @@ export default function Hoy() {
                                 : falta || noEstaba ? <XCircle className="mt-0.5 size-3.5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden />
                                 : <Stethoscope className="mt-0.5 size-3.5 shrink-0 text-marca" aria-hidden />}
                               <span>
+                                {o.hora_pactada && <span className="tabular text-tenue">{o.hora_pactada.slice(0, 5)} · </span>}
                                 {o.medico ? <><b>{o.medico.nombre}</b>{(o.especialidad ?? o.medico.especialidad) && <span className="text-tenue"> · {o.especialidad ?? o.medico.especialidad}</span>}</>
                                   : <>Buscar médico de <b>{o.especialidad}</b></>}
                                 {v && <span className="text-xs font-medium text-green-700 dark:text-green-400"> · lo viste {fmtSoloHora(v.fecha_hora)}</span>}
@@ -245,6 +246,19 @@ export default function Hoy() {
                         })}
                       </ul>
                     )}
+                    {esMedica && objetivosDe(p.parada_id).length > 0 && (() => {
+                      // Visitas de hoy en este lugar a médicos que no estaban en el plan.
+                      const fuera = (datos?.visitasHoy ?? []).filter((v) => v.cliente_id === p.cliente_id && !objetivosDe(p.parada_id).some((o) => vistoEn(p.cliente_id, o) === v))
+                      return fuera.length > 0 && (
+                        <div className="mt-1.5 rounded-lg border border-dashed border-borde px-2.5 py-1.5 text-sm">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Fuera del plan</p>
+                          {fuera.map((v, k) => (
+                            <p key={k} className="flex items-start gap-1.5"><Stethoscope className="mt-0.5 size-3.5 shrink-0 text-marca" aria-hidden />
+                              <span><span className="tabular text-tenue">{fmtSoloHora(v.fecha_hora)}</span> {v.medico?.nombre ?? 'Visita'}{v.resultado && <span className="text-tenue"> · {v.resultado.nombre}</span>}</span></p>
+                          ))}
+                        </div>
+                      )
+                    })()}
                     {esMedica && horasLlegada(datos?.llegadas?.[p.cliente_id]).length > 0 && (
                       <p className="mt-1 flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400"><CheckCircle2 className="size-3.5" aria-hidden /> Llegaste a las {fmtHoras(horasLlegada(datos?.llegadas?.[p.cliente_id]))}{datos?.pactadas?.[p.parada_id] && <span className="font-normal text-tenue"> (pactado {datos.pactadas[p.parada_id]})</span>}</p>
                     )}

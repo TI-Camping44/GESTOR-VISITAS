@@ -22,7 +22,7 @@ import { tocaVisitar } from '@/lib/medicos'
 import type { Medico, Resultado } from '@/lib/database.types'
 
 type Lugar = { id: string; razon_social: string; ciudad: string | null; direccion: string | null; lat: number | null; lng: number | null; tipo_lugar?: string | null; telefono?: string | null; notas?: string | null }
-type Objetivo = { medico_id: string | null; especialidad: string | null; orden: number }
+type Objetivo = { medico_id: string | null; especialidad: string | null; orden: number; hora_pactada?: string | null }
 const NO_ESTABA = 'No estaba / no atendió'
 
 export default function PaginaLugar() {
@@ -90,7 +90,7 @@ export default function PaginaLugar() {
       const pid = parada ?? (await sb.from('vis_ruta_paradas').select('id').eq('cliente_id', lugarId).eq('dia', hoyIso()).limit(1)).data?.[0]?.id ?? null
       if (vivo) setParadaHoy(pid)
       if (pid) {
-        const ro = await sb.from('vis_parada_objetivos').select('medico_id, especialidad, orden').eq('parada_id', pid).order('orden')
+        const ro = await sb.from('vis_parada_objetivos').select('medico_id, especialidad, orden, hora_pactada').eq('parada_id', pid).order('orden')
         if (vivo && ro.data) setObjetivos(ro.data)
       }
       if (rv.data) {
@@ -221,6 +221,7 @@ export default function PaginaLugar() {
     const visitado = hoyVisitados.has(m.id)
     const toca = tocaVisitar(m)
     const horario = m.lugares.find((l) => l.lugar_id === lugarId)?.horario
+    const pactada = orden ? objetivos.find((o) => o.medico_id === m.id)?.hora_pactada?.slice(0, 5) : null
     const tel = linkTel(m.telefono)
     const wa = linkWhatsApp(m.telefono_norm)
     return (
@@ -230,6 +231,7 @@ export default function PaginaLugar() {
             {orden && <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-marca text-sm font-semibold text-sobre-marca">{orden}</span>}
             <div className="min-w-0">
               <p className="font-semibold leading-snug">{m.nombre}</p>
+              {pactada && <p className="text-sm font-semibold text-marca">Hora pactada {pactada}</p>}
               <p className="text-sm text-tenue">{[m.especialidad, horario].filter(Boolean).join(' · ') || 'Sin especialidad'}</p>
             </div>
           </div>

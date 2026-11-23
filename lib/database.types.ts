@@ -177,8 +177,8 @@ export type Database = {
         ]
       }
       vis_parada_objetivos: {
-        Row: { id: string; parada_id: string; medico_id: string | null; especialidad: string | null; orden: number }
-        Insert: { id?: string; parada_id: string; medico_id?: string | null; especialidad?: string | null; orden?: number }
+        Row: { id: string; parada_id: string; medico_id: string | null; especialidad: string | null; orden: number; hora_pactada: string | null }
+        Insert: { id?: string; parada_id: string; medico_id?: string | null; especialidad?: string | null; orden?: number; hora_pactada?: string | null }
         Update: Partial<Database['public']['Tables']['vis_parada_objetivos']['Insert']>
         Relationships: [
           { foreignKeyName: 'vis_parada_objetivos_medico_id_fkey'; columns: ['medico_id']; isOneToOne: false; referencedRelation: 'vis_medicos'; referencedColumns: ['id'] },
