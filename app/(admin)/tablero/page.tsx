@@ -5,7 +5,6 @@
 // Empresas con visitadoras (Vitalica): en Visita médica (arriba de la Actividad, /medica) las visitadoras, con médicos, lugares
 // y muestras (cada día lleva a su Actividad); en Ventas, abajo la Actividad del día de cada vendedor.
 import { usePanel } from '@/components/admin/PanelModo'
-import { useRouter } from 'next/navigation'
 import { ActividadVentas } from '@/components/admin/ActividadVentas'
 import { totalMuestras } from '@/components/admin/medica/datos'
 import type { ProductoVisita } from '@/lib/database.types'
@@ -39,7 +38,10 @@ function colorCumplimiento(hechas: number, meta: number) {
 export default function Tablero() {
   const { delModo, modo, hayMedica } = usePanel() // con visitadoras: en Ventas no aparecen, en Visita médica solo ellas
   const medica = modo === 'medica'
-  const router = useRouter()
+  // Con la Actividad abajo (Visita médica y Ventas de Vitalica): tocar un día la lleva a ese día y esa persona.
+  const [, setDiaUrl] = useParamUrl('dia', hoyIso())
+  const [, setVistaUrl] = useParamUrl('vista', 'dia')
+  const [, setPersonaUrl] = useParamUrl(medica ? 'visitadora' : 'vendedor', '')
   const [semana, setSemana] = useParamUrl('semana', lunesDe(hoyIso())) // en la URL: se puede pasar el link de esa semana
   const [filas, setFilas] = useState<FilaTablero[] | null>(null)
   const [porRuta, setPorRuta] = useState<FilaTableroRuta[]>([])
@@ -123,10 +125,13 @@ export default function Tablero() {
     return m
   }, [visitas])
   function abrirDia(id: string, nombre: string, desde: string, hasta: string) {
-    if (!medica) return setSel({ vendedorId: id, nombre, desde, hasta })
-    // Visita médica: la Actividad está debajo, en la misma pantalla; se cambia el día y se baja hasta ella.
-    router.push(`/medica?dia=${hasta}&visitadora=${id}`, { scroll: false })
-    setTimeout(() => document.getElementById('actividad')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+    if (!medica) setSel({ vendedorId: id, nombre, desde, hasta })
+    if (!medica && !hayMedica) return
+    // La Actividad (debajo, en la misma pantalla) pasa a ese día, o a la semana si se tocó el total; la semana no cambia.
+    setPersonaUrl(id)
+    setVistaUrl(desde === hasta ? 'dia' : 'semana')
+    if (desde === hasta) setDiaUrl(desde)
+    if (medica) setTimeout(() => document.getElementById('actividad')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
   }
   const hoy = hoyIso()
   return (
@@ -187,9 +192,9 @@ export default function Tablero() {
                     </td>
                   ))}
                   <td className="px-3 py-2 text-center">
-                    <button type="button" onClick={() => abrirDia(id, v.nombre, dias[0]!, dias.filter((d) => d <= hoy).at(-1) ?? dias[0]!)}
+                    <button type="button" onClick={() => abrirDia(id, v.nombre, dias[0]!, dias.at(-1)!)}
                       className={cn('rounded-md border border-borde px-2 py-0.5 hover:ring-2 hover:ring-marca/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marca', sel?.vendedorId === id && sel.desde !== sel.hasta && 'ring-2 ring-marca')}
-                      title={medica ? 'Tocá para ver el último día de la semana' : 'Tocá para ver los clientes de la semana'}>
+                      title={medica ? 'Tocá para ver la semana completa' : 'Tocá para ver los clientes de la semana'}>
                       <strong>{total}</strong><span className="text-tenue"> / {v.metaS}</span>
                     </button>
                     <div className="mx-auto mt-1 h-1.5 w-20 overflow-hidden rounded-full bg-fondo" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, pct)} aria-label={`${pct}% de la meta semanal`}>

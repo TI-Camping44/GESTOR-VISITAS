@@ -229,6 +229,10 @@ async function tableros() {
     const p = await contexto(false)
     await ir(p, '/tablero', 4500); await foto(p, 'k-tablero-c44-completo', { completa: true })
   })
+  await conMock('noe', true, async () => {
+    const p = await contexto(true)
+    await ir(p, '/hoy', 4000); await p.getByText('del plan').first().evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(400); await foto(p, 'k-hoy-plan')
+  })
 }
 
 const grupos = { tableros, ciclos, 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita, 'medico-ausente': medicoAusente, 'para-hoy': paraHoy }
