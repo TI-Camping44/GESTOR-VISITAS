@@ -18,7 +18,7 @@ import { cn, mensajeError } from '@/lib/utils'
 import type { Medico } from '@/lib/database.types'
 
 type Parada = { id: string; ruta_id: string; cliente_id: string; dia: string; orden: number; hora_pactada: string | null }
-type Objetivo = { id: string; parada_id: string; medico_id: string | null; especialidad: string | null; orden: number }
+type Objetivo = { id: string; parada_id: string; medico_id: string | null; especialidad: string | null; orden: number; hora_pactada: string | null }
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 export default function ArmarDia() {
@@ -50,7 +50,7 @@ export default function ArmarDia() {
     if (e2) return setError(mensajeError(e2))
     setParadas((ps ?? []) as Parada[])
     const pids = (ps ?? []).map((p) => p.id)
-    const { data: os } = pids.length ? await sb.from('vis_parada_objetivos').select('id, parada_id, medico_id, especialidad, orden').in('parada_id', pids).order('orden') : { data: [] }
+    const { data: os } = pids.length ? await sb.from('vis_parada_objetivos').select('id, parada_id, medico_id, especialidad, orden, hora_pactada').in('parada_id', pids).order('orden') : { data: [] }
     setObjetivos((os ?? []) as Objetivo[])
   }, [sb, quien, semana])
   useEffect(() => { setParadas(null); void cargar() }, [cargar])
@@ -96,7 +96,7 @@ export default function ArmarDia() {
     return sb.from('vis_ruta_paradas').insert({ ruta_id: ruta, cliente_id: lugarId, dia: d, orden: o, hora_pactada: hora }).select('id').single()
   }
   // Agrega médicos (o una especialidad a buscar) al final de la lista del lugar, en el orden dado.
-  async function agregarObjetivos(paradaId: string, items: { medico_id: string | null; especialidad: string | null }[]) {
+  async function agregarObjetivos(paradaId: string, items: { medico_id: string | null; especialidad: string | null; hora_pactada?: string | null }[]) {
     let orden = Math.max(0, ...objetivosDe(paradaId).map((o) => o.orden))
     return sb.from('vis_parada_objetivos').insert(items.map((x) => ({ parada_id: paradaId, ...x, orden: ++orden })))
   }
@@ -125,7 +125,7 @@ export default function ArmarDia() {
       }
       const yaObj = objetivosDe(id)
       const items = objetivosDe(p.id).filter((o) => !yaObj.some((y) => (o.medico_id ? y.medico_id === o.medico_id : y.especialidad === o.especialidad)))
-        .map((o) => ({ medico_id: o.medico_id, especialidad: o.especialidad }))
+        .map((o) => ({ medico_id: o.medico_id, especialidad: o.especialidad, hora_pactada: o.hora_pactada }))
       if (items.length) { const r = await agregarObjetivos(id, items); if (r.error) return r }
     }
   }
@@ -215,6 +215,7 @@ export default function ArmarDia() {
                     onAgregarTodos={(ids) => void hacer(async () => agregarObjetivos(p.id, ids.map((id) => ({ medico_id: id, especialidad: null }))))}
                     onMoverObjetivo={(lista, j, delta) => void hacer(async () => mover('vis_parada_objetivos', lista, j, delta))}
                     onQuitarObjetivo={(o) => void hacer(async () => sb.from('vis_parada_objetivos').delete().eq('id', o.id))}
+                    onHoraObjetivo={(o, hora) => { if ((o.hora_pactada?.slice(0, 5) ?? '') !== hora) void hacer(async () => sb.from('vis_parada_objetivos').update({ hora_pactada: hora || null }).eq('id', o.id)) }}
                     onCrearMedico={(datos) => void hacer(async () => {
                       const { data: yo } = await sb.rpc('vis_mi_id')
                       const { data: emp } = await sb.rpc('vis_mi_empresa')
@@ -235,10 +236,10 @@ export default function ArmarDia() {
   )
 }
 
-function TarjetaParada({ p, i, total, nombre, ocupado, objetivos, medicosLugar, todos, onMover, onHora, onQuitar, onAgregar, onAgregarTodos, onMoverObjetivo, onQuitarObjetivo, onCrearMedico }: {
+function TarjetaParada({ p, i, total, nombre, ocupado, objetivos, medicosLugar, todos, onMover, onHora, onQuitar, onAgregar, onAgregarTodos, onMoverObjetivo, onQuitarObjetivo, onHoraObjetivo, onCrearMedico }: {
   p: Parada; i: number; total: number; nombre: string; ocupado: boolean; objetivos: Objetivo[]; medicosLugar: Medico[]; todos: Medico[]; visitadora: string
   onMover: (delta: number) => void; onHora: (hora: string) => void; onQuitar: () => void; onAgregar: (medicoId: string | null, especialidad: string | null) => void; onAgregarTodos: (ids: string[]) => void
-  onMoverObjetivo: (lista: Objetivo[], j: number, delta: number) => void; onQuitarObjetivo: (o: Objetivo) => void
+  onMoverObjetivo: (lista: Objetivo[], j: number, delta: number) => void; onQuitarObjetivo: (o: Objetivo) => void; onHoraObjetivo: (o: Objetivo, hora: string) => void
   onCrearMedico: (d: { nombre: string; especialidad: string; horario: string }) => void
 }) {
   const [elegido, setElegido] = useState('')
@@ -284,6 +285,10 @@ function TarjetaParada({ p, i, total, nombre, ocupado, objetivos, medicosLugar, 
                     {dias.length > 0 && !dias.includes(diaSemana) && <span className="font-medium text-amber-700 dark:text-amber-300">no atiende este día</span>}
                   </div>}
                 </div>
+                {/* Hora pactada con este médico (la ve la visitadora en el lugar y en Hoy). */}
+                <input type="time" defaultValue={o.hora_pactada?.slice(0, 5) ?? ''} key={o.hora_pactada ?? ''} disabled={ocupado}
+                  onBlur={(e) => onHoraObjetivo(o, e.target.value)} aria-label={`Hora pactada con ${m?.nombre ?? o.especialidad}`} title="Hora pactada con este médico"
+                  className="min-h-8 w-24 shrink-0 rounded-md border border-borde bg-superficie px-1.5 text-sm" />
                 <button type="button" className={btn} aria-label="Subir" disabled={ocupado || j === 0} onClick={() => onMoverObjetivo(objetivos, j, -1)}><ArrowUp className="size-4" aria-hidden /></button>
                 <button type="button" className={btn} aria-label="Bajar" disabled={ocupado || j === objetivos.length - 1} onClick={() => onMoverObjetivo(objetivos, j, 1)}><ArrowDown className="size-4" aria-hidden /></button>
                 <button type="button" className={cn(btn, 'text-red-600 dark:text-red-400')} aria-label={`Quitar ${m?.nombre ?? o.especialidad}`} disabled={ocupado} onClick={() => onQuitarObjetivo(o)}><Trash2 className="size-4" aria-hidden /></button>
