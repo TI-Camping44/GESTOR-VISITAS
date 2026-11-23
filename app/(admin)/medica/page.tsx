@@ -14,7 +14,7 @@ import { fechaIso, fmtDia, fmtFecha, fmtSoloHora, hoyIso, sumarDias } from '@/li
 import { useParamUrl } from '@/lib/useParamUrl'
 import { cn } from '@/lib/utils'
 import { leerLlegadas, leerNoVisitados, leerVisitas, textoProductos, totalMuestras, useVisitadoras, type Llegada, type NoVisitado, type VisitaMedica } from '@/components/admin/medica/datos'
-import { claveEspecialidad, textoMotivo } from '@/lib/medicos'
+import { claveEspecialidad, noLoVio, textoMotivo } from '@/lib/medicos'
 
 type Jornada = { vendedor_id: string; inicio: string; fin: string | null }
 // Plan del día (lo arma el supervisor en «Armar el día»): lugares en orden y, en cada uno, a quién ver.
@@ -219,7 +219,7 @@ function PlanDelDia({ plan, datos, vendedorId, dia }: {
 }) {
   if (!plan.length) return null
   const pasado = dia < hoyIso()
-  const vistos = plan.reduce((s, p) => s + p.objetivos.filter((o) => datos.visitas.some((v) => v.vendedor_id === vendedorId && v.cliente_id === p.cliente_id && cumple(o, v))).length, 0)
+  const vistos = plan.reduce((s, p) => s + p.objetivos.filter((o) => datos.visitas.some((v) => v.vendedor_id === vendedorId && v.cliente_id === p.cliente_id && cumple(o, v) && !noLoVio(v.resultado?.nombre))).length, 0)
   const total = plan.reduce((s, p) => s + p.objetivos.length, 0)
   return (
     <div className="mb-4 rounded-lg border border-borde p-3">
@@ -238,18 +238,24 @@ function PlanDelDia({ plan, datos, vendedorId, dia }: {
               {(p.objetivos.length > 0 || fuera.length > 0) && (
                 <ul className="mt-1 flex flex-col gap-0.5 pl-4">
                   {p.objetivos.map((o, j) => {
-                    const v = visitas.find((x) => cumple(o, x))
+                    // La que lo atendió; si solo hay «No está» (o sin acceso / ya no atiende acá), esa, con el motivo.
+                    const v = visitas.find((x) => cumple(o, x) && !noLoVio(x.resultado?.nombre))
+                    const noEstaba = v ? undefined : visitas.find((x) => cumple(o, x))
                     const quien = o.medico?.nombre ?? `Buscar ${o.especialidad ?? 'médico'}`
                     const esp = o.medico?.especialidad ?? (o.medico ? null : o.especialidad)
                     return (
                       <li key={j} className="flex items-start gap-1.5">
                         {v ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-700 dark:text-green-400" aria-hidden />
+                          : noEstaba ? <CircleSlash className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden />
                           : estuvo || pasado ? <XCircle className="mt-0.5 size-4 shrink-0 text-red-700 dark:text-red-400" aria-hidden />
                           : <CircleDashed className="mt-0.5 size-4 shrink-0 text-tenue" aria-hidden />}
                         <span>{quien}{esp && <span className="text-tenue"> · {esp}</span>}
-                          {' '}<span className={cn('text-xs font-medium', v ? 'text-green-800 dark:text-green-300' : estuvo || pasado ? 'text-red-800 dark:text-red-300' : 'text-tenue')}>
-                            {v ? `visitado ${fmtSoloHora(v.fecha_hora)}${v.resultado ? ` · ${v.resultado.nombre}` : ''}${!o.medico_id && v.medico ? ` (${v.medico.nombre})` : ''}` : estuvo || pasado ? 'no lo vio' : 'pendiente'}
-                          </span></span>
+                          {' '}<span className={cn('text-xs font-medium', v ? 'text-green-800 dark:text-green-300' : noEstaba ? 'text-amber-800 dark:text-amber-300' : estuvo || pasado ? 'text-red-800 dark:text-red-300' : 'text-tenue')}>
+                            {v ? `visitado ${fmtSoloHora(v.fecha_hora)}${v.resultado ? ` · ${v.resultado.nombre}` : ''}${!o.medico_id && v.medico ? ` (${v.medico.nombre})` : ''}`
+                              : noEstaba ? `${noEstaba.resultado?.nombre ?? 'no lo vio'} · ${fmtSoloHora(noEstaba.fecha_hora)}`
+                              : estuvo || pasado ? 'no lo vio (sin motivo cargado)' : 'pendiente'}
+                          </span>
+                          {noEstaba?.observaciones && <span className="block text-xs text-tenue">«{noEstaba.observaciones}»</span>}</span>
                       </li>
                     )
                   })}

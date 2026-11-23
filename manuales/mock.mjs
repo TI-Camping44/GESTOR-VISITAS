@@ -70,6 +70,7 @@ const visitas = [
   vis('vu1', 'hug', 'c11', '08:50', hoy, { hizo_pedido: true, ruta_parada_id: 'u1', observaciones: 'Pidió reposición de vitaminas y proteína.', proxima_visita: sumar(hoy, 14), resultado: { nombre: 'Pedido' }, cliente: { razon_social: 'Farmacia Vida', ciudad: 'Asunción' } }),
   vis('vu2', 'hug', 'c13x', '11:20', hoy, { ruta_parada_id: null, observaciones: 'Prospecto: le interesa la línea deportiva, pidió lista de precios.', resultado: { nombre: 'Cotización' }, cliente: { razon_social: 'Gimnasio Fuerza Total', ciudad: 'Asunción' } }),
   vis('vn1', 'noe', 'l1', '09:35', hoy, { medico_id: 'm1', observaciones: 'Pidió más muestras del antiinflamatorio para la semana que viene.', productos: [{ producto: 'Artrodol 50 mg', muestras: 4 }, { producto: 'Vitalcal D', muestras: 0 }], resultado: { nombre: 'Presentó productos' }, lugar: { razon_social: lnom('l1') }, medico: med('m1'), cliente: { razon_social: lnom('l1') } }),
+  vis('vn3', 'noe', 'l1', '09:50', hoy, { medico_id: 'm2', observaciones: 'De vacaciones hasta el lunes.', productos: [], resultado: { nombre: 'No estaba / no atendió' }, lugar: { razon_social: lnom('l1') }, medico: med('m2'), cliente: { razon_social: lnom('l1') } }),
   vis('vn2', 'noe', 'l2', '11:10', hoy, { medico_id: 'm3', productos: [{ producto: 'Gastrovit', muestras: 6 }], resultado: { nombre: 'Dejó muestras' }, lugar: { razon_social: lnom('l2') }, medico: med('m3'), cliente: { razon_social: lnom('l2') } }),
 ]
 const llegadas = [

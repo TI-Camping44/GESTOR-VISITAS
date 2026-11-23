@@ -8,7 +8,7 @@ import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, PuntoEstado, Tarjeta, Vacio, claseBoton } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
-import { claveEspecialidad, textoMotivo } from '@/lib/medicos'
+import { claveEspecialidad, noLoVio, textoMotivo } from '@/lib/medicos'
 import { fmtFecha, fmtHoras, fmtSoloHora, hace, minutosDelDia, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
 import { fmtMin, horasEstimadas } from '@/lib/ruteo'
@@ -25,7 +25,7 @@ type Objetivo = { parada_id: string; especialidad: string | null; orden: number;
 const horasLlegada = (v: string[] | string | undefined) => (Array.isArray(v) ? v : v ? [v] : [])
 
 // Visitas de hoy de la visitadora (para marcar a qué médicos del plan ya vio).
-type VisitaHoy = { cliente_id: string; medico_id: string | null; fecha_hora: string; medico: { especialidad: string | null } | null }
+type VisitaHoy = { cliente_id: string; medico_id: string | null; fecha_hora: string; medico: { especialidad: string | null } | null; resultado: { nombre: string } | null }
 type Datos = { paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[]; objetivos?: Objetivo[]; visitasHoy?: VisitaHoy[]; llegadas?: Record<string, string[]>; noVisitados?: Record<string, { hora: string; motivo: string }>; base?: { lat: number | null; lng: number | null } | null }
 
 export default function Hoy() {
@@ -69,7 +69,7 @@ export default function Hoy() {
           sb.from('vis_vendedores').select('base_lat, base_lng').eq('id', perfil.id).maybeSingle(),
           sb.from('vis_config').select('base_lat, base_lng').maybeSingle(),
           sb.from('vis_llegadas').select('lugar_id, fecha_hora').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
-          sb.from('vis_visitas').select('cliente_id, medico_id, fecha_hora, medico:vis_medicos!vis_visitas_medico_id_fkey(especialidad)').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
+          sb.from('vis_visitas').select('cliente_id, medico_id, fecha_hora, medico:vis_medicos!vis_visitas_medico_id_fkey(especialidad), resultado:vis_resultados!vis_visitas_resultado_id_fkey(nombre)').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
         ])
         visitasHoy = (vh.data ?? []) as unknown as VisitaHoy[]
         for (const x of ll.data ?? []) (llegadas[x.lugar_id] ??= []).push(x.fecha_hora)
@@ -218,19 +218,23 @@ export default function Hoy() {
                     {esMedica && objetivosDe(p.parada_id).length > 0 && (
                       <ul className="mt-2 flex flex-col gap-1 rounded-lg bg-fondo px-2.5 py-2 text-sm">
                         {objetivosDe(p.parada_id).map((o, k) => {
-                          const v = vistoEn(p.cliente_id, o)
+                          const r = vistoEn(p.cliente_id, o)
+                          // Marcado «No está» (o sin acceso / ya no atiende acá): no lo viste, con el motivo.
+                          const noEstaba = r && noLoVio(r.resultado?.nombre) ? r : undefined
+                          const v = noEstaba ? undefined : r
                           // «No lo viste»: ya pasaste por el lugar (visita o llegada) y a este no lo visitaste.
-                          const falta = !v && (p.visitada || horasLlegada(datos?.llegadas?.[p.cliente_id]).length > 0)
+                          const falta = !v && !noEstaba && (p.visitada || horasLlegada(datos?.llegadas?.[p.cliente_id]).length > 0)
                           return (
                             <li key={k} className="flex items-start gap-1.5">
                               {v ? <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-green-700 dark:text-green-400" aria-hidden />
-                                : falta ? <XCircle className="mt-0.5 size-3.5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden />
+                                : falta || noEstaba ? <XCircle className="mt-0.5 size-3.5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden />
                                 : <Stethoscope className="mt-0.5 size-3.5 shrink-0 text-marca" aria-hidden />}
                               <span>
                                 {o.medico ? <><b>{o.medico.nombre}</b>{(o.especialidad ?? o.medico.especialidad) && <span className="text-tenue"> · {o.especialidad ?? o.medico.especialidad}</span>}</>
                                   : <>Buscar médico de <b>{o.especialidad}</b></>}
                                 {v && <span className="text-xs font-medium text-green-700 dark:text-green-400"> · lo viste {fmtSoloHora(v.fecha_hora)}</span>}
                                 {falta && <span className="text-xs font-medium text-amber-700 dark:text-amber-300"> · no lo viste</span>}
+                                {noEstaba && <span className="text-xs font-medium text-amber-700 dark:text-amber-300"> · {noEstaba.resultado!.nombre.toLowerCase()} ({fmtSoloHora(noEstaba.fecha_hora)})</span>}
                               </span>
                             </li>
                           )
@@ -266,7 +270,7 @@ export default function Hoy() {
                   {p.visitada && esMedica && objetivosDe(p.parada_id).length > 0 ? (() => {
                     // Visita médica con plan: cuántos del plan viste; si falta alguno, se puede volver a entrar.
                     const plan = objetivosDe(p.parada_id)
-                    const vistos = plan.filter((o) => vistoEn(p.cliente_id, o)).length
+                    const vistos = plan.filter((o) => { const r = vistoEn(p.cliente_id, o); return r && !noLoVio(r.resultado?.nombre) }).length
                     const visitas = (datos?.visitasHoy ?? []).filter((v) => v.cliente_id === p.cliente_id).length
                     const completo = vistos === plan.length
                     return <>

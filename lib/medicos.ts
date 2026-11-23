@@ -78,3 +78,7 @@ export const MOTIVOS_NO_VISITA_VENTA: { valor: MotivoNoVisita; texto: string }[]
 ]
 export const textoMotivo = (m: string | null | undefined) =>
   [...MOTIVOS_NO_VISITA, ...MOTIVOS_NO_VISITA_VENTA].find((x) => x.valor === m)?.texto ?? 'Otro motivo'
+
+/** Resultados de visita médica en los que el médico no fue atendido (no cuenta como «visto» en el plan del día). */
+export const RESULTADOS_NO_VISTO = ['No estaba / no atendió', 'Sin acceso', 'Ya no atiende acá']
+export const noLoVio = (resultado: string | null | undefined) => !!resultado && RESULTADOS_NO_VISTO.includes(resultado)
