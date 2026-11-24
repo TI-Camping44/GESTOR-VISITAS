@@ -15,7 +15,7 @@ export type LugarMedico = {
 export type VisitaMedica = {
   id: string; vendedor_id: string; cliente_id: string; medico_id: string | null; fecha_hora: string
   observaciones: string | null; proxima_visita: string | null; productos: ProductoVisita[] | null
-  resultado: { nombre: string } | null; lugar: { razon_social: string } | null; medico: { nombre: string; especialidad: string | null } | null
+  resultado: { nombre: string } | null; detalle?: { nombre: string } | null; lugar: { razon_social: string } | null; medico: { nombre: string; especialidad: string | null } | null
 }
 export type NoVisitado = { id: string; vendedor_id: string; lugar_id: string; fecha_hora: string; motivo: string; observaciones: string | null; lugar: { razon_social: string } | null }
 export type Llegada = { id: string; vendedor_id: string; lugar_id: string; fecha_hora: string; lugar: { razon_social: string } | null }
@@ -55,7 +55,7 @@ export function useLugares() {
 }
 
 const CAMPOS_VISITA = 'id, vendedor_id, cliente_id, medico_id, fecha_hora, observaciones, proxima_visita, productos, '
-  + 'resultado:vis_resultados!vis_visitas_resultado_id_fkey(nombre), lugar:vis_clientes!vis_visitas_cliente_id_fkey(razon_social), '
+  + 'resultado:vis_resultados!vis_visitas_resultado_id_fkey(nombre), detalle:vis_resultados!vis_visitas_detalle_id_fkey(nombre), lugar:vis_clientes!vis_visitas_cliente_id_fkey(razon_social), '
   + 'medico:vis_medicos!vis_visitas_medico_id_fkey(nombre, especialidad)'
 
 /** Visitas de las visitadoras entre dos días (inclusive), más nuevas primero. */

@@ -15,7 +15,7 @@ import { useParamUrl } from '@/lib/useParamUrl'
 import { useSemanaDia } from '@/lib/useSemanaDia'
 import { cn } from '@/lib/utils'
 import { leerLlegadas, leerNoVisitados, leerVisitas, textoProductos, totalMuestras, useVisitadoras, type Llegada, type NoVisitado, type VisitaMedica } from '@/components/admin/medica/datos'
-import { claveEspecialidad, mismoMedico, noLoVio, quePaso, textoMotivo } from '@/lib/medicos'
+import { claveEspecialidad, conDetalle, mismoMedico, noLoVio, quePaso, textoMotivo } from '@/lib/medicos'
 import { minDeHora } from '@/lib/ruteo'
 
 type Jornada = { vendedor_id: string; inicio: string; fin: string | null }
@@ -141,6 +141,7 @@ export default function Actividad() {
       { titulo: 'Médico', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.medico?.nombre ?? '' : '') },
       { titulo: 'Especialidad', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.medico?.especialidad ?? '' : '') },
       { titulo: 'Resultado', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.resultado?.nombre ?? '' : e.tipo === 'no_visitado' ? textoMotivo(e.n.motivo) : '') },
+      { titulo: 'Detalle', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.detalle?.nombre ?? '' : '') },
       { titulo: 'Productos (muestras)', valor: (e: Evento) => (e.tipo === 'visita' ? textoProductos(e.v) : '') },
       { titulo: 'Observaciones', valor: (e: Evento) => (e.tipo === 'visita' ? e.v.observaciones ?? '' : e.tipo === 'no_visitado' ? e.n.observaciones ?? '' : '') },
       { titulo: 'Próxima visita', valor: (e: Evento) => (e.tipo === 'visita' && e.v.proxima_visita ? fmtFecha(e.v.proxima_visita) : '') },
@@ -332,8 +333,8 @@ function PlanDelDia({ plan, datos, vendedorId, dia }: {
                             {o.medico?.nombre ?? `Buscar ${o.especialidad ?? 'médico'}`}
                             {(o.medico?.especialidad ?? (o.medico ? null : o.especialidad)) && <span className="text-tenue"> · {o.medico?.especialidad ?? o.especialidad}</span>}
                             {' '}<span className={cn('text-xs font-medium', v ? 'text-green-800 dark:text-green-300' : noEstaba || noPudo ? 'text-amber-800 dark:text-amber-300' : estuvo || pasado ? 'text-red-800 dark:text-red-300' : 'text-tenue')}>
-                              {v ? `visitado ${fmtSoloHora(v.fecha_hora)} · ${v.resultado?.nombre ?? 'Visitado'}${!o.medico_id && v.medico ? ` (${v.medico.nombre})` : ''}`
-                                : noEstaba ? `Visita no realizada (${fmtSoloHora(noEstaba.fecha_hora)}): ${quePaso(noEstaba.resultado?.nombre)}`
+                              {v ? `visitado ${fmtSoloHora(v.fecha_hora)} · ${conDetalle(v.resultado?.nombre ?? 'Visitado', v.detalle?.nombre)}${!o.medico_id && v.medico ? ` (${v.medico.nombre})` : ''}`
+                                : noEstaba ? `Visita no realizada (${fmtSoloHora(noEstaba.fecha_hora)}): ${quePaso(noEstaba.resultado?.nombre, noEstaba.detalle?.nombre)}`
                                 : noPudo ? 'Visita no realizada: no pudo visitar el lugar'
                                 : estuvo || pasado ? 'No lo visitó y no cargó el motivo' : 'pendiente'}
                             </span>
@@ -365,7 +366,7 @@ function PlanDelDia({ plan, datos, vendedorId, dia }: {
                         <li key={v.id} className="flex items-start gap-1.5">
                           <Stethoscope className="mt-0.5 size-4 shrink-0 text-marca" aria-hidden />
                           <span><span className="tabular text-tenue">{fmtSoloHora(v.fecha_hora)}</span> {v.medico?.nombre ?? 'Visita'}{v.medico?.especialidad && <span className="text-tenue"> · {v.medico.especialidad}</span>}
-                            {v.resultado && <span className="text-xs font-medium text-tenue"> · {v.resultado.nombre}</span>}
+                            {v.resultado && <span className="text-xs font-medium text-tenue"> · {conDetalle(v.resultado.nombre, v.detalle?.nombre)}</span>}
                             {v.observaciones && <span className="block text-xs text-tenue">«{v.observaciones}»</span>}</span>
                         </li>
                       ))}
@@ -392,7 +393,7 @@ function PlanDelDia({ plan, datos, vendedorId, dia }: {
                     {vs.map((v) => (
                       <li key={v.id} className="flex items-start gap-1.5">
                         <Stethoscope className="mt-0.5 size-4 shrink-0 text-marca" aria-hidden />
-                        <span><span className="font-medium">{fmtSoloHora(v.fecha_hora)} {v.medico?.nombre ?? 'Visita'}</span>{v.resultado && <span className="text-tenue"> · {v.resultado.nombre}</span>}</span>
+                        <span><span className="font-medium">{fmtSoloHora(v.fecha_hora)} {v.medico?.nombre ?? 'Visita'}</span>{v.resultado && <span className="text-tenue"> · {conDetalle(v.resultado.nombre, v.detalle?.nombre)}</span>}</span>
                       </li>
                     ))}
                   </ul>
@@ -437,7 +438,7 @@ function EventoFila({ e }: { e: Evento }) {
       {punto(Stethoscope, 'bg-marca text-sobre-marca')}
       <p>{hora}<b>{v.medico?.nombre ?? 'Visita'}</b>{v.medico?.especialidad && <span className="text-tenue"> · {v.medico.especialidad}</span>}<span className="text-tenue"> · {v.lugar?.razon_social}</span></p>
       <div className="mt-1 flex flex-col gap-0.5 rounded-lg bg-fondo px-3 py-2">
-        {v.resultado && <p><span className="text-tenue">Resultado:</span> {v.resultado.nombre}</p>}
+        {v.resultado && <p><span className="text-tenue">Resultado:</span> {conDetalle(v.resultado.nombre, v.detalle?.nombre)}</p>}
         {(v.productos ?? []).length > 0 && <p><span className="text-tenue">Productos:</span> {textoProductos(v)}</p>}
         {v.observaciones && <p className="break-words"><span className="text-tenue">Observaciones:</span> {v.observaciones}</p>}
         {v.proxima_visita && <p><span className="text-tenue">Próxima visita:</span> {fmtFecha(v.proxima_visita)}</p>}

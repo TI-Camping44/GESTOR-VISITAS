@@ -210,6 +210,21 @@ async function gestion() {
     const p = await contexto(true)
     await ir(p, '/hoy', 3000); await foto(p, 'g-hoy-noe', { completa: true })
   })
+  await conMock('noe', true, async () => {
+    const p = await contexto(true)
+    await ir(p, '/visita?c=l1&m=m2', 3000)
+    await p.getByLabel('Resultado', { exact: true }).selectOption({ label: 'Visita no efectiva' })
+    await p.getByLabel('Motivo').selectOption({ label: 'Está en un congreso' }); await espera(300)
+    await p.getByText('Resultado', { exact: true }).first().evaluate((e) => e.scrollIntoView({ block: 'start' })); await p.evaluate(() => window.scrollBy(0, -80)); await espera(300)
+    await foto(p, 'g-noe-no-efectiva')
+    await p.getByLabel('Resultado', { exact: true }).selectOption({ label: 'Visita efectiva' }); await espera(400)
+    await foto(p, 'g-noe-efectiva')
+  })
+  await conMock('ser', false, async () => {
+    const p = await contexto(false)
+    await ir(p, '/resultados', 3000); await p.getByRole('tab', { name: 'Visita médica' }).click(); await espera(400)
+    await foto(p, 'g-resultados-medica', { completa: true })
+  })
   await conMock('hug', true, async () => {
     const p = await contexto(true)
     await ir(p, '/visita?c=c11', 3000)

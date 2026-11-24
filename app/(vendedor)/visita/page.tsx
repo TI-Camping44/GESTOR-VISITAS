@@ -19,6 +19,7 @@ import { distanciaM, fmtDistancia } from '@/lib/geo'
 import { VIS } from '@/lib/config'
 import { esErrorDeRed, mensajeError } from '@/lib/utils'
 import { urlLugar } from '@/lib/rutas'
+import { NO_EFECTIVA } from '@/lib/medicos'
 import { useErrorCampo } from '@/components/ErrorCampo'
 import { useAvisoSinGuardar } from '@/lib/sinGuardar'
 import type { EstadoCliente, Medico, ParadaDia, Producto, ProductoVisita, ProximaVisita, Resultado } from '@/lib/database.types'
@@ -139,7 +140,9 @@ export default function RegistrarVisita() {
   // Resultado → Detalle → Observaciones: el detalle aparece si la empresa cargó detalles (Vitalica, venta).
   const visibles = resultados.filter((r) => (r.tipo ?? 'ventas') === tipoResultado && !r.oculto)
   const opciones = visibles.filter((r) => (r.clase ?? 'resultado') === 'resultado')
-  const detalles = visibles.filter((r) => r.clase === 'detalle')
+  // El detalle puede depender del resultado (visita médica de Vitalica: «Visita no efectiva» → los motivos).
+  const detalles = visibles.filter((r) => r.clase === 'detalle' && (r.padre_id == null || String(r.padre_id) === resultadoId))
+  const detallesPropios = detalles.filter((r) => r.padre_id != null)
   const volver = esMedica ? urlLugar(clienteId, { parada: paradaId }) : '/hoy'
 
   const destino = cliente?.lat != null && cliente.lng != null ? { lat: cliente.lat, lng: cliente.lng } : null
@@ -149,9 +152,15 @@ export default function RegistrarVisita() {
   // «No le interesa»: el cliente queda en naranja; el motivo es obligatorio (lo ve el supervisor).
   const noLeInteresa = resultadoElegido?.nombre === 'No le interesa'
   // «Ya no atiende acá»: el médico sale de este lugar al guardar (no se borra; sus visitas quedan).
-  const yaNoAtiende = resultadoElegido?.nombre === 'Ya no atiende acá'
+  const yaNoAtiende = resultadoElegido?.nombre === 'Ya no atiende acá' || detalleElegido?.nombre.toLowerCase() === 'ya no atiende acá'
   // Sin ver al médico no hay productos que presentar.
-  const sinPresentar = yaNoAtiende || ['No estaba / no atendió', 'Sin acceso'].includes(resultadoElegido?.nombre ?? '')
+  const sinPresentar = yaNoAtiende || ['No estaba / no atendió', 'Sin acceso', NO_EFECTIVA].includes(resultadoElegido?.nombre ?? '')
+
+  function elegirResultado(id: string) {
+    setResultadoId(id)
+    const propios = visibles.filter((r) => r.clase === 'detalle' && String(r.padre_id) === id)
+    setDetalleId(propios.length === 1 ? String(propios[0]!.id) : '')
+  }
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault()
@@ -159,6 +168,7 @@ export default function RegistrarVisita() {
     if (!cliente) return
     errCampo.limpiar()
     if (!resultadoId) return errCampo.marcar('resultado', 'Elegí el resultado de la visita.')
+    if (detallesPropios.length > 0 && !detalleElegido) return errCampo.marcar('detalle', resultadoElegido?.nombre === NO_EFECTIVA ? 'Elegí el motivo.' : 'Elegí el detalle.')
     if (cobranza && !(Number(monto) > 0)) return errCampo.marcar('monto', 'Indicá el monto cobrado.')
     if (noLeInteresa && !obs.trim()) return errCampo.marcar('obs', 'Escribí por qué no le interesa.')
     setEnviando(true)
@@ -274,18 +284,19 @@ export default function RegistrarVisita() {
 
       <div>
         <Etiqueta htmlFor="resultado">Resultado</Etiqueta>
-        <Selector id="resultado" required value={resultadoId} onChange={(e) => setResultadoId(e.target.value)} {...errCampo.campo('resultado')}>
+        <Selector id="resultado" required value={resultadoId} onChange={(e) => elegirResultado(e.target.value)} {...errCampo.campo('resultado')}>
           <option value="">Elegí…</option>
           {opciones.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
         </Selector>
         {errCampo.mensaje('resultado')}
         {detalles.length > 0 && (
           <div className="mt-3">
-            <Etiqueta htmlFor="detalle">Detalle</Etiqueta>
-            <Selector id="detalle" value={detalleId} onChange={(e) => setDetalleId(e.target.value)}>
+            <Etiqueta htmlFor="detalle">{resultadoElegido?.nombre === NO_EFECTIVA ? 'Motivo' : 'Detalle'}</Etiqueta>
+            <Selector id="detalle" value={detalleId} onChange={(e) => { errCampo.limpiar(); setDetalleId(e.target.value) }} {...errCampo.campo('detalle')}>
               <option value="">Elegí…</option>
               {detalles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
             </Selector>
+            {errCampo.mensaje('detalle')}
           </div>
         )}
         {yaNoAtiende && medico && (

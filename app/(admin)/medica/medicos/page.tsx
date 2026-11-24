@@ -6,7 +6,7 @@ import { ChevronDown, ChevronRight, Combine, Pencil, Trash2 } from 'lucide-react
 import { Aviso, Boton, Entrada, Selector, Tarjeta, Vacio } from '@/components/ui'
 import { descargarCsv } from '@/lib/csv'
 import { fmtFecha, fmtSoloHora, hoyIso } from '@/lib/fechas'
-import { DIAS_SEMANA, claveEspecialidad, diasDeHorario, diasSinVisita, tocaVisitar } from '@/lib/medicos'
+import { DIAS_SEMANA, claveEspecialidad, conDetalle, diasDeHorario, diasSinVisita, tocaVisitar } from '@/lib/medicos'
 import { useParamUrl } from '@/lib/useParamUrl'
 import { cn } from '@/lib/utils'
 import { ChipsDias } from '@/components/admin/medica/ChipsDias'
@@ -218,7 +218,7 @@ function Historial({ medico }: { medico: Medico }) {
               <tr key={v.id} className="border-t border-borde align-top">
                 <td className="whitespace-nowrap py-1.5 pr-2 tabular">{fmtFecha(v.fecha_hora)} {fmtSoloHora(v.fecha_hora)}</td>
                 <td className="py-1.5 pr-2">{v.lugar?.razon_social ?? '—'}</td>
-                <td className="py-1.5 pr-2">{v.resultado?.nombre ?? '—'}{v.proxima_visita && <p className="text-xs text-tenue">próxima: {fmtFecha(v.proxima_visita)}</p>}</td>
+                <td className="py-1.5 pr-2">{v.resultado ? conDetalle(v.resultado.nombre, v.detalle?.nombre) : '—'}{v.proxima_visita && <p className="text-xs text-tenue">próxima: {fmtFecha(v.proxima_visita)}</p>}</td>
                 <td className="py-1.5 pr-2">{textoProductos(v) || <span className="text-tenue">—</span>}</td>
                 <td className="max-w-80 break-words py-1.5">{v.observaciones ?? <span className="text-tenue">—</span>}</td>
               </tr>

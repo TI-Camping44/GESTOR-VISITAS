@@ -81,7 +81,9 @@ export const textoMotivo = (m: string | null | undefined) =>
 
 /** Resultados de visita médica en los que el médico no fue atendido (no cuenta como «visto» en el plan del día). */
 // «Otro motivo» y «Pidió volver otro día» también: la visitadora los usa cuando no pudo presentar (congreso, canceló…).
-export const RESULTADOS_NO_VISTO = ['No estaba / no atendió', 'Sin acceso', 'Ya no atiende acá', 'Pidió volver otro día', 'Otro motivo']
+// «Visita no efectiva» (Vitalica, 0045): el motivo va en el detalle (de vacaciones, en un congreso, reprogramó…).
+export const NO_EFECTIVA = 'Visita no efectiva'
+export const RESULTADOS_NO_VISTO = ['No estaba / no atendió', 'Sin acceso', 'Ya no atiende acá', 'Pidió volver otro día', 'Otro motivo', NO_EFECTIVA]
 export const noLoVio = (resultado: string | null | undefined) => !!resultado && RESULTADOS_NO_VISTO.includes(resultado)
 
 /** Qué pasó con una visita que no se hizo, en palabras («Sin acceso» → «no dejaron pasar»). */
@@ -92,7 +94,10 @@ const QUE_PASO: Record<string, string> = {
   'Pidió volver otro día': 'reprogramada: el médico pidió volver otro día',
   'Otro motivo': 'otro motivo',
 }
-export const quePaso = (resultado: string | null | undefined) => (resultado && QUE_PASO[resultado]) ?? (resultado ?? 'sin motivo').toLowerCase()
+export const quePaso = (resultado: string | null | undefined, detalle?: string | null) =>
+  detalle ? detalle.charAt(0).toLowerCase() + detalle.slice(1) : (resultado && QUE_PASO[resultado]) ?? (resultado ?? 'sin motivo').toLowerCase()
+/** Resultado y detalle juntos para mostrar («Visita efectiva → Promoción»). */
+export const conDetalle = (resultado: string | null | undefined, detalle: string | null | undefined) => [resultado, detalle].filter(Boolean).join(' → ')
 
 /** Nombre para comparar médicos cargados dos veces («Dra. Yanina  Meza» = «Dra. Yanina Meza»): sin título, tildes ni espacios de más. */
 export const claveNombre = (n: string | null | undefined) => (n ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
