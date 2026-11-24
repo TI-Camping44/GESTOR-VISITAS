@@ -18,7 +18,7 @@ import { guardarCache, leerCache } from '@/lib/offline/db'
 import { hace } from '@/lib/fechas'
 import { esErrorDeRed, linkComoLlegar, linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
 import { urlVisitaMedico } from '@/lib/rutas'
-import { tocaVisitar } from '@/lib/medicos'
+import { NO_EFECTIVA, noLoVio, tocaVisitar } from '@/lib/medicos'
 import type { Medico, Resultado } from '@/lib/database.types'
 
 type Lugar = { id: string; razon_social: string; ciudad: string | null; direccion: string | null; lat: number | null; lng: number | null; tipo_lugar?: string | null; telefono?: string | null; notas?: string | null }
@@ -38,8 +38,11 @@ export default function PaginaLugar() {
   // La parada de hoy de este lugar (la de Hoy, o la que armó el supervisor si se abrió desde Lugares).
   const [paradaHoy, setParadaHoy] = useState<string | null>(parada)
   // Cómo quedó hoy cada médico: visitado o «no estaba» (con la hora).
-  const [estadoHoy, setEstadoHoy] = useState<Map<string, { noEstaba: boolean; hora: string }>>(new Map())
+  const [estadoHoy, setEstadoHoy] = useState<Map<string, { noEstaba: boolean; hora: string; motivo?: string | null }>>(new Map())
   const [idNoEstaba, setIdNoEstaba] = useState<number | null>(null)
+  // Con «Visita no efectiva» y sus motivos (Vitalica), «No está» pide el motivo y guarda ese resultado.
+  const [noEfectiva, setNoEfectiva] = useState<{ id: number; motivos: { id: number; nombre: string }[] } | null>(null)
+  const [motivoNoEsta, setMotivoNoEsta] = useState('')
   const [noEsta, setNoEsta] = useState<string | null>(null) // médico con «No está» abierto
   const [obsNoEsta, setObsNoEsta] = useState('')
   const [guardandoNoEsta, setGuardandoNoEsta] = useState(false)
@@ -78,7 +81,7 @@ export default function PaginaLugar() {
       const [rl, rm, rv] = await Promise.all([
         sb.from('vis_clientes_v').select('id, razon_social, ciudad, direccion, lat, lng, tipo_lugar, telefono, notas').eq('id', lugarId).maybeSingle(),
         sb.from('vis_medicos_v').select('*').order('nombre').limit(3000),
-        sb.from('vis_visitas').select('medico_id, fecha_hora, resultado:vis_resultados!vis_visitas_resultado_id_fkey(nombre)').eq('vendedor_id', perfil.id).eq('cliente_id', lugarId).gte('fecha_hora', desde.toISOString()),
+        sb.from('vis_visitas').select('medico_id, fecha_hora, resultado:vis_resultados!vis_visitas_resultado_id_fkey(nombre), detalle:vis_resultados!vis_visitas_detalle_id_fkey(nombre)').eq('vendedor_id', perfil.id).eq('cliente_id', lugarId).gte('fecha_hora', desde.toISOString()),
       ])
       void sb.from('vis_llegadas').select('id, fecha_hora, created_at').eq('vendedor_id', perfil.id).eq('lugar_id', lugarId).gte('fecha_hora', desde.toISOString())
         .order('fecha_hora').then(({ data }) => { if (vivo && data) setLlegadas(data.map((x) => ({ id: x.id, hora: x.fecha_hora, creada: x.created_at }))) })
@@ -94,15 +97,19 @@ export default function PaginaLugar() {
         if (vivo && ro.data) setObjetivos(ro.data)
       }
       if (rv.data) {
-        const vs = rv.data as unknown as { medico_id: string | null; fecha_hora: string; resultado: { nombre: string } | null }[]
+        const vs = rv.data as unknown as { medico_id: string | null; fecha_hora: string; resultado: { nombre: string } | null; detalle: { nombre: string } | null }[]
         setHoyVisitados(new Set(vs.map((v) => v.medico_id).filter((x): x is string => !!x)))
         setHorasVisitas(vs.map((v) => v.fecha_hora))
-        setEstadoHoy(new Map(vs.filter((v) => v.medico_id).map((v) => [v.medico_id!, { noEstaba: v.resultado?.nombre === NO_ESTABA, hora: v.fecha_hora }])))
+        setEstadoHoy(new Map(vs.filter((v) => v.medico_id).map((v) => [v.medico_id!, { noEstaba: noLoVio(v.resultado?.nombre), hora: v.fecha_hora, motivo: v.detalle?.nombre ?? null }])))
       }
       // El resultado «No estaba / no atendió» (para el botón «No está»), de la base o de lo guardado.
       const rr = await sb.from('vis_resultados').select('id, nombre').eq('nombre', NO_ESTABA).is('empresa_id', null).maybeSingle()
       const id = rr.data?.id ?? (await leerCache<Resultado[]>('resultados').catch(() => null))?.datos.find((r) => r.nombre === NO_ESTABA)?.id ?? null
       if (vivo) setIdNoEstaba(id)
+      const lista = ((await sb.from('vis_resultados_v').select('*').eq('activo', true).eq('oculto', false).eq('tipo', 'medica').order('orden')).data
+        ?? (await leerCache<Resultado[]>('resultados').catch(() => null))?.datos ?? []) as Resultado[]
+      const ne = lista.find((r) => r.clase === 'resultado' && r.nombre === NO_EFECTIVA && !r.oculto)
+      if (vivo && ne) setNoEfectiva({ id: ne.id, motivos: lista.filter((r) => r.clase === 'detalle' && r.padre_id === ne.id && !r.oculto).map((r) => ({ id: r.id, nombre: r.nombre })) })
     })()
     return () => { vivo = false }
   }, [lugarId, perfil.id, parada])
@@ -160,13 +167,15 @@ export default function PaginaLugar() {
   async function marcarNoEsta(m: Medico) {
     if (!lugar) return
     if (soloLectura) return setErrorNoEsta(AVISO_SOLO_LECTURA)
-    if (!idNoEstaba) return setErrorNoEsta('Abrí la app una vez con señal para poder marcar «No está».')
+    if (!noEfectiva && !idNoEstaba) return setErrorNoEsta('Abrí la app una vez con señal para poder marcar «No está».')
+    const motivo = noEfectiva?.motivos.find((x) => String(x.id) === motivoNoEsta)
+    if (noEfectiva && noEfectiva.motivos.length && !motivo) return setErrorNoEsta('Elegí el motivo.')
     setGuardandoNoEsta(true); setErrorNoEsta(null)
     const gps = await leerGps(10000).catch(() => null)
     const client_uuid = crypto.randomUUID()
     const ahora = new Date().toISOString()
     const payload: Record<string, unknown> = {
-      client_uuid, cliente_id: lugar.id, ruta_parada_id: paradaHoy, fecha_hora: ahora, medico_id: m.id, resultado_id: idNoEstaba,
+      client_uuid, cliente_id: lugar.id, ruta_parada_id: paradaHoy, fecha_hora: ahora, medico_id: m.id, resultado_id: noEfectiva ? noEfectiva.id : idNoEstaba, detalle_id: motivo?.id ?? null,
       lat: gps?.lat ?? null, lng: gps?.lng ?? null, precision_m: gps?.precision ?? null,
       hizo_pedido: false, hizo_cobranza: false, monto_cobrado_gs: null, observaciones: obsNoEsta.trim() || null, proxima_visita: null, fotos: [], productos: [],
     }
@@ -181,9 +190,9 @@ export default function PaginaLugar() {
       await refrescarPendientes()
     }
     setGuardandoNoEsta(false)
-    setEstadoHoy((x) => new Map(x).set(m.id, { noEstaba: true, hora: ahora }))
+    setEstadoHoy((x) => new Map(x).set(m.id, { noEstaba: true, hora: ahora, motivo: motivo?.nombre ?? null }))
     setHoyVisitados((x) => new Set(x).add(m.id))
-    setNoEsta(null); setObsNoEsta('')
+    setNoEsta(null); setObsNoEsta(''); setMotivoNoEsta('')
   }
 
   async function sumarMedico() {
@@ -240,12 +249,21 @@ export default function PaginaLugar() {
         <p className="mt-1 text-xs text-tenue">Última visita: {m.ultima_visita ? hace(m.ultima_visita) : 'nunca'} · cada {m.frecuencia_dias} días</p>
         {noEsta === m.id ? (
           <div className="mt-3 flex flex-col gap-2 rounded-lg bg-fondo p-3">
+            {noEfectiva && noEfectiva.motivos.length > 0 && (
+              <>
+                <label htmlFor={`motivo-no-esta-${m.id}`} className="text-sm font-medium">Motivo</label>
+                <Selector id={`motivo-no-esta-${m.id}`} value={motivoNoEsta} onChange={(e) => { setMotivoNoEsta(e.target.value); setErrorNoEsta(null) }}>
+                  <option value="">Elegí…</option>
+                  {noEfectiva.motivos.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+                </Selector>
+              </>
+            )}
             <label htmlFor={`obs-no-esta-${m.id}`} className="text-sm font-medium">¿Querés anotar algo? (opcional)</label>
             <Entrada id={`obs-no-esta-${m.id}`} value={obsNoEsta} onChange={(e) => setObsNoEsta(e.target.value)} placeholder="Ej.: de vacaciones, viene a la tarde…" autoComplete="off" />
             {errorNoEsta && <Aviso tipo="error">{errorNoEsta}</Aviso>}
             <div className="flex gap-2">
               <Boton variante="secundario" className="flex-1" disabled={guardandoNoEsta} onClick={() => void marcarNoEsta(m)}>
-                <CircleMinus className="size-4 text-amber-700 dark:text-amber-300" aria-hidden /> {guardandoNoEsta ? 'Guardando…' : 'Confirmar: no está'}
+                <CircleMinus className="size-4 text-amber-700 dark:text-amber-300" aria-hidden /> {guardandoNoEsta ? 'Guardando…' : noEfectiva ? 'Confirmar: visita no efectiva' : 'Confirmar: no está'}
               </Boton>
               <Boton variante="fantasma" onClick={() => { setNoEsta(null); setErrorNoEsta(null) }}>Cancelar</Boton>
             </div>
@@ -253,13 +271,13 @@ export default function PaginaLugar() {
         ) : (
           <div className="mt-3 flex gap-2">
             {estado?.noEstaba ? (
-              <span className="inline-flex flex-1 items-center justify-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-300"><CircleMinus className="size-4" aria-hidden /> No estaba ({fmtSoloHora(estado.hora)})</span>
+              <span className="inline-flex flex-1 items-center justify-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-300"><CircleMinus className="size-4" aria-hidden /> {estado.motivo ? `No efectiva: ${estado.motivo}` : 'No estaba'} ({fmtSoloHora(estado.hora)})</span>
             ) : visitado ? (
               <span className="inline-flex flex-1 items-center justify-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-400"><CheckCircle2 className="size-4" aria-hidden /> Visitado hoy{estado && ` (${fmtSoloHora(estado.hora)})`}</span>
             ) : (
               <>
                 <Link href={urlVisitaMedico(lugar.id, m.id, { parada: paradaHoy })} className={claseBoton({ className: 'flex-1' })}>Registrar visita</Link>
-                {orden && <Boton variante="secundario" onClick={() => { setNoEsta(m.id); setObsNoEsta(''); setErrorNoEsta(null) }}><CircleMinus className="size-4 text-amber-700 dark:text-amber-300" aria-hidden /> No está</Boton>}
+                {orden && <Boton variante="secundario" onClick={() => { setNoEsta(m.id); setObsNoEsta(''); setMotivoNoEsta(''); setErrorNoEsta(null) }}><CircleMinus className="size-4 text-amber-700 dark:text-amber-300" aria-hidden /> No está</Boton>}
               </>
             )}
             {!orden && tel && <a href={tel} aria-label={`Llamar a ${m.nombre}`} className="grid size-10 place-items-center rounded-lg border border-borde"><Phone className="size-4" aria-hidden /></a>}

@@ -8,7 +8,7 @@ import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, PuntoEstado, Tarjeta, Vacio, claseBoton } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
-import { claveEspecialidad, mismoMedico, noLoVio, quePaso, textoMotivo } from '@/lib/medicos'
+import { claveEspecialidad, conDetalle, mismoMedico, noLoVio, quePaso, textoMotivo } from '@/lib/medicos'
 import { fmtFecha, fmtHoras, fmtSoloHora, hace, minutosDelDia, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
 import { fmtMin, horasEstimadas } from '@/lib/ruteo'
@@ -25,7 +25,7 @@ type Objetivo = { parada_id: string; especialidad: string | null; orden: number;
 const horasLlegada = (v: string[] | string | undefined) => (Array.isArray(v) ? v : v ? [v] : [])
 
 // Visitas de hoy de la visitadora (para marcar a qué médicos del plan ya vio).
-type VisitaHoy = { cliente_id: string; medico_id: string | null; fecha_hora: string; medico: { nombre: string; especialidad: string | null } | null; resultado: { nombre: string } | null }
+type VisitaHoy = { cliente_id: string; medico_id: string | null; fecha_hora: string; medico: { nombre: string; especialidad: string | null } | null; resultado: { nombre: string } | null; detalle?: { nombre: string } | null }
 type Datos = { pactadas?: Record<string, string>; paradas: ParadaDia[]; hoy: number; semana: number; pendientes?: ProximaVisita[]; objetivos?: Objetivo[]; visitasHoy?: VisitaHoy[]; llegadas?: Record<string, string[]>; noVisitados?: Record<string, { hora: string; motivo: string }>; base?: { lat: number | null; lng: number | null } | null }
 
 export default function Hoy() {
@@ -71,7 +71,7 @@ export default function Hoy() {
           sb.from('vis_config').select('base_lat, base_lng').maybeSingle(),
           sb.from('vis_llegadas').select('lugar_id, fecha_hora').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
           paradas.length ? sb.from('vis_ruta_paradas').select('id, hora_pactada').in('id', paradas.map((x) => x.parada_id)).not('hora_pactada', 'is', null) : Promise.resolve({ data: [] }),
-          sb.from('vis_visitas').select('cliente_id, medico_id, fecha_hora, medico:vis_medicos!vis_visitas_medico_id_fkey(nombre, especialidad), resultado:vis_resultados!vis_visitas_resultado_id_fkey(nombre)').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
+          sb.from('vis_visitas').select('cliente_id, medico_id, fecha_hora, medico:vis_medicos!vis_visitas_medico_id_fkey(nombre, especialidad), resultado:vis_resultados!vis_visitas_resultado_id_fkey(nombre), detalle:vis_resultados!vis_visitas_detalle_id_fkey(nombre)').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
         ])
         visitasHoy = (vh.data ?? []) as unknown as VisitaHoy[]
         for (const x of (hp.data ?? []) as { id: string; hora_pactada: string | null }[]) if (x.hora_pactada) pactadas[x.id] = x.hora_pactada.slice(0, 5)
@@ -240,7 +240,7 @@ export default function Hoy() {
                                   : <>Buscar médico de <b>{o.especialidad}</b></>}
                                 {v && <span className="text-xs font-medium text-green-700 dark:text-green-400"> · lo viste {fmtSoloHora(v.fecha_hora)}</span>}
                                 {falta && <span className="text-xs font-medium text-red-700 dark:text-red-400"> · no lo visitaste</span>}
-                                {noEstaba && <span className="text-xs font-medium text-amber-700 dark:text-amber-300"> · visita no realizada ({fmtSoloHora(noEstaba.fecha_hora)}): {quePaso(noEstaba.resultado?.nombre)}</span>}
+                                {noEstaba && <span className="text-xs font-medium text-amber-700 dark:text-amber-300"> · visita no realizada ({fmtSoloHora(noEstaba.fecha_hora)}): {quePaso(noEstaba.resultado?.nombre, noEstaba.detalle?.nombre)}</span>}
                               </span>
                             </li>
                           )
@@ -255,7 +255,7 @@ export default function Hoy() {
                           <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Fuera del plan</p>
                           {fuera.map((v, k) => (
                             <p key={k} className="flex items-start gap-1.5"><Stethoscope className="mt-0.5 size-3.5 shrink-0 text-marca" aria-hidden />
-                              <span><span className="tabular text-tenue">{fmtSoloHora(v.fecha_hora)}</span> {v.medico?.nombre ?? 'Visita'}{v.resultado && <span className="text-tenue"> · {v.resultado.nombre}</span>}</span></p>
+                              <span><span className="tabular text-tenue">{fmtSoloHora(v.fecha_hora)}</span> {v.medico?.nombre ?? 'Visita'}{v.resultado && <span className="text-tenue"> · {conDetalle(v.resultado.nombre, v.detalle?.nombre)}</span>}</span></p>
                           ))}
                         </div>
                       )

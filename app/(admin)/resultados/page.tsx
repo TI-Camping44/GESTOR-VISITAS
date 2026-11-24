@@ -5,14 +5,14 @@
 // ella y agregar los suyos, que ve solo ella. Nada se borra: lo que no se usa se oculta (las visitas no cambian).
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp, Eye, EyeOff } from 'lucide-react'
-import { Aviso, Boton, Entrada, Tarjeta } from '@/components/ui'
+import { Aviso, Boton, Entrada, Selector, Tarjeta } from '@/components/ui'
 import { usePanel } from '@/components/admin/PanelModo'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { cn, mensajeError } from '@/lib/utils'
 import type { ClaseResultado, Resultado, TipoUsuario } from '@/lib/database.types'
 
 // Resultados que la app usa por el nombre: no se renombran ni se ocultan.
-const FIJOS = new Set(['Cliente nuevo', 'No le interesa', 'No estaba / no atendió', 'Sin acceso', 'Ya no atiende acá', 'Pidió volver otro día', 'Otro motivo'])
+const FIJOS = new Set(['Cliente nuevo', 'No le interesa', 'Visita no efectiva', 'No estaba / no atendió', 'Sin acceso', 'Ya no atiende acá', 'Pidió volver otro día', 'Otro motivo'])
 type Error = { code?: string; message: string } | null
 
 export default function Resultados() {
@@ -74,7 +74,8 @@ export default function Resultados() {
       {lista === null ? <div className="h-40 animate-pulse rounded-xl bg-borde/40" /> : (
         <>
           <Lista {...comun} clase="resultado" filas={ordenar(lista.filter((r) => r.tipo === tipo && (r.clase ?? 'resultado') === 'resultado' && r.nombre !== 'Cliente nuevo'), empresa)} />
-          <Lista {...comun} clase="detalle" filas={ordenar(lista.filter((r) => r.tipo === tipo && r.clase === 'detalle'), empresa)} />
+          <Lista {...comun} clase="detalle" filas={ordenar(lista.filter((r) => r.tipo === tipo && r.clase === 'detalle'), empresa)}
+            padres={lista.filter((r) => r.tipo === tipo && (r.clase ?? 'resultado') === 'resultado' && r.empresa_id && r.empresa_id === empresa)} />
         </>
       )}
       <p className="text-xs text-tenue">La app toma los cambios la próxima vez que se abre con señal. Los compartidos los renombra solo un admin de las dos empresas; los de «no lo vio» de visita médica no se renombran ni se ocultan porque la app los usa para el plan del día y los tableros.</p>
@@ -85,15 +86,15 @@ export default function Resultados() {
 // Como en la app (por orden), con lo que tu empresa no ve al final.
 const ordenar = (filas: Resultado[], empresa: string | null) => {
   const oculto = (r: Resultado) => (r.empresa_id && r.empresa_id === empresa ? !r.activo : !r.activo || !!r.oculto)
-  return [...filas].sort((a, b) => Number(oculto(a)) - Number(oculto(b)) || a.orden - b.orden || a.nombre.localeCompare(b.nombre, 'es'))
+  return [...filas].sort((a, b) => Number(oculto(a)) - Number(oculto(b)) || (a.padre_id ?? 0) - (b.padre_id ?? 0) || a.orden - b.orden || a.nombre.localeCompare(b.nombre, 'es'))
 }
 
-function Lista({ sb, tipo, clase, filas, esAdmin, multi, empresa, ocupado, hacer }: {
-  sb: ReturnType<typeof supabaseNavegador>; tipo: TipoUsuario; clase: ClaseResultado; filas: Resultado[]
+function Lista({ sb, tipo, clase, filas, padres = [], esAdmin, multi, empresa, ocupado, hacer }: {
+  sb: ReturnType<typeof supabaseNavegador>; tipo: TipoUsuario; clase: ClaseResultado; filas: Resultado[]; padres?: Resultado[]
   esAdmin: boolean; multi: boolean; empresa: string | null; ocupado: boolean
   hacer: (fn: () => PromiseLike<{ error: Error }>, msg?: string) => Promise<void>
 }) {
-  const [nuevo, setNuevo] = useState({ nombre: '', es_venta: false })
+  const [nuevo, setNuevo] = useState({ nombre: '', es_venta: false, padre: '' })
   const propio = (r: Resultado) => !!r.empresa_id && r.empresa_id === empresa
   const titulo = clase === 'resultado' ? 'Resultado' : 'Detalle'
   const propios = filas.filter(propio)
@@ -103,19 +104,20 @@ function Lista({ sb, tipo, clase, filas, esAdmin, multi, empresa, ocupado, hacer
     const nombre = nuevo.nombre.trim()
     if (!nombre || !empresa) return
     const orden = Math.max(0, ...filas.filter((r) => r.orden < 90).map((r) => r.orden)) + 1
-    void hacer(() => sb.from('vis_resultados').insert({ nombre, tipo, clase, es_venta: tipo === 'ventas' && nuevo.es_venta, orden, empresa_id: empresa }),
+    void hacer(() => sb.from('vis_resultados').insert({ nombre, tipo, clase, es_venta: tipo === 'ventas' && nuevo.es_venta, orden, empresa_id: empresa, padre_id: nuevo.padre ? Number(nuevo.padre) : null }),
       `«${nombre}» se agregó a «${titulo}». La app lo muestra la próxima vez que se abre con señal.`)
-    setNuevo({ nombre: '', es_venta: false })
+    setNuevo((n) => ({ nombre: '', es_venta: false, padre: n.padre }))
   }
 
   // Subir o bajar uno propio: se reordenan los propios entre ellos, sin tocar los compartidos.
   function mover(r: Resultado, delta: number) {
-    const i = propios.findIndex((x) => x.id === r.id)
-    const otro = propios[i + delta]
+    const grupo = propios.filter((x) => x.padre_id === r.padre_id) // los detalles se ordenan dentro de su resultado
+    const i = grupo.findIndex((x) => x.id === r.id)
+    const otro = grupo[i + delta]
     if (!otro) return
-    const nuevos = [...propios]
+    const nuevos = [...grupo]
     nuevos[i] = otro; nuevos[i + delta] = r
-    const valores = propios.map((x) => x.orden).sort((a, b) => a - b)
+    const valores = grupo.map((x) => x.orden).sort((a, b) => a - b)
     for (let k = 1; k < valores.length; k++) if (valores[k]! <= valores[k - 1]!) valores[k] = valores[k - 1]! + 1
     void hacer(async () => {
       for (const [k, x] of nuevos.entries()) {
@@ -150,12 +152,18 @@ function Lista({ sb, tipo, clase, filas, esAdmin, multi, empresa, ocupado, hacer
         <h2 className="font-semibold">{clase === 'resultado' ? '1. Resultado' : '2. Detalle'}</h2>
         <p className="text-sm text-tenue">{clase === 'resultado'
           ? 'El primer desplegable: qué tipo de visita fue.'
-          : filas.length ? 'El segundo desplegable, debajo del resultado: qué pasó en concreto.' : 'Si cargás detalles, la app muestra un segundo desplegable debajo del resultado. Sin detalles no aparece.'}</p>
+          : filas.length ? `El segundo desplegable, debajo del resultado: qué pasó en concreto.${padres.length ? ' Cada detalle puede ser de un resultado (por ejemplo, los motivos de «Visita no efectiva»): sale solo cuando se elige ese resultado y es obligatorio.' : ''}` : 'Si cargás detalles, la app muestra un segundo desplegable debajo del resultado. Sin detalles no aparece.'}</p>
       </div>
       {esAdmin && (
         <form onSubmit={agregar} className="flex flex-wrap items-end gap-3 px-4">
           <Entrada aria-label={`Agregar ${titulo.toLowerCase()}`} className="min-w-64 flex-1" autoComplete="off" value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })}
             placeholder={clase === 'resultado' ? (tipo === 'ventas' ? 'Agregar resultado (ej.: Rutina, Seguimiento…)' : 'Agregar resultado (ej.: Pidió más muestras…)') : 'Agregar detalle (ej.: Propuesta enviada, Promociones…)'} />
+          {clase === 'detalle' && padres.length > 0 && (
+            <Selector aria-label="Para el resultado" className="w-auto" value={nuevo.padre} onChange={(e) => setNuevo({ ...nuevo, padre: e.target.value })}>
+              <option value="">Para cualquier resultado</option>
+              {padres.map((p) => <option key={p.id} value={p.id}>Para «{p.nombre}»</option>)}
+            </Selector>
+          )}
           {tipo === 'ventas' && (
             <label className="flex items-center gap-2 pb-2 text-sm">
               <input type="checkbox" className="size-4 accent-[var(--c-marca)]" checked={nuevo.es_venta} onChange={(e) => setNuevo({ ...nuevo, es_venta: e.target.checked })} /> Cuenta como venta
@@ -170,6 +178,7 @@ function Lista({ sb, tipo, clase, filas, esAdmin, multi, empresa, ocupado, hacer
             <thead><tr className="border-y border-borde text-left text-xs uppercase tracking-wide text-tenue">
               <th className="w-20 px-3 py-2 font-medium">Orden</th><th className="px-2 py-2 font-medium">{titulo}</th>
               {tipo === 'ventas' && <th className="px-2 py-2 font-medium">Cuenta como venta</th>}
+              {clase === 'detalle' && padres.length > 0 && <th className="px-2 py-2 font-medium">Para el resultado</th>}
               <th className="px-2 py-2 font-medium">De</th><th className="px-2 py-2 font-medium">En la app</th>
             </tr></thead>
             <tbody>
@@ -178,14 +187,15 @@ function Lista({ sb, tipo, clase, filas, esAdmin, multi, empresa, ocupado, hacer
                 const editable = esAdmin && (mio || (!r.empresa_id && multi))
                 const fijo = FIJOS.has(r.nombre)
                 const visible = mio ? r.activo : r.activo && !r.oculto
-                const j = propios.findIndex((x) => x.id === r.id)
+                const grupo = propios.filter((x) => x.padre_id === r.padre_id)
+                const j = grupo.findIndex((x) => x.id === r.id)
                 return (
                   <tr key={r.id} className={cn('border-b border-borde last:border-0', !visible && 'text-tenue')}>
                     <td className="px-3 py-1.5">
                       {mio && esAdmin ? (
                         <div className="flex">
                           <button type="button" aria-label={`Subir ${r.nombre}`} disabled={ocupado || j === 0} onClick={() => mover(r, -1)} className="grid size-8 place-items-center rounded-lg hover:bg-fondo disabled:opacity-30"><ArrowUp className="size-4" aria-hidden /></button>
-                          <button type="button" aria-label={`Bajar ${r.nombre}`} disabled={ocupado || j === propios.length - 1} onClick={() => mover(r, 1)} className="grid size-8 place-items-center rounded-lg hover:bg-fondo disabled:opacity-30"><ArrowDown className="size-4" aria-hidden /></button>
+                          <button type="button" aria-label={`Bajar ${r.nombre}`} disabled={ocupado || j === grupo.length - 1} onClick={() => mover(r, 1)} className="grid size-8 place-items-center rounded-lg hover:bg-fondo disabled:opacity-30"><ArrowDown className="size-4" aria-hidden /></button>
                         </div>
                       ) : null}
                     </td>
@@ -199,6 +209,17 @@ function Lista({ sb, tipo, clase, filas, esAdmin, multi, empresa, ocupado, hacer
                       <td className="px-2 py-1.5">
                         <input type="checkbox" aria-label={`${r.nombre} cuenta como venta`} className="size-4 accent-[var(--c-marca)]" checked={r.es_venta} disabled={!editable || ocupado}
                           onChange={(e) => void hacer(() => sb.from('vis_resultados').update({ es_venta: e.target.checked }).eq('id', r.id))} />
+                      </td>
+                    )}
+                    {clase === 'detalle' && padres.length > 0 && (
+                      <td className="px-2 py-1.5">
+                        {mio && esAdmin ? (
+                          <Selector aria-label={`Resultado de ${r.nombre}`} className="w-auto py-1.5 text-sm" value={r.padre_id ?? ''} disabled={ocupado}
+                            onChange={(e) => void hacer(() => sb.from('vis_resultados').update({ padre_id: e.target.value ? Number(e.target.value) : null }).eq('id', r.id))}>
+                            <option value="">Cualquiera</option>
+                            {padres.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                          </Selector>
+                        ) : <span>{padres.find((p) => p.id === r.padre_id)?.nombre ?? 'Cualquiera'}</span>}
                       </td>
                     )}
                     <td className="px-2 py-1.5">{mio ? 'Tu empresa' : <span className="text-tenue">Compartido</span>}</td>

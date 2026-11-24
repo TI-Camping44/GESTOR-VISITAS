@@ -64,8 +64,8 @@ export type Database = {
         Relationships: Rel[]
       }
       vis_resultados: {
-        Row: { activo: boolean; es_venta: boolean; id: number; nombre: string; orden: number; tipo: TipoUsuario; empresa_id: string | null; clase: ClaseResultado }
-        Insert: { activo?: boolean; es_venta?: boolean; id?: number; nombre: string; orden?: number; tipo?: TipoUsuario; empresa_id?: string | null; clase?: ClaseResultado }
+        Row: { activo: boolean; es_venta: boolean; id: number; nombre: string; orden: number; tipo: TipoUsuario; empresa_id: string | null; clase: ClaseResultado; padre_id: number | null }
+        Insert: { activo?: boolean; es_venta?: boolean; id?: number; nombre: string; orden?: number; tipo?: TipoUsuario; empresa_id?: string | null; clase?: ClaseResultado; padre_id?: number | null }
         Update: Partial<Database['public']['Tables']['vis_resultados']['Insert']>
         Relationships: []
       }
