@@ -220,6 +220,11 @@ async function gestion() {
     await p.getByLabel('Resultado', { exact: true }).selectOption({ label: 'Visita efectiva' }); await espera(400)
     await foto(p, 'g-noe-efectiva')
   })
+  await conMock('noe', true, async () => {
+    const p = await contexto(true)
+    await ir(p, '/hoy', 3000); await foto(p, 'g-hoy-boton-semana')
+    await ir(p, '/semana', 3500); await foto(p, 'g-semana', { completa: true })
+  })
   await conMock('ser', false, async () => {
     const p = await contexto(false)
     await ir(p, '/resultados', 3000); await p.getByRole('tab', { name: 'Visita médica' }).click(); await espera(400)
