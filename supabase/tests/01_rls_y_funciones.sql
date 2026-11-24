@@ -1239,4 +1239,38 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── La visitadora reorganiza su semana (0046) ─────────────────────
+insert into vis_clientes (razon_social, categoria, empresa_id, vendedor_id, activo)
+values ('Clínica Para Mover', 'lugar', (select id from vis_empresas where nombre = 'Vitalica'), (select id from vis_vendedores where nombre = 'Vale'), true);
+insert into vis_ruta_paradas (ruta_id, cliente_id, dia, orden)
+values ((select id from vis_rutas where nombre = 'Ruta Vale'), (select id from vis_clientes where razon_social = 'Clínica Para Mover'), vis_hoy(), 50);
+select pg_temp.como('vale@vitalica.com.py') \gset
+set role authenticated;
+do $$ declare v_p uuid := (select p.id from vis_ruta_paradas p join vis_clientes c on c.id = p.cliente_id where c.razon_social = 'Clínica Para Mover');
+  v_dest date := case when extract(isodow from vis_hoy()) < 7 then vis_hoy() + 1 else null end; begin
+  if v_dest is not null then
+    perform vis_mover_parada(v_p, v_dest);
+    assert (select dia = v_dest and dia_anterior = vis_hoy() from vis_ruta_paradas where id = v_p), 'pasó al día siguiente y queda de qué día venía';
+  end if;
+  begin
+    perform vis_mover_parada(v_p, vis_hoy() - 1);
+    assert false, 'no se pasa a un día que ya pasó';
+  exception when raise_exception then null;
+  end;
+  begin
+    perform vis_mover_parada(v_p, date_trunc('week', vis_hoy())::date + 7);
+    assert false, 'solo dentro de la semana';
+  exception when raise_exception then null;
+  end;
+end $$;
+reset role;
+select pg_temp.como('hugo@vitalica.com.py') \gset
+set role authenticated;
+do $$ begin
+  perform vis_mover_parada((select p.id from vis_ruta_paradas p join vis_clientes c on c.id = p.cliente_id where c.razon_social = 'Clínica Para Mover'), vis_hoy());
+  assert false, 'un vendedor no mueve la parada de la visitadora';
+exception when raise_exception then null;
+end $$;
+reset role;
+
 select 'OK: todas las pruebas pasaron' as resultado;
