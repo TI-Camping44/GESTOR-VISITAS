@@ -2,7 +2,7 @@
 // Hoy: la ruta del día con contador, mapa y acciones por parada (BRIEF §6 vendedor 1).
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Phone, MessageCircle, Navigation, CheckCircle2, SkipForward, Undo2, Stethoscope, Clock, CircleMinus, XCircle } from 'lucide-react'
+import { Phone, MessageCircle, Navigation, CheckCircle2, SkipForward, Undo2, Stethoscope, Clock, CircleMinus, XCircle, CalendarDays } from 'lucide-react'
 import { useVendedor } from '@/components/vendedor/Proveedor'
 import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, PuntoEstado, Tarjeta, Vacio, claseBoton } from '@/components/ui'
@@ -153,6 +153,7 @@ export default function Hoy() {
     <div className="flex flex-col gap-4">
       <div className="flex items-baseline justify-between gap-2">
         <h1 className="text-xl font-semibold">Hoy · {fmtFecha(hoy)}</h1>
+        <Link href="/semana" className={claseBoton({ variante: 'secundario', className: 'min-h-9 px-3 text-sm' })}><CalendarDays className="size-4" aria-hidden /> Mi semana</Link>
       </div>
 
       <Tarjeta className="grid grid-cols-2 gap-2 text-center tabular">

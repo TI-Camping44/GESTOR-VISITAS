@@ -20,7 +20,7 @@ import { minDeHora } from '@/lib/ruteo'
 
 type Jornada = { vendedor_id: string; inicio: string; fin: string | null }
 // Plan del día (lo arma el supervisor en «Armar el día»): lugares en orden y, en cada uno, a quién ver.
-type ParadaPlan = { id: string; dia: string; orden: number; cliente_id: string; vendedor_id: string; lugar: string; hora_pactada: string | null
+type ParadaPlan = { id: string; dia: string; orden: number; cliente_id: string; vendedor_id: string; lugar: string; hora_pactada: string | null; dia_anterior: string | null
   objetivos: { orden: number; medico_id: string | null; especialidad: string | null; hora_pactada: string | null; medico: { nombre: string; especialidad: string | null } | null }[] }
 type Datos = { visitas: VisitaMedica[]; llegadas: Llegada[]; noVisitados: NoVisitado[]; jornadas: Jornada[]; plan: ParadaPlan[] }
 
@@ -28,17 +28,17 @@ async function leerPlan(ids: string[], desde: string, hasta: string): Promise<Pa
   if (!ids.length) return []
   const sb = supabaseNavegador()
   const { data: ps, error } = await sb.from('vis_ruta_paradas')
-    .select('id, dia, orden, cliente_id, hora_pactada, ruta:vis_rutas!vis_ruta_paradas_ruta_id_fkey!inner(vendedor_id, estado), lugar:vis_clientes!vis_ruta_paradas_cliente_id_fkey(razon_social)')
+    .select('id, dia, orden, cliente_id, hora_pactada, dia_anterior, ruta:vis_rutas!vis_ruta_paradas_ruta_id_fkey!inner(vendedor_id, estado), lugar:vis_clientes!vis_ruta_paradas_cliente_id_fkey(razon_social)')
     .gte('dia', desde).lte('dia', hasta).in('ruta.vendedor_id', ids).in('ruta.estado', ['publicada', 'cerrada']).order('dia').order('orden')
   if (error) throw new Error(error.message)
-  const filas = ((ps ?? []) as unknown as { id: string; dia: string; orden: number; cliente_id: string; hora_pactada: string | null; ruta: { vendedor_id: string } | null; lugar: { razon_social: string } | null }[])
+  const filas = ((ps ?? []) as unknown as { id: string; dia: string; orden: number; cliente_id: string; hora_pactada: string | null; dia_anterior: string | null; ruta: { vendedor_id: string } | null; lugar: { razon_social: string } | null }[])
     .filter((p) => p.ruta && ids.includes(p.ruta.vendedor_id))
   const pids = filas.map((p) => p.id)
   const { data: os } = pids.length
     ? await sb.from('vis_parada_objetivos').select('parada_id, orden, medico_id, especialidad, hora_pactada, medico:vis_medicos!vis_parada_objetivos_medico_id_fkey(nombre, especialidad)').in('parada_id', pids).order('orden')
     : { data: [] }
   const objetivos = (os ?? []) as unknown as (ParadaPlan['objetivos'][number] & { parada_id: string })[]
-  return filas.map((p) => ({ id: p.id, dia: p.dia, orden: p.orden, cliente_id: p.cliente_id, hora_pactada: p.hora_pactada, vendedor_id: p.ruta!.vendedor_id, lugar: p.lugar?.razon_social ?? 'Lugar',
+  return filas.map((p) => ({ id: p.id, dia: p.dia, orden: p.orden, cliente_id: p.cliente_id, hora_pactada: p.hora_pactada, dia_anterior: p.dia_anterior, vendedor_id: p.ruta!.vendedor_id, lugar: p.lugar?.razon_social ?? 'Lugar',
     objetivos: objetivos.filter((o) => o.parada_id === p.id) }))
 }
 type Evento =
@@ -313,7 +313,7 @@ function PlanDelDia({ plan, datos, vendedorId, dia }: {
             <li key={p.id} className="grid border-b border-borde text-sm last:border-0 md:grid-cols-2">
               {/* Plan, médico por médico con lo que pasó al lado (✓ lo vio, naranja con motivo, ✗ no lo vio, pendiente). */}
               <div className="px-3 py-2">
-                <p><span className="font-semibold tabular">{i + 1}.</span> <b>{p.lugar}</b>{pactada && <span className="tabular text-tenue"> · pactado {pactada}</span>}</p>
+                <p><span className="font-semibold tabular">{i + 1}.</span> <b>{p.lugar}</b>{pactada && <span className="tabular text-tenue"> · pactado {pactada}</span>}{p.dia_anterior && p.dia_anterior !== p.dia && <span className="ml-1 rounded-full bg-amber-100 px-1.5 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">la visitadora lo pasó del {fmtDia(p.dia_anterior)}</span>}</p>
                 {p.objetivos.length > 0 ? (
                   <ul className="mt-1 flex flex-col gap-1 pl-4">
                     {p.objetivos.map((o, j) => {

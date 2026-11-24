@@ -116,7 +116,7 @@ export function ProveedorVendedor({ perfil: inicial, observador = null, children
     const clave = 'vis-precarga'
     try { if (Date.now() - Number(localStorage.getItem(clave) ?? 0) < 6 * 3600_000) return } catch { /* sin almacenamiento: igual precarga */ }
     void navigator.serviceWorker.ready.then((reg) => {
-      const urls = inicial.tipo === 'medica' ? ['/hoy', '/visitas', '/mapa', '/medicos', '/lugar', '/visita', '/offline'] : ['/hoy', '/visitas', '/mapa', '/prospecto/nuevo', '/visita', '/offline']
+      const urls = inicial.tipo === 'medica' ? ['/hoy', '/semana', '/visitas', '/mapa', '/medicos', '/lugar', '/visita', '/offline'] : ['/hoy', '/visitas', '/mapa', '/prospecto/nuevo', '/visita', '/offline']
       reg.active?.postMessage({ tipo: 'precargar', urls })
       try { localStorage.setItem(clave, String(Date.now())) } catch { /* nada */ }
     })
