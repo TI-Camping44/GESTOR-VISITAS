@@ -215,7 +215,10 @@ export default function EditarMedico() {
         <AreaTexto id="notas" value={f.notas} onChange={cambiar('notas')} placeholder="Secretaria, cómo prefiere que lo visiten, qué receta…" />
       </div>
       {error && <Aviso tipo="error">{error}</Aviso>}
-      <Boton type="submit" grande disabled={enviando}>{enviando ? 'Guardando…' : 'Guardar médico'}</Boton>
+      {/* Siempre a la vista, arriba de las pestañas: en algunos celulares el botón quedaba debajo de la barra y se tocaba «Médicos». */}
+      <div className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] z-10 -mx-1 rounded-xl bg-fondo/95 p-1 backdrop-blur">
+        <Boton type="submit" grande disabled={enviando} className="w-full">{enviando ? 'Guardando…' : 'Guardar médico'}</Boton>
+      </div>
       <div className="flex justify-between">
         <button type="button" className="text-sm text-tenue underline" onClick={() => { if (puedeSalir()) salir() }}>Cancelar</button>
         {id && <button type="button" className="text-sm text-red-700 underline dark:text-red-300" onClick={() => void darDeBaja()}>Borrar médico</button>}
