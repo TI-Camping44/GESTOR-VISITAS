@@ -211,7 +211,7 @@ const tablas = {
   vis_visitas: visitas.filter((v) => deEmpresa(v.vendedor_id)), vis_llegadas: llegadas, vis_no_visitados: noVisitados, vis_jornadas: JORNADA || ['jor', 'ser'].includes(P) ? jornadas : [],
   vis_zonas: EMP === E1 ? zonas : zonasVit, vis_ciclos: EMP === E2 ? ciclos : [], vis_rutas: rutas.filter((r) => deEmpresa(r.vendedor_id)), vis_ruta_paradas: rutaParadas,
   vis_posicion_actual: posActual.filter((p) => deEmpresa(p.vendedor_id)), vis_posiciones: [...recorrido, ...recorrido.map((r) => ({ ...r, vendedor_id: 'hug', lat: r.lat + 0.004, lng: r.lng + 0.012 }))],
-  vis_alertas_alta: EMP === E1 ? alertas : [], vis_sync_log: [], vis_parada_objetivos: objetivosParada, vis_medico_lugares: [],
+  vis_alertas_alta: EMP === E1 ? alertas : [], vis_sync_log: [], vis_parada_objetivos: objetivosParada, vis_medico_lugares: medicos.flatMap((m) => m.lugares.map((l) => ({ medico_id: m.id, lugar_id: l.lugar_id, horario: l.horario }))),
   vis_gps_dispositivos: [{ vendedor_id: 'hum', ultima_recibida_el: new Date(Date.now() - 3 * 60000).toISOString() }, { vendedor_id: 'noe', ultima_recibida_el: new Date(Date.now() - 60000).toISOString() }, { vendedor_id: 'dan', ultima_recibida_el: null }],
   vis_config: [{ id: true, base_lat: -25.3060, base_lng: -57.6200 }],
 }
