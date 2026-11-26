@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart3, Route, Radio, Users, MapPinned, UserCog, RefreshCw, Smartphone, FileBarChart, ShieldAlert, Stethoscope, ClipboardList, Building2, Tags, Pill, CalendarRange, ListOrdered, ListChecks } from 'lucide-react'
+import { BarChart3, Route, Radio, Users, MapPinned, UserCog, RefreshCw, Smartphone, FileBarChart, ShieldAlert, Stethoscope, ClipboardList, Building2, Tags, Pill, CalendarRange, ListOrdered, ListChecks, Store } from 'lucide-react'
 import { usePanel } from './PanelModo'
 import { cn } from '@/lib/utils'
 import type { Rol } from '@/lib/database.types'
@@ -30,6 +30,7 @@ export function NavAdmin({ rol, altas = 0 }: { rol: Rol; altas?: number }) {
     { href: '/rutas', texto: 'Rutas', Icono: Route },
     { href: '/en-vivo', texto: 'En vivo', Icono: Radio },
     { href: '/clientes', texto: 'Clientes', Icono: Users },
+    { href: '/sucursales', texto: 'Sucursales', Icono: Store },
     { href: '/altas', texto: 'Altas a revisar', Icono: ShieldAlert, contador: altas },
     { href: '/zonas', texto: 'Zonas', Icono: MapPinned },
     ...comunes.slice(0, -1),

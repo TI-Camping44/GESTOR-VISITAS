@@ -204,7 +204,7 @@ const tablas = {
   vis_vendedores: vendedores.filter((v) => v.empresa_id === EMP),
   vis_empresas: [{ id: E1, nombre: 'Camping 44' }, { id: E2, nombre: 'Vitalica' }].filter((e) => e.id === EMP),
   vis_equipos: EMP === E1 ? [{ id: 'eq1', empresa_id: E1, nombre: 'Mayorista' }] : [],
-  vis_clientes_v: [...clientes, ...(EMP === E2 ? lugares : [])], vis_clientes: [...clientes, ...lugares, { ...lugares[0], id: 'lx1', razon_social: 'Sanatorio La Costa (repetido)', activo: false, updated_at: h('15:00', sumar(hoy, -2)), notas: null }],
+  vis_clientes_v: [...clientes, ...(EMP === E2 ? [{ ...clientes[10], id: 'bf1', razon_social: 'Biggie Farma F124 Bruno Guggiari Pinoza', direccion: 'Bruno Guggiari Pinoza', cliente_padre_id: 'c11', odoo_partner_id: null, lat: null, lng: null, notas: 'Biggie Farma · Cód. almacén F124 · Cluster A.' }, { ...clientes[10], id: 'bf2', razon_social: 'Biggie Farma F073 Colon Sajonia', direccion: 'Colon Sajonia', cliente_padre_id: 'c11', odoo_partner_id: null, lat: null, lng: null, notas: 'Biggie Farma · Cód. almacén F073 · Cluster A.' }, ...lugares] : [])], vis_clientes: [...clientes, ...lugares, { ...lugares[0], id: 'lx1', razon_social: 'Sanatorio La Costa (repetido)', activo: false, updated_at: h('15:00', sumar(hoy, -2)), notas: null }],
   vis_medicos_v: EMP === E2 ? medicos : [],
   vis_medicos: EMP === E2 ? [...medicos, { ...medicos[6], id: 'mx1', nombre: 'Dra. Yanina  Meza', activo: false, updated_at: h('16:30'), notas: `Unido con «Dra. Yanina Meza» el ${hoy.split('-').reverse().join('/')}: sus visitas, planes y lugares pasaron a ese médico.` }] : [],
   vis_resultados: resultados, vis_resultados_v: resultados, vis_productos: EMP === E2 ? productos : [],
@@ -251,6 +251,7 @@ createServer((req, res) => {
       else if (v.startsWith('lt.')) filas = filas.filter((r) => r[k] != null && new Date(r[k]) < new Date(v.slice(3)))
       else if (v.startsWith('in.(')) { const set = v.slice(4, -1).split(',').map((x) => x.replace(/"/g, '')); filas = filas.filter((r) => set.includes(String(r[k]))) }
       else if (v === 'is.null') filas = filas.filter((r) => r[k] == null)
+      else if (v === 'not.is.null') filas = filas.filter((r) => r[k] != null)
     }
     const uno = (req.headers.accept || '').includes('vnd.pgrst.object')
     return json(uno ? (filas[0] ?? null) : filas, 200, { 'content-range': `0-${Math.max(0, filas.length - 1)}/${filas.length}` })
