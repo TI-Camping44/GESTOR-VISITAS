@@ -259,6 +259,7 @@ export type Database = {
       vis_quitar_lugar: { Args: { p_lugar: string }; Returns: Json }
       vis_unir_medicos: { Args: { p_queda: string; p_sale: string }; Returns: Json }
       vis_mover_parada: { Args: { p_parada: string; p_dia: string }; Returns: Json }
+      vis_crear_cliente: { Args: { p: Json }; Returns: Json }
       vis_ordenar_paradas: { Args: { p_paradas: string[] }; Returns: Json }
       vis_cargar_ruteo: { Args: { p: Json }; Returns: Json }
       vis_marcar_llegada: { Args: { p: Json }; Returns: Json }
