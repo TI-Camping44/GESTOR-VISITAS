@@ -1,4 +1,5 @@
 'use client'
+import { AvisoSinJornada } from '@/components/admin/AvisoSinJornada'
 // Tablero semanal (requerimiento 3): planificado vs. realizado por día y vendedor,
 // cumplimiento contra la meta, agrupado por zona/ciudad y en el mapa con clustering.
 // TI-0115: no concretadas (con motivo) y cumplimiento por ruta, zona y semana del ciclo.
@@ -159,6 +160,7 @@ export default function Tablero() {
         <h1 className="text-2xl font-semibold">{medica ? 'Tablero semanal de visita médica' : 'Tablero semanal'}</h1>
         <SelectorSemana semana={semana} alCambiar={setSemana} />
       </div>
+      <AvisoSinJornada />
       <p className="-mt-3 text-sm text-tenue">{medica
         ? <>Por día: <b className="font-semibold text-tinta">médicos atendidos</b> contra la meta (no cuentan los que no estaban o no la recibieron) y lugares visitados de los del plan. Tocá un número para ver ese día hora por hora.</>
         : <>Tocá un número (por ejemplo <b className="font-semibold text-tinta">7 / 10</b>) para ver qué clientes visitó y cuáles quedaron sin visitar.</>}</p>
