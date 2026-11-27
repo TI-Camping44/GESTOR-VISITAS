@@ -44,7 +44,10 @@ export default function RegistrarVisita() {
   const altaId = busqueda.get('alta') // visita creada con el alta del cliente: se completa, no se duplica
   const medicoId = busqueda.get('m')
   const router = useRouter()
-  const { perfil, refrescarPendientes, nombreVendedor, esMedica, soloLectura } = useVendedor()
+  const { perfil, refrescarPendientes, nombreVendedor, esMedica, soloLectura, jornada, cargandoJornada, iniciarJornada } = useVendedor()
+  const [iniciando, setIniciando] = useState(false)
+  // Sin jornada no se guarda el recorrido: se avisa acá y al guardar (pedido de Sergio, 27/11).
+  const sinJornada = !soloLectura && !cargandoJornada && !jornada
   const gps = useGps()
 
   const [cliente, setCliente] = useState<ClienteVisita | null>(null)
@@ -171,6 +174,10 @@ export default function RegistrarVisita() {
     if (detallesPropios.length > 0 && !detalleElegido) return errCampo.marcar('detalle', resultadoElegido?.nombre === NO_EFECTIVA ? 'Elegí el motivo.' : 'Elegí el detalle.')
     if (cobranza && !(Number(monto) > 0)) return errCampo.marcar('monto', 'Indicá el monto cobrado.')
     if (noLeInteresa && !obs.trim()) return errCampo.marcar('obs', 'Escribí por qué no le interesa.')
+    if (sinJornada && perfil.tracking_aceptado_el && navigator.onLine
+        && confirm('Todavía no iniciaste la jornada: sin jornada no se guarda tu recorrido.\n\n¿Iniciar la jornada ahora? (Aceptar = iniciar y guardar la visita · Cancelar = guardar igual)')) {
+      try { await iniciarJornada() } catch { /* si falla, la visita se guarda igual */ }
+    }
     setEnviando(true)
     setError(null)
     const client_uuid = crypto.randomUUID()
@@ -279,6 +286,17 @@ export default function RegistrarVisita() {
         <Aviso tipo="alerta">Este cliente es de <b>{nombreVendedor(cliente.vendedor_id)}</b>. Si lo visitás, la visita queda a tu nombre y su vendedor la ve en el historial.</Aviso>
       )}
       {altaId && <Aviso tipo="ok">El cliente quedó cargado y la visita ya cuenta. Elegí el resultado y tocá <b>Guardar visita</b> para completarla.</Aviso>}
+      {sinJornada && (
+        <Aviso tipo="alerta">
+          <p className="font-medium">Iniciá la jornada</p>
+          <p className="text-sm">Sin jornada no se guarda tu recorrido y tu supervisor no te ve en el mapa.</p>
+          {perfil.tracking_aceptado_el ? (
+            <Boton variante="exito" className="mt-2" disabled={iniciando} onClick={() => { setIniciando(true); void iniciarJornada().catch((e: Error) => setError(e.message)).finally(() => setIniciando(false)) }}>
+              {iniciando ? 'Iniciando…' : 'Iniciar jornada'}
+            </Boton>
+          ) : <p className="mt-1 text-sm">Tocá <b>Iniciar jornada</b> arriba de todo.</p>}
+        </Aviso>
+      )}
       <CapturaGps gps={gps} destino={destino} />
       {lejos && <Aviso tipo="alerta">Estás lejos de donde figura el cliente. Si está acá, al guardar te preguntamos si corregimos la ubicación.</Aviso>}
 
