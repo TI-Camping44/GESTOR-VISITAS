@@ -19,7 +19,7 @@ import { distanciaM, fmtDistancia } from '@/lib/geo'
 import { VIS } from '@/lib/config'
 import { esErrorDeRed, mensajeError } from '@/lib/utils'
 import { urlLugar } from '@/lib/rutas'
-import { NO_EFECTIVA } from '@/lib/medicos'
+import { NO_EFECTIVA, noLoVio } from '@/lib/medicos'
 import { useErrorCampo } from '@/components/ErrorCampo'
 import { useAvisoSinGuardar } from '@/lib/sinGuardar'
 import type { EstadoCliente, Medico, ParadaDia, Producto, ProductoVisita, ProximaVisita, Resultado } from '@/lib/database.types'
@@ -237,7 +237,8 @@ export default function RegistrarVisita() {
   if (!cliente) return <div className="h-40 animate-pulse rounded-xl bg-borde/40" />
 
   if (fin) {
-    const preguntar = (fin.alerta != null || fin.sinUbicacion) && !ubicacionGuardada
+    // Visitadora: si no vio al médico (visita no efectiva) puede no estar en el consultorio: no se ofrece mover la ubicación.
+    const preguntar = (fin.alerta != null || fin.sinUbicacion) && !ubicacionGuardada && !(esMedica && noLoVio(resultadoElegido?.nombre))
     return (
       <div className="flex flex-col gap-4">
         <Aviso tipo={fin.tipo === 'online' ? 'ok' : 'alerta'}>
@@ -252,12 +253,13 @@ export default function RegistrarVisita() {
             <p className="font-medium">
               {fin.sinUbicacion
                 ? `${cliente.razon_social} no tiene ubicación cargada. ¿Guardamos esta como la ubicación del cliente?`
+                : esMedica ? `Estás a ${fmtDistancia(fin.alerta)} de ${cliente.razon_social}. ¿El consultorio está acá?`
                 : `Estás a ${fmtDistancia(fin.alerta)} de la ubicación registrada. ¿El cliente está acá?`}
             </p>
             <p className="text-sm text-tenue">Se corrige solo en esta app (no en Odoo) y queda en el historial.</p>
             <div className="flex gap-2">
-              <Boton className="flex-1" disabled={enviando} onClick={() => void corregirUbicacion()}>Sí, está acá</Boton>
-              <Boton variante="secundario" onClick={() => router.push(volver)}>No</Boton>
+              <Boton className="flex-1" disabled={enviando} onClick={() => void corregirUbicacion()}>{esMedica ? 'Sí, el consultorio está acá' : 'Sí, está acá'}</Boton>
+              <Boton variante="secundario" onClick={() => router.push(volver)}>{esMedica ? 'No, estoy en otro lado' : 'No'}</Boton>
             </div>
           </Tarjeta>
         )}
@@ -298,7 +300,9 @@ export default function RegistrarVisita() {
         </Aviso>
       )}
       <CapturaGps gps={gps} destino={destino} />
-      {lejos && <Aviso tipo="alerta">Estás lejos de donde figura el cliente. Si está acá, al guardar te preguntamos si corregimos la ubicación.</Aviso>}
+      {lejos && (esMedica
+        ? <Aviso tipo="alerta">Estás lejos de {cliente.razon_social}. Si viste al médico en otro lugar, registrá la visita desde ese lugar (Lugares → el lugar → «Ya lo tengo cargado»). Si fuiste y no estaba, elegí «Visita no efectiva» con el motivo.</Aviso>
+        : <Aviso tipo="alerta">Estás lejos de donde figura el cliente. Si está acá, al guardar te preguntamos si corregimos la ubicación.</Aviso>)}
 
       <div>
         <Etiqueta htmlFor="resultado">Resultado</Etiqueta>
