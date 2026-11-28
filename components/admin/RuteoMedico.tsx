@@ -33,7 +33,8 @@ function estado(f: FilaRuteoSemana, hoy: string): Estado {
   if (f.resultado === 'Ya no atiende acá') return 'Ya no atiende acá'
   if (f.resultado === 'No estaba / no atendió') return 'No atendió'
   // «Visita no efectiva: <motivo>» (Vitalica, 0045).
-  if (f.resultado?.startsWith('Visita no efectiva')) return /ya no atiende/i.test(f.resultado) ? 'Ya no atiende acá' : /reprogram/i.test(f.resultado) ? 'Reprogramado' : 'No efectiva'
+  const r = f.resultado ?? ''
+  if (/^visita no efectiva/i.test(r)) return /ya no atiende/i.test(r) ? 'Ya no atiende acá' : /reprogram/i.test(r) ? 'Reprogramado' : 'No efectiva'
   return 'Visitado'
 }
 

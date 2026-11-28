@@ -2,6 +2,7 @@
 // Mi semana: los lugares de cada día de la semana (los que armó el supervisor), con los médicos a ver y la hora
 // pactada. La visitadora anticipa los próximos días y los reorganiza: cambia el orden de un día o pasa un lugar
 // a otro día de la misma semana (0046). Lo que ya tiene visita, llegada o «no pude visitar» queda donde está.
+import { textoRecupera } from '@/lib/medicos'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowDown, ArrowUp, CheckCircle2, ChevronLeft, ChevronRight, MapPin, Navigation, Stethoscope } from 'lucide-react'
@@ -17,7 +18,7 @@ type Parada = {
   id: string; dia: string; orden: number; hora_pactada: string | null; dia_anterior: string | null; cliente_id: string
   cliente: { razon_social: string; direccion: string | null; ciudad: string | null; lat: number | null; lng: number | null } | null
 }
-type Objetivo = { parada_id: string; orden: number; especialidad: string | null; hora_pactada: string | null; medico: { nombre: string; especialidad: string | null } | null }
+type Objetivo = { parada_id: string; orden: number; especialidad: string | null; hora_pactada: string | null; recupera_dia?: string | null; recupera_motivo?: string | null; medico: { nombre: string; especialidad: string | null } | null }
 type Hecho = { visitas: number; llego: boolean; noPudo: boolean }
 
 export default function MiSemana() {
@@ -48,7 +49,7 @@ export default function MiSemana() {
     const desde = new Date(`${semana}T00:00:00-03:00`).toISOString()
     const hasta = new Date(`${sumarDias(semana, 7)}T00:00:00-03:00`).toISOString()
     const [ro, rv, rl, rn] = await Promise.all([
-      pids.length ? sb.from('vis_parada_objetivos').select('parada_id, orden, especialidad, hora_pactada, medico:vis_medicos(nombre, especialidad)').in('parada_id', pids).order('orden') : Promise.resolve({ data: [] }),
+      pids.length ? sb.from('vis_parada_objetivos').select('parada_id, orden, especialidad, hora_pactada, recupera_dia, recupera_motivo, medico:vis_medicos(nombre, especialidad)').in('parada_id', pids).order('orden') : Promise.resolve({ data: [] }),
       sb.from('vis_visitas').select('cliente_id, fecha_hora, ruta_parada_id').eq('vendedor_id', perfil.id).gte('fecha_hora', desde).lt('fecha_hora', hasta),
       sb.from('vis_llegadas').select('lugar_id, fecha_hora, parada_id').eq('vendedor_id', perfil.id).gte('fecha_hora', desde).lt('fecha_hora', hasta),
       sb.from('vis_no_visitados').select('lugar_id, fecha_hora, parada_id').eq('vendedor_id', perfil.id).gte('fecha_hora', desde).lt('fecha_hora', hasta),
@@ -165,7 +166,7 @@ export default function MiSemana() {
                         {objs.map((o, k) => (
                           <li key={k} className="flex items-start gap-1.5">
                             <Stethoscope className="mt-0.5 size-3.5 shrink-0 text-marca" aria-hidden />
-                            <span>{o.hora_pactada && <span className="tabular text-tenue">{o.hora_pactada.slice(0, 5)} · </span>}{o.medico ? o.medico.nombre : `Buscar médico de ${o.especialidad}`}{o.medico?.especialidad && <span className="text-tenue"> · {o.medico.especialidad}</span>}</span>
+                            <span>{o.hora_pactada && <span className="tabular text-tenue">{o.hora_pactada.slice(0, 5)} · </span>}{o.medico ? o.medico.nombre : `Buscar médico de ${o.especialidad}`}{o.medico?.especialidad && <span className="text-tenue"> · {o.medico.especialidad}</span>}{textoRecupera(o) && <span className="block text-xs font-medium text-sky-800 dark:text-sky-300">↻ {textoRecupera(o)}</span>}</span>
                           </li>
                         ))}
                       </ul>

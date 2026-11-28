@@ -154,8 +154,9 @@ const tableroRutas = [
 const rutaParadas = ['c1', 'c2', 'c5', 'c3', 'c4', 'c6'].map((c, i) => ({ id: `rp${i}`, ruta_id: 'r1', cliente_id: c, dia: i < 4 ? hoy : sumar(hoy, 1), orden: (i % 4) + 1 }))
 rutaParadas.push(...[['q1', 'l1', hoy, 1], ['q2', 'l2', hoy, 2], ['q3', 'l3', hoy, 3], ['q4', 'l4', sumar(hoy, 1), 1], ['q5', 'l2', sumar(hoy, 1), 2], ['q6', 'l3', sumar(hoy, 2), 1], ['q7', 'l1', sumar(hoy, 2), 2]].map(([id, c, dia, orden]) => { const l = lugares.find((x) => x.id === c); return { id, ruta_id: 'r5', cliente_id: c, dia, orden, hora_pactada: { q1: '09:00:00', q2: '10:30:00', q3: '12:00:00', q6: '08:30:00' }[id] ?? null, dia_anterior: id === 'q5' ? hoy : null, ruta: { vendedor_id: 'noe', estado: 'publicada' }, lugar: { razon_social: lnom(c) }, cliente: { razon_social: l.razon_social, direccion: l.direccion, ciudad: l.ciudad, lat: l.lat, lng: l.lng } } }))
 // A quién ver en cada lugar (lo arma el supervisor en «Armar el día»).
-const objetivosParada = [['o1', 'q1', 'm1', 1], ['o2', 'q1', 'm2', 2], ['o3', 'q2', 'm3', 1], ['o4', 'q2', 'm6', 2], ['o5', 'q3', 'm5', 1], ['o6', 'q4', 'm4', 1]]
-  .map(([id, parada_id, medico_id, orden]) => ({ id, parada_id, medico_id, especialidad: null, orden, hora_pactada: { o1: '09:15:00', o2: '10:00:00', o3: '11:00:00' }[id] ?? null, medico: (({ nombre, especialidad }) => ({ id: medico_id, nombre, especialidad }))(M.map(([i, nombre, especialidad]) => ({ i, nombre, especialidad })).find((x) => x.i === medico_id)) }))
+const objetivosParada = [['o1', 'q1', 'm1', 1], ['o2', 'q1', 'm2', 2], ['o3', 'q2', 'm3', 1], ['o4', 'q2', 'm6', 2], ['o5', 'q3', 'm5', 1], ['o6', 'q4', 'm4', 1], ['o7', 'q2', 'm4', 3]]
+  .map(([id, parada_id, medico_id, orden]) => ({ id, parada_id, medico_id, especialidad: null, orden, hora_pactada: { o1: '09:15:00', o2: '10:00:00', o3: '11:00:00', o7: '11:30:00' }[id] ?? null,
+    ...(id === 'o7' ? { recupera_dia: sumar(hoy, -21), recupera_motivo: 'Canceló porque no tiene pacientes' } : {}), medico: (({ nombre, especialidad }) => ({ id: medico_id, nombre, especialidad }))(M.map(([i, nombre, especialidad]) => ({ i, nombre, especialidad })).find((x) => x.i === medico_id)) }))
 // ── En vivo y recorrido ──
 const posActual = [
   { vendedor_id: 'hum', lat: -25.2925, lng: -57.6140, fecha_hora: new Date(Date.now() - 2 * 60000).toISOString(), en_jornada: true, bateria_pct: 72, jornada_id: 'j1', precision_m: 8 },
@@ -227,7 +228,7 @@ const RPC = {
   vis_mi_gps: () => ({ codigo: 'c44a7f3e91b20d4c', ultima_recibida_el: new Date(Date.now() - 2 * 60000).toISOString(), ultima_posicion_el: new Date(Date.now() - 2 * 60000).toISOString() }),
   vis_vecinos_de_otros: () => [], vis_clientes_cercanos: () => [], vis_zona_historial: () => [], vis_sugerir_paradas: () => [],
   vis_marcar_llegada: () => ({ id: 'a9', parada_id: 'q3' }),
-  vis_registrar_visita: () => ({ id: 'vnueva', alerta_distancia: false, distancia_cliente_m: 10 }),
+  vis_registrar_visita: () => (process.env.LEJOS ? { id: 'vnueva', alerta_distancia: true, distancia_cliente_m: 4700 } : { id: 'vnueva', alerta_distancia: false, distancia_cliente_m: 10 }),
   vis_marcar_no_visitado: (a) => { const p = a.p ?? {}; const n = { id: `nv${noVisitados.length + 1}`, vendedor_id: P, lugar_id: p.lugar_id, parada_id: null, fecha_hora: new Date().toISOString(), created_at: new Date().toISOString(), motivo: p.motivo, observaciones: p.observaciones ?? null, lat: p.lat, lng: p.lng, lugar: { razon_social: (lugares.find((l) => l.id === p.lugar_id) ?? {}).razon_social } }; noVisitados.push(n); return { id: n.id, parada_id: null, duplicada: false } },
   vis_quitar_no_visitado: (a) => { const i = noVisitados.findIndex((n) => n.id === a.p_id); if (i >= 0) noVisitados.splice(i, 1); return { ok: true } }, vis_iniciar_jornada: () => ({ id: 'j1', inicio: new Date().toISOString() }),
 }

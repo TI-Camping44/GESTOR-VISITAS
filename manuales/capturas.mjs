@@ -290,7 +290,72 @@ async function tableros() {
   })
 }
 
-const grupos = { tableros, ciclos, 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita, 'medico-ausente': medicoAusente, 'para-hoy': paraHoy, gestion }
+// Respuesta a Noelia (28/11): médico en otro lugar, médicos que cancelaron con ella ya en el lugar.
+async function noelia() {
+  const enLugar = { latitude: -25.3011, longitude: -57.5961, accuracy: 9 }
+  await conMock('noe', true, async () => {
+    const p = await contexto(true); await p.context().setGeolocation(enLugar)
+    await ir(p, '/lugar?c=l3&parada=q3', 3200); await foto(p, 'x1-llegue')
+    await ir(p, '/lugar?c=l1&parada=q1', 3200)
+    await p.getByRole('button', { name: 'Ya lo tengo cargado' }).click(); await espera(500)
+    await p.getByText('Ya lo tengo cargado').first().evaluate((e) => e.scrollIntoView({ block: 'start' })); await p.evaluate(() => window.scrollBy(0, -90)); await espera(300); await foto(p, 'x2-ya-cargado')
+  })
+  process.env.LEJOS = '1'
+  await conMock('noe', true, async () => {
+    const p = await contexto(true); await p.context().setGeolocation({ latitude: -25.2600, longitude: -57.5600, accuracy: 9 })
+    await ir(p, '/visita?c=l1&m=m2', 3500)
+    await p.getByText(/Estás lejos de/).first().evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'x3-lejos')
+    await p.getByLabel('Resultado', { exact: true }).selectOption({ label: 'Visita efectiva' }); await espera(300)
+    await p.getByRole('button', { name: 'Guardar visita' }).click(); await p.getByText('¿El consultorio está acá?').first().waitFor({ timeout: 20000 }); await espera(400); await foto(p, 'x4-otro-lado')
+  })
+  delete process.env.LEJOS
+  await conMock('noe', true, async () => {
+    const p = await contexto(true); await p.context().setGeolocation(enLugar)
+    await p.context().setGeolocation({ latitude: -25.2870, longitude: -57.6350, accuracy: 9 })
+    await ir(p, '/lugar?c=l2&parada=q2', 3500)
+    await p.getByRole('button', { name: 'No está' }).first().click(); await espera(400)
+    const sel = p.locator('select[id^="motivo-no-esta-"]').first()
+    await sel.selectOption({ label: 'Canceló porque no tiene pacientes' })
+    await p.getByLabel(/anotar algo/).fill('Llegué 10:05 y canceló, no tenía pacientes. Vuelvo el martes.').catch(() => {}); await espera(300)
+    await sel.evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'x5-no-esta-cancelo')
+  })
+  await conMock('noe', true, async () => {
+    const p = await contexto(true); await p.context().setGeolocation(enLugar)
+    await ir(p, '/visita?c=l1&m=m2', 3200)
+    await p.getByLabel('Resultado', { exact: true }).selectOption({ label: 'Visita no efectiva' })
+    await p.getByLabel('Motivo').selectOption({ label: 'Canceló porque no tiene pacientes' })
+    await p.locator('#obs').fill('Llegué 10:05 y canceló, no tenía pacientes. Vuelvo el martes.').catch(() => {}); await espera(300)
+    await p.getByText('Resultado', { exact: true }).first().evaluate((e) => e.scrollIntoView({ block: 'start' })); await p.evaluate(() => window.scrollBy(0, -80)); await espera(300); await foto(p, 'x6-no-efectiva')
+  })
+  await conMock('noe', true, async () => {
+    const p = await contexto(true); await p.context().setGeolocation(enLugar)
+    await ir(p, '/lugar?c=l4', 3200)
+    await p.getByRole('button', { name: 'No pude visitar este lugar' }).click(); await espera(300)
+    await p.getByLabel('No había médicos').check(); await p.getByLabel(/Observación/).fill('Cancelaron todos, no había pacientes. Llegué 15:10.')
+    await p.getByRole('button', { name: 'Guardar', exact: true }).evaluate((e) => e.scrollIntoView({ block: 'end' })); await espera(300); await foto(p, 'x7-no-pude')
+    const q = await contexto(true); await ir(q, '/semana', 3500)
+    const pasar = q.getByLabel(/^Pasar .* a otro día/).first()
+    await pasar.evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(q, 'x8-semana')
+  })
+}
+
+// Recuperar visitas no efectivas en la última semana del mes (0051).
+async function recupero() {
+  await conMock('noe', true, async () => {
+    const p = await contexto(true); await p.context().setGeolocation({ latitude: -25.2870, longitude: -57.6350, accuracy: 9 })
+    await ir(p, '/hoy', 3500)
+    await p.getByText(/Recupera la visita no efectiva/).first().evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'r-hoy')
+    await ir(p, '/lugar?c=l2&parada=q2', 3500)
+    await p.getByText(/Recupera la visita no efectiva/).first().evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'r-lugar')
+  })
+  await conMock('ser', false, async () => {
+    const p = await contexto(false)
+    await ir(p, '/medica', 4500)
+    await p.getByText(/Recupera la visita no efectiva/).first().evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(400); await foto(p, 'r-plan')
+  })
+}
+
+const grupos = { recupero, noelia, tableros, ciclos, 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita, 'medico-ausente': medicoAusente, 'para-hoy': paraHoy, gestion }
 for (const g of grupo === 'todos' ? Object.keys(grupos).filter((x) => !['no-visita', 'medico-ausente', 'para-hoy', 'ciclos', 'tableros', 'gestion'].includes(x)) : [grupo]) await grupos[g]()
 await browser.close()
 if (errores.length) console.log('ERRORES:\n' + [...new Set(errores)].join('\n'))

@@ -12,7 +12,8 @@ import { cn, mensajeError } from '@/lib/utils'
 import type { ClaseResultado, Resultado, TipoUsuario } from '@/lib/database.types'
 
 // Resultados que la app usa por el nombre: no se renombran ni se ocultan.
-const FIJOS = new Set(['Cliente nuevo', 'No le interesa', 'Visita no efectiva', 'No estaba / no atendió', 'Sin acceso', 'Ya no atiende acá', 'Pidió volver otro día', 'Otro motivo'])
+// La app los busca por nombre (sin mayúsculas): no se renombran ni ocultan.
+const FIJOS = new Set(['Cliente nuevo', 'No le interesa', 'Visita no efectiva', 'No estaba / no atendió', 'Sin acceso', 'Ya no atiende acá', 'Pidió volver otro día', 'Otro motivo'].map((n) => n.toLowerCase()))
 type Error = { code?: string; message: string } | null
 
 export default function Resultados() {
@@ -185,7 +186,7 @@ function Lista({ sb, tipo, clase, filas, padres = [], esAdmin, multi, empresa, o
               {filas.map((r) => {
                 const mio = propio(r)
                 const editable = esAdmin && (mio || (!r.empresa_id && multi))
-                const fijo = FIJOS.has(r.nombre)
+                const fijo = FIJOS.has(r.nombre.trim().toLowerCase())
                 const visible = mio ? r.activo : r.activo && !r.oculto
                 const grupo = propios.filter((x) => x.padre_id === r.padre_id)
                 const j = grupo.findIndex((x) => x.id === r.id)
