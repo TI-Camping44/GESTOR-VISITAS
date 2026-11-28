@@ -1,4 +1,10 @@
 import type { Medico, MotivoNoVisita } from '@/lib/database.types'
+import { fmtDia } from '@/lib/fechas'
+
+/** Médico que se sumó solo a la última semana del mes para recuperar una visita no efectiva (0051). */
+export function textoRecupera(o: { recupera_dia?: string | null; recupera_motivo?: string | null }): string | null {
+  return o.recupera_dia ? `Recupera la visita no efectiva del ${fmtDia(o.recupera_dia)}${o.recupera_motivo ? ` (${o.recupera_motivo})` : ''}` : null
+}
 
 /** Días desde la última visita al médico (null = nunca). */
 export function diasSinVisita(m: Pick<Medico, 'ultima_visita'>, ahora = Date.now()): number | null {
@@ -84,18 +90,23 @@ export const textoMotivo = (m: string | null | undefined) =>
 // «Visita no efectiva» (Vitalica, 0045): el motivo va en el detalle (de vacaciones, en un congreso, reprogramó…).
 export const NO_EFECTIVA = 'Visita no efectiva'
 export const RESULTADOS_NO_VISTO = ['No estaba / no atendió', 'Sin acceso', 'Ya no atiende acá', 'Pidió volver otro día', 'Otro motivo', NO_EFECTIVA]
-export const noLoVio = (resultado: string | null | undefined) => !!resultado && RESULTADOS_NO_VISTO.includes(resultado)
+// Los nombres se comparan sin mayúsculas ni espacios de más: en el panel se pueden escribir distinto («Visita NO efectiva»).
+const nombreResultado = (n: string | null | undefined) => (n ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+const NO_VISTO = new Set(RESULTADOS_NO_VISTO.map(nombreResultado))
+export const mismoResultado = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && nombreResultado(a) === nombreResultado(b)
+export const esNoEfectiva = (resultado: string | null | undefined) => mismoResultado(resultado, NO_EFECTIVA)
+export const noLoVio = (resultado: string | null | undefined) => !!resultado && NO_VISTO.has(nombreResultado(resultado))
 
 /** Qué pasó con una visita que no se hizo, en palabras («Sin acceso» → «no dejaron pasar»). */
 const QUE_PASO: Record<string, string> = {
-  'No estaba / no atendió': 'el médico no estaba o no atendió',
-  'Sin acceso': 'no dejaron pasar (sin acceso)',
-  'Ya no atiende acá': 'el médico ya no atiende en este lugar',
-  'Pidió volver otro día': 'reprogramada: el médico pidió volver otro día',
-  'Otro motivo': 'otro motivo',
+  'no estaba / no atendió': 'el médico no estaba o no atendió',
+  'sin acceso': 'no dejaron pasar (sin acceso)',
+  'ya no atiende acá': 'el médico ya no atiende en este lugar',
+  'pidió volver otro día': 'reprogramada: el médico pidió volver otro día',
+  'otro motivo': 'otro motivo',
 }
 export const quePaso = (resultado: string | null | undefined, detalle?: string | null) =>
-  detalle ? detalle.charAt(0).toLowerCase() + detalle.slice(1) : (resultado && QUE_PASO[resultado]) ?? (resultado ?? 'sin motivo').toLowerCase()
+  detalle ? detalle.charAt(0).toLowerCase() + detalle.slice(1) : (resultado && QUE_PASO[nombreResultado(resultado)]) ?? (resultado ?? 'sin motivo').toLowerCase()
 /** Resultado y detalle juntos para mostrar («Visita efectiva → Promoción»). */
 export const conDetalle = (resultado: string | null | undefined, detalle: string | null | undefined) => [resultado, detalle].filter(Boolean).join(' → ')
 

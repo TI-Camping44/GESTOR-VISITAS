@@ -1273,4 +1273,61 @@ exception when raise_exception then null;
 end $$;
 reset role;
 
+-- ── Recuperar en el mes las visitas no efectivas (0051) ──────────
+do $$
+declare
+  v_vit uuid := (select id from vis_empresas where nombre = 'Vitalica');
+  v_vale uuid := (select id from vis_vendedores where nombre = 'Vale');
+  v_l uuid; v_m uuid; v_m2 uuid; v_ruta uuid; v_p uuid; v_nv uuid; v_vis uuid;
+  v_ini date := date_trunc('month', vis_hoy())::date + interval '1 month';
+  v_d date; v_dest date;
+  v_noef int := (select id from vis_resultados where nombre = 'Visita no efectiva' and empresa_id = (select id from vis_empresas where nombre = 'Vitalica') and clase = 'resultado');
+  v_ef int := (select id from vis_resultados where nombre = 'Visita efectiva' and empresa_id = (select id from vis_empresas where nombre = 'Vitalica') and clase = 'resultado');
+  v_cancelo int := (select id from vis_resultados where nombre = 'Canceló porque no tiene pacientes' and empresa_id = (select id from vis_empresas where nombre = 'Vitalica'));
+  v_yano int := (select id from vis_resultados where nombre = 'Ya no atiende acá' and clase = 'detalle' and empresa_id = (select id from vis_empresas where nombre = 'Vitalica'));
+begin
+  v_d := v_ini + ((8 - extract(isodow from v_ini)::int) % 7);  -- primer lunes del mes que viene
+  v_dest := vis_dia_recupero(v_d);
+  assert extract(isodow from v_dest) = 1 and v_dest > (date_trunc('month', v_d) + interval '1 month' - interval '8 days')::date, 'recupero: mismo día de la semana en los últimos 7 días';
+  assert vis_dia_recupero(v_dest) is null, 'la última semana no se recupera dentro del mes';
+  assert vis_visita_no_efectiva(v_noef, v_cancelo) and not vis_visita_no_efectiva(v_noef, v_yano) and not vis_visita_no_efectiva(v_ef, null), 'qué cuenta como no efectiva';
+
+  insert into vis_clientes (razon_social, categoria, empresa_id, vendedor_id, activo) values ('Sanatorio Recupero', 'lugar', v_vit, v_vale, true) returning id into v_l;
+  insert into vis_medicos (nombre, empresa_id, visitadora_id) values ('Dr. Recupero Uno', v_vit, v_vale) returning id into v_m;
+  insert into vis_medicos (nombre, empresa_id, visitadora_id) values ('Dra. Recupero Dos', v_vit, v_vale) returning id into v_m2;
+  insert into vis_rutas (nombre, vendedor_id, semana_inicio, estado) values ('Ruta Recupero', v_vale, date_trunc('week', v_d)::date, 'publicada') returning id into v_ruta;
+  insert into vis_ruta_paradas (ruta_id, cliente_id, dia, orden) values (v_ruta, v_l, v_d, 1) returning id into v_p;
+  insert into vis_parada_objetivos (parada_id, medico_id, orden, hora_pactada) values (v_p, v_m, 1, '09:30'), (v_p, v_m2, 2, '10:00');
+
+  -- No efectiva → se suma a la última semana, mismo lugar y hora.
+  insert into vis_visitas (cliente_id, vendedor_id, medico_id, ruta_parada_id, fecha_hora, resultado_id, detalle_id)
+  values (v_l, v_vale, v_m, v_p, (v_d + time '09:40') at time zone 'America/Asuncion', v_noef, v_cancelo) returning id into v_vis;
+  assert (select count(*) from vis_parada_objetivos o join vis_ruta_paradas pa on pa.id = o.parada_id
+          where o.medico_id = v_m and pa.dia = v_dest and pa.cliente_id = v_l and o.recupera_dia = v_d
+            and o.hora_pactada = '09:30' and o.recupera_motivo = 'Canceló porque no tiene pacientes' and pa.recuperacion) = 1, 'se recupera en la última semana';
+  -- Otra no efectiva el mismo día no duplica.
+  insert into vis_visitas (cliente_id, vendedor_id, medico_id, ruta_parada_id, fecha_hora, resultado_id, detalle_id)
+  values (v_l, v_vale, v_m, v_p, (v_d + time '11:00') at time zone 'America/Asuncion', v_noef, v_cancelo);
+  assert (select count(*) from vis_parada_objetivos where medico_id = v_m and recupera_dia is not null) = 1, 'no duplica';
+  -- Lo ve antes (visita efectiva otro día) → se quita la recuperación y la parada creada para eso.
+  insert into vis_visitas (cliente_id, vendedor_id, medico_id, fecha_hora, resultado_id)
+  values (v_l, v_vale, v_m, (v_d + 2 + time '09:40') at time zone 'America/Asuncion', v_ef);
+  assert not exists (select 1 from vis_parada_objetivos where medico_id = v_m and recupera_dia is not null), 'lo vio: se quita';
+  assert not exists (select 1 from vis_ruta_paradas where cliente_id = v_l and dia = v_dest), 'la parada de recupero vacía se borra';
+
+  -- «No pude visitar este lugar» → recupera a los del plan que no vio; deshacerlo lo quita.
+  insert into vis_no_visitados (vendedor_id, lugar_id, parada_id, fecha_hora, motivo)
+  values (v_vale, v_l, v_p, (v_d + time '15:00') at time zone 'America/Asuncion', 'cerrado') returning id into v_nv;
+  assert (select count(*) from vis_parada_objetivos o join vis_ruta_paradas pa on pa.id = o.parada_id where pa.dia = v_dest and o.origen_no_visitado_id = v_nv) = 1,
+    'no pudo visitar: recupera a la que no vio (al que vio después no)';
+  assert exists (select 1 from vis_parada_objetivos where medico_id = v_m2 and recupera_motivo like 'No pudo visitar el lugar:%'), 'motivo del no visitado';
+  delete from vis_no_visitados where id = v_nv;
+  assert not exists (select 1 from vis_parada_objetivos where recupera_dia is not null and medico_id = v_m2), 'deshacer el no visitado quita la recuperación';
+
+  -- «Ya no atiende acá» no se recupera; un médico fuera del plan tampoco.
+  insert into vis_visitas (cliente_id, vendedor_id, medico_id, ruta_parada_id, fecha_hora, resultado_id, detalle_id)
+  values (v_l, v_vale, v_m2, v_p, (v_d + time '10:10') at time zone 'America/Asuncion', v_noef, v_yano);
+  assert not exists (select 1 from vis_parada_objetivos where recupera_dia is not null and medico_id = v_m2), 'ya no atiende: no se recupera';
+end $$;
+
 select 'OK: todas las pruebas pasaron' as resultado;

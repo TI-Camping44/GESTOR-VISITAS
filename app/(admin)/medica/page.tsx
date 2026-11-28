@@ -15,13 +15,13 @@ import { useParamUrl } from '@/lib/useParamUrl'
 import { useSemanaDia } from '@/lib/useSemanaDia'
 import { cn } from '@/lib/utils'
 import { leerLlegadas, leerNoVisitados, leerVisitas, textoProductos, totalMuestras, useVisitadoras, type Llegada, type NoVisitado, type VisitaMedica } from '@/components/admin/medica/datos'
-import { claveEspecialidad, conDetalle, mismoMedico, noLoVio, quePaso, textoMotivo } from '@/lib/medicos'
+import { claveEspecialidad, conDetalle, mismoMedico, noLoVio, quePaso, textoMotivo, textoRecupera } from '@/lib/medicos'
 import { minDeHora } from '@/lib/ruteo'
 
 type Jornada = { vendedor_id: string; inicio: string; fin: string | null }
 // Plan del día (lo arma el supervisor en «Armar el día»): lugares en orden y, en cada uno, a quién ver.
 type ParadaPlan = { id: string; dia: string; orden: number; cliente_id: string; vendedor_id: string; lugar: string; hora_pactada: string | null; dia_anterior: string | null
-  objetivos: { orden: number; medico_id: string | null; especialidad: string | null; hora_pactada: string | null; medico: { nombre: string; especialidad: string | null } | null }[] }
+  objetivos: { orden: number; medico_id: string | null; especialidad: string | null; hora_pactada: string | null; recupera_dia?: string | null; recupera_motivo?: string | null; medico: { nombre: string; especialidad: string | null } | null }[] }
 type Datos = { visitas: VisitaMedica[]; llegadas: Llegada[]; noVisitados: NoVisitado[]; jornadas: Jornada[]; plan: ParadaPlan[] }
 
 async function leerPlan(ids: string[], desde: string, hasta: string): Promise<ParadaPlan[]> {
@@ -35,7 +35,7 @@ async function leerPlan(ids: string[], desde: string, hasta: string): Promise<Pa
     .filter((p) => p.ruta && ids.includes(p.ruta.vendedor_id))
   const pids = filas.map((p) => p.id)
   const { data: os } = pids.length
-    ? await sb.from('vis_parada_objetivos').select('parada_id, orden, medico_id, especialidad, hora_pactada, medico:vis_medicos!vis_parada_objetivos_medico_id_fkey(nombre, especialidad)').in('parada_id', pids).order('orden')
+    ? await sb.from('vis_parada_objetivos').select('parada_id, orden, medico_id, especialidad, hora_pactada, recupera_dia, recupera_motivo, medico:vis_medicos!vis_parada_objetivos_medico_id_fkey(nombre, especialidad)').in('parada_id', pids).order('orden')
     : { data: [] }
   const objetivos = (os ?? []) as unknown as (ParadaPlan['objetivos'][number] & { parada_id: string })[]
   return filas.map((p) => ({ id: p.id, dia: p.dia, orden: p.orden, cliente_id: p.cliente_id, hora_pactada: p.hora_pactada, dia_anterior: p.dia_anterior, vendedor_id: p.ruta!.vendedor_id, lugar: p.lugar?.razon_social ?? 'Lugar',
@@ -340,6 +340,7 @@ function PlanDelDia({ plan, datos, vendedorId, dia }: {
                             </span>
                             {dif != null && Math.abs(dif) >= 5 && <span className={cn('text-xs', dif > 15 ? 'text-red-800 dark:text-red-300' : 'text-tenue')}> · {dif > 0 ? `${dif} min tarde` : `${-dif} min antes`}</span>}
                             {nota && <span className="block text-xs text-tenue">{v ? 'Nota' : 'Motivo'}: «{nota}»</span>}
+                            {textoRecupera(o) && <span className="block text-xs font-medium text-sky-800 dark:text-sky-300">↻ {textoRecupera(o)} · se sumó sola</span>}
                           </span>
                         </li>
                       )

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { claveEspecialidad, diasDeHorario, parecidos } from '../lib/medicos'
+import { claveEspecialidad, diasDeHorario, parecidos, textoRecupera, noLoVio, esNoEfectiva, quePaso } from '../lib/medicos'
 
 test('días del horario escrito a mano', () => {
   assert.deepEqual(diasDeHorario('Lunes a Viernes 07:00 Hs a 17:00 Hs.'), [1, 2, 3, 4, 5])
@@ -51,4 +51,17 @@ test('médicos parecidos: no junta a distintos', () => {
   assert.equal(parecidos('María González', 'María Gómez'), false)
   assert.equal(parecidos('Juan Pérez', 'Pedro Pérez'), false)
   assert.equal(parecidos('Ana', 'Ana'), true)
+})
+
+test('textoRecupera: visita no efectiva que se sumó a la última semana', () => {
+  assert.equal(textoRecupera({ recupera_dia: null }), null)
+  assert.equal(textoRecupera({ recupera_dia: '2026-12-07', recupera_motivo: 'Canceló porque no tiene pacientes' }),
+    'Recupera la visita no efectiva del lun, 07/12/2026 (Canceló porque no tiene pacientes)')
+})
+
+test('resultados por nombre sin mayúsculas («Visita NO efectiva» del panel)', () => {
+  assert.ok(noLoVio('Visita NO efectiva'))
+  assert.ok(esNoEfectiva(' visita no  efectiva '))
+  assert.ok(!noLoVio('Visita efectiva'))
+  assert.equal(quePaso('SIN ACCESO'), 'no dejaron pasar (sin acceso)')
 })

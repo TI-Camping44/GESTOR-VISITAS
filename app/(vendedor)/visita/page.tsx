@@ -19,7 +19,7 @@ import { distanciaM, fmtDistancia } from '@/lib/geo'
 import { VIS } from '@/lib/config'
 import { esErrorDeRed, mensajeError } from '@/lib/utils'
 import { urlLugar } from '@/lib/rutas'
-import { NO_EFECTIVA, noLoVio } from '@/lib/medicos'
+import { esNoEfectiva, mismoResultado, noLoVio } from '@/lib/medicos'
 import { useErrorCampo } from '@/components/ErrorCampo'
 import { useAvisoSinGuardar } from '@/lib/sinGuardar'
 import type { EstadoCliente, Medico, ParadaDia, Producto, ProductoVisita, ProximaVisita, Resultado } from '@/lib/database.types'
@@ -153,11 +153,11 @@ export default function RegistrarVisita() {
   const detalleElegido = detalles.find((r) => String(r.id) === detalleId)
   const esVenta = !!resultadoElegido?.es_venta || !!detalleElegido?.es_venta
   // «No le interesa»: el cliente queda en naranja; el motivo es obligatorio (lo ve el supervisor).
-  const noLeInteresa = resultadoElegido?.nombre === 'No le interesa'
+  const noLeInteresa = mismoResultado(resultadoElegido?.nombre, 'No le interesa')
   // «Ya no atiende acá»: el médico sale de este lugar al guardar (no se borra; sus visitas quedan).
-  const yaNoAtiende = resultadoElegido?.nombre === 'Ya no atiende acá' || detalleElegido?.nombre.toLowerCase() === 'ya no atiende acá'
+  const yaNoAtiende = mismoResultado(resultadoElegido?.nombre, 'Ya no atiende acá') || mismoResultado(detalleElegido?.nombre, 'Ya no atiende acá')
   // Sin ver al médico no hay productos que presentar.
-  const sinPresentar = yaNoAtiende || ['No estaba / no atendió', 'Sin acceso', NO_EFECTIVA].includes(resultadoElegido?.nombre ?? '')
+  const sinPresentar = yaNoAtiende || ['No estaba / no atendió', 'Sin acceso'].some((n) => mismoResultado(n, resultadoElegido?.nombre)) || esNoEfectiva(resultadoElegido?.nombre)
 
   function elegirResultado(id: string) {
     setResultadoId(id)
@@ -171,7 +171,7 @@ export default function RegistrarVisita() {
     if (!cliente) return
     errCampo.limpiar()
     if (!resultadoId) return errCampo.marcar('resultado', 'Elegí el resultado de la visita.')
-    if (detallesPropios.length > 0 && !detalleElegido) return errCampo.marcar('detalle', resultadoElegido?.nombre === NO_EFECTIVA ? 'Elegí el motivo.' : 'Elegí el detalle.')
+    if (detallesPropios.length > 0 && !detalleElegido) return errCampo.marcar('detalle', esNoEfectiva(resultadoElegido?.nombre) ? 'Elegí el motivo.' : 'Elegí el detalle.')
     if (cobranza && !(Number(monto) > 0)) return errCampo.marcar('monto', 'Indicá el monto cobrado.')
     if (noLeInteresa && !obs.trim()) return errCampo.marcar('obs', 'Escribí por qué no le interesa.')
     if (sinJornada && perfil.tracking_aceptado_el && navigator.onLine
@@ -313,7 +313,7 @@ export default function RegistrarVisita() {
         {errCampo.mensaje('resultado')}
         {detalles.length > 0 && (
           <div className="mt-3">
-            <Etiqueta htmlFor="detalle">{resultadoElegido?.nombre === NO_EFECTIVA ? 'Motivo' : 'Detalle'}</Etiqueta>
+            <Etiqueta htmlFor="detalle">{esNoEfectiva(resultadoElegido?.nombre) ? 'Motivo' : 'Detalle'}</Etiqueta>
             <Selector id="detalle" value={detalleId} onChange={(e) => { errCampo.limpiar(); setDetalleId(e.target.value) }} {...errCampo.campo('detalle')}>
               <option value="">Elegí…</option>
               {detalles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}

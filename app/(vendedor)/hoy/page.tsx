@@ -8,7 +8,7 @@ import { Mapa, type PuntoMapa } from '@/components/map/MapaDinamico'
 import { Aviso, PuntoEstado, Tarjeta, Vacio, claseBoton } from '@/components/ui'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { guardarCache, leerCache } from '@/lib/offline/db'
-import { claveEspecialidad, conDetalle, mismoMedico, noLoVio, quePaso, textoMotivo } from '@/lib/medicos'
+import { claveEspecialidad, conDetalle, mismoMedico, noLoVio, quePaso, textoMotivo, textoRecupera } from '@/lib/medicos'
 import { fmtFecha, fmtHoras, fmtSoloHora, hace, minutosDelDia, hoyIso, lunesDe } from '@/lib/fechas'
 import { linksGoogleMaps } from '@/lib/geo'
 import { fmtMin, horasEstimadas } from '@/lib/ruteo'
@@ -20,7 +20,7 @@ import { linkComoLlegar, linkTel, linkWhatsApp, mensajeError } from '@/lib/utils
 import type { FilaTablero, ParadaDia, ProximaVisita } from '@/lib/database.types'
 
 // Visita médica: a qué médico ir o qué especialidad buscar en cada parada (lo arma Sergio en el panel).
-type Objetivo = { parada_id: string; especialidad: string | null; orden: number; hora_pactada?: string | null; medico: { id: string; nombre: string; especialidad: string | null } | null }
+type Objetivo = { parada_id: string; especialidad: string | null; orden: number; hora_pactada?: string | null; recupera_dia?: string | null; recupera_motivo?: string | null; medico: { id: string; nombre: string; especialidad: string | null } | null }
 // Llegadas de hoy a un lugar (lo guardado por una versión anterior era una sola hora).
 const horasLlegada = (v: string[] | string | undefined) => (Array.isArray(v) ? v : v ? [v] : [])
 
@@ -66,7 +66,7 @@ export default function Hoy() {
       for (const x of nv.data ?? []) noVisitados[x.lugar_id] = { hora: x.fecha_hora, motivo: x.motivo } // la última del día
       if (esMedica) {
         const [o, b, c, ll, hp, vh] = await Promise.all([
-          paradas.length ? sb.from('vis_parada_objetivos').select('parada_id, especialidad, orden, hora_pactada, medico:vis_medicos(id, nombre, especialidad)').in('parada_id', paradas.map((x) => x.parada_id)) : Promise.resolve({ data: [] }),
+          paradas.length ? sb.from('vis_parada_objetivos').select('parada_id, especialidad, orden, hora_pactada, recupera_dia, recupera_motivo, medico:vis_medicos(id, nombre, especialidad)').in('parada_id', paradas.map((x) => x.parada_id)) : Promise.resolve({ data: [] }),
           sb.from('vis_vendedores').select('base_lat, base_lng').eq('id', perfil.id).maybeSingle(),
           sb.from('vis_config').select('base_lat, base_lng').maybeSingle(),
           sb.from('vis_llegadas').select('lugar_id, fecha_hora').eq('vendedor_id', perfil.id).gte('fecha_hora', desdeHoy).order('fecha_hora'),
@@ -242,6 +242,7 @@ export default function Hoy() {
                                 {v && <span className="text-xs font-medium text-green-700 dark:text-green-400"> · lo viste {fmtSoloHora(v.fecha_hora)}</span>}
                                 {falta && <span className="text-xs font-medium text-red-700 dark:text-red-400"> · no lo visitaste</span>}
                                 {noEstaba && <span className="text-xs font-medium text-amber-700 dark:text-amber-300"> · visita no realizada ({fmtSoloHora(noEstaba.fecha_hora)}): {quePaso(noEstaba.resultado?.nombre, noEstaba.detalle?.nombre)}</span>}
+                                {textoRecupera(o) && <span className="block text-xs font-medium text-sky-800 dark:text-sky-300">↻ {textoRecupera(o)}</span>}
                               </span>
                             </li>
                           )

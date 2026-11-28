@@ -76,7 +76,7 @@ export type Database = {
         Relationships: []
       }
       vis_ruta_paradas: {
-        Row: { cliente_id: string; dia: string; id: string; orden: number; ruta_id: string; hora_pactada: string | null }
+        Row: { cliente_id: string; dia: string; id: string; orden: number; ruta_id: string; hora_pactada: string | null; recuperacion?: boolean }
         Insert: { cliente_id: string; dia: string; id?: string; orden?: number; ruta_id: string; hora_pactada?: string | null }
         Update: Partial<Database['public']['Tables']['vis_ruta_paradas']['Insert']>
         Relationships: Rel[]
@@ -183,7 +183,7 @@ export type Database = {
         ]
       }
       vis_parada_objetivos: {
-        Row: { id: string; parada_id: string; medico_id: string | null; especialidad: string | null; orden: number; hora_pactada: string | null }
+        Row: { id: string; parada_id: string; medico_id: string | null; especialidad: string | null; orden: number; hora_pactada: string | null; recupera_dia: string | null; recupera_motivo: string | null; origen_visita_id: string | null; origen_no_visitado_id: string | null }
         Insert: { id?: string; parada_id: string; medico_id?: string | null; especialidad?: string | null; orden?: number; hora_pactada?: string | null }
         Update: Partial<Database['public']['Tables']['vis_parada_objetivos']['Insert']>
         Relationships: [

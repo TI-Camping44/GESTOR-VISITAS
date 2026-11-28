@@ -12,13 +12,13 @@ import { ChipsDias } from '@/components/admin/medica/ChipsDias'
 import { useLugares, useMedicos, useVisitadoras } from '@/components/admin/medica/datos'
 import { supabaseNavegador } from '@/lib/supabase/client'
 import { fmtDia, hoyIso, lunesDe, semanaIso, sumarDias } from '@/lib/fechas'
-import { DIAS_SEMANA, MEDICO_REPETIDO, claveNombre, diasDeHorario, esMedicoRepetido, tocaVisitar } from '@/lib/medicos'
+import { DIAS_SEMANA, MEDICO_REPETIDO, claveNombre, diasDeHorario, esMedicoRepetido, tocaVisitar, textoRecupera } from '@/lib/medicos'
 import { useParamUrl } from '@/lib/useParamUrl'
 import { cn, mensajeError } from '@/lib/utils'
 import type { Medico } from '@/lib/database.types'
 
 type Parada = { id: string; ruta_id: string; cliente_id: string; dia: string; orden: number; hora_pactada: string | null }
-type Objetivo = { id: string; parada_id: string; medico_id: string | null; especialidad: string | null; orden: number; hora_pactada: string | null }
+type Objetivo = { id: string; parada_id: string; medico_id: string | null; especialidad: string | null; orden: number; hora_pactada: string | null; recupera_dia?: string | null; recupera_motivo?: string | null }
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 export default function ArmarDia() {
@@ -50,7 +50,7 @@ export default function ArmarDia() {
     if (e2) return setError(mensajeError(e2))
     setParadas((ps ?? []) as Parada[])
     const pids = (ps ?? []).map((p) => p.id)
-    const { data: os } = pids.length ? await sb.from('vis_parada_objetivos').select('id, parada_id, medico_id, especialidad, orden, hora_pactada').in('parada_id', pids).order('orden') : { data: [] }
+    const { data: os } = pids.length ? await sb.from('vis_parada_objetivos').select('id, parada_id, medico_id, especialidad, orden, hora_pactada, recupera_dia, recupera_motivo').in('parada_id', pids).order('orden') : { data: [] }
     setObjetivos((os ?? []) as Objetivo[])
   }, [sb, quien, semana])
   useEffect(() => { setParadas(null); void cargar() }, [cargar])
@@ -290,6 +290,7 @@ function TarjetaParada({ p, i, total, nombre, ocupado, objetivos, medicosLugar, 
                     <ChipsDias dias={dias} />
                     {dias.length > 0 && !dias.includes(diaSemana) && <span className="font-medium text-amber-700 dark:text-amber-300">no atiende este día</span>}
                   </div>}
+                  {textoRecupera(o) && <p className="text-xs font-medium text-sky-800 dark:text-sky-300">↻ {textoRecupera(o)} · se sumó sola</p>}
                 </div>
                 {/* Hora pactada con este médico (la ve la visitadora en el lugar y en Hoy). */}
                 <input type="time" defaultValue={o.hora_pactada?.slice(0, 5) ?? ''} key={o.hora_pactada ?? ''} disabled={ocupado}

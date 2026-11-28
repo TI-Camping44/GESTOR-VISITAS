@@ -339,7 +339,23 @@ async function noelia() {
   })
 }
 
-const grupos = { noelia, tableros, ciclos, 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita, 'medico-ausente': medicoAusente, 'para-hoy': paraHoy, gestion }
+// Recuperar visitas no efectivas en la última semana del mes (0051).
+async function recupero() {
+  await conMock('noe', true, async () => {
+    const p = await contexto(true); await p.context().setGeolocation({ latitude: -25.2870, longitude: -57.6350, accuracy: 9 })
+    await ir(p, '/hoy', 3500)
+    await p.getByText(/Recupera la visita no efectiva/).first().evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'r-hoy')
+    await ir(p, '/lugar?c=l2&parada=q2', 3500)
+    await p.getByText(/Recupera la visita no efectiva/).first().evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(300); await foto(p, 'r-lugar')
+  })
+  await conMock('ser', false, async () => {
+    const p = await contexto(false)
+    await ir(p, '/medica', 4500)
+    await p.getByText(/Recupera la visita no efectiva/).first().evaluate((e) => e.scrollIntoView({ block: 'center' })); await espera(400); await foto(p, 'r-plan')
+  })
+}
+
+const grupos = { recupero, noelia, tableros, ciclos, 'vend-c44': () => vendedor('v', 'hum'), 'vend-vit': () => vendedor('h', 'hug'), medica, 'panel-c44': panelC44, 'panel-vit': panelVit, 'no-visita': noVisita, 'medico-ausente': medicoAusente, 'para-hoy': paraHoy, gestion }
 for (const g of grupo === 'todos' ? Object.keys(grupos).filter((x) => !['no-visita', 'medico-ausente', 'para-hoy', 'ciclos', 'tableros', 'gestion'].includes(x)) : [grupo]) await grupos[g]()
 await browser.close()
 if (errores.length) console.log('ERRORES:\n' + [...new Set(errores)].join('\n'))

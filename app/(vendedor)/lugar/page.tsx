@@ -18,11 +18,11 @@ import { guardarCache, leerCache } from '@/lib/offline/db'
 import { hace } from '@/lib/fechas'
 import { esErrorDeRed, linkComoLlegar, linkTel, linkWhatsApp, mensajeError } from '@/lib/utils'
 import { urlVisitaMedico } from '@/lib/rutas'
-import { NO_EFECTIVA, noLoVio, tocaVisitar } from '@/lib/medicos'
+import { esNoEfectiva, noLoVio, tocaVisitar, textoRecupera } from '@/lib/medicos'
 import type { Medico, Resultado } from '@/lib/database.types'
 
 type Lugar = { id: string; razon_social: string; ciudad: string | null; direccion: string | null; lat: number | null; lng: number | null; tipo_lugar?: string | null; telefono?: string | null; notas?: string | null }
-type Objetivo = { medico_id: string | null; especialidad: string | null; orden: number; hora_pactada?: string | null }
+type Objetivo = { medico_id: string | null; especialidad: string | null; orden: number; hora_pactada?: string | null; recupera_dia?: string | null; recupera_motivo?: string | null }
 const NO_ESTABA = 'No estaba / no atendió'
 
 export default function PaginaLugar() {
@@ -93,7 +93,7 @@ export default function PaginaLugar() {
       const pid = parada ?? (await sb.from('vis_ruta_paradas').select('id').eq('cliente_id', lugarId).eq('dia', hoyIso()).limit(1)).data?.[0]?.id ?? null
       if (vivo) setParadaHoy(pid)
       if (pid) {
-        const ro = await sb.from('vis_parada_objetivos').select('medico_id, especialidad, orden, hora_pactada').eq('parada_id', pid).order('orden')
+        const ro = await sb.from('vis_parada_objetivos').select('medico_id, especialidad, orden, hora_pactada, recupera_dia, recupera_motivo').eq('parada_id', pid).order('orden')
         if (vivo && ro.data) setObjetivos(ro.data)
       }
       if (rv.data) {
@@ -108,7 +108,7 @@ export default function PaginaLugar() {
       if (vivo) setIdNoEstaba(id)
       const lista = ((await sb.from('vis_resultados_v').select('*').eq('activo', true).eq('oculto', false).eq('tipo', 'medica').order('orden')).data
         ?? (await leerCache<Resultado[]>('resultados').catch(() => null))?.datos ?? []) as Resultado[]
-      const ne = lista.find((r) => r.clase === 'resultado' && r.nombre === NO_EFECTIVA && !r.oculto)
+      const ne = lista.find((r) => r.clase === 'resultado' && esNoEfectiva(r.nombre) && !r.oculto)
       if (vivo && ne) setNoEfectiva({ id: ne.id, motivos: lista.filter((r) => r.clase === 'detalle' && r.padre_id === ne.id && !r.oculto).map((r) => ({ id: r.id, nombre: r.nombre })) })
     })()
     return () => { vivo = false }
@@ -230,7 +230,9 @@ export default function PaginaLugar() {
     const visitado = hoyVisitados.has(m.id)
     const toca = tocaVisitar(m)
     const horario = m.lugares.find((l) => l.lugar_id === lugarId)?.horario
-    const pactada = orden ? objetivos.find((o) => o.medico_id === m.id)?.hora_pactada?.slice(0, 5) : null
+    const objetivo = orden ? objetivos.find((o) => o.medico_id === m.id) : undefined
+    const pactada = objetivo?.hora_pactada?.slice(0, 5) ?? null
+    const recupera = objetivo ? textoRecupera(objetivo) : null
     const tel = linkTel(m.telefono)
     const wa = linkWhatsApp(m.telefono_norm)
     return (
@@ -241,6 +243,7 @@ export default function PaginaLugar() {
             <div className="min-w-0">
               <p className="font-semibold leading-snug">{m.nombre}</p>
               {pactada && <p className="text-sm font-semibold text-marca">Hora pactada {pactada}</p>}
+              {recupera && <p className="text-xs font-medium text-sky-800 dark:text-sky-300">↻ {recupera}</p>}
               <p className="text-sm text-tenue">{[m.especialidad, horario].filter(Boolean).join(' · ') || 'Sin especialidad'}</p>
             </div>
           </div>
